@@ -1,0 +1,15 @@
+{
+  "additional_directories": [
+    "../APIs/neptunus"
+  ],
+  "permissions": {
+    "allow": [
+      "bash",
+      "read",
+      "write",
+      "edit",
+      "glob",
+      "grep"
+    ]
+  }
+}

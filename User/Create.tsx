@@ -349,7 +349,7 @@ function UserForm({
                         }}
                         onMouseOver={(e) =>
                             !isSubmitting &&
-                            (e.currentTarget.style.backgroundColor = "#6d28d9")
+                            (e.currentTarget.style.backgroundColor = "#2563eb")
                         }
                         onMouseOut={(e) =>
                             !isSubmitting &&
@@ -450,19 +450,19 @@ function UserFormManager() {
                     alignItems: "center",
                     gap: "8px",
                     transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(124, 58, 237, 0.3)",
+                    boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
                 }}
                 onMouseOver={(e) => {
-                    e.currentTarget.style.backgroundColor = "#6d28d9"
+                    e.currentTarget.style.backgroundColor = "#2563eb"
                     e.currentTarget.style.transform = "translateY(-1px)"
                     e.currentTarget.style.boxShadow =
-                        "0 6px 16px rgba(124, 58, 237, 0.4)"
+                        "0 6px 16px rgba(59, 130, 246, 0.4)"
                 }}
                 onMouseOut={(e) => {
                     e.currentTarget.style.backgroundColor = "#10b981"
                     e.currentTarget.style.transform = "translateY(0)"
                     e.currentTarget.style.boxShadow =
-                        "0 4px 12px rgba(124, 58, 237, 0.3)"
+                        "0 4px 12px rgba(59, 130, 246, 0.3)"
                 }}
             >
                 <FaPlus size={14} />

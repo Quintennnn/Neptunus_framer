@@ -11,6 +11,10 @@ import {
     FaCheck,
     FaTimes,
     FaBuilding,
+    FaShip,
+    FaUserShield,
+    FaUser,
+    FaUserEdit,
 } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
@@ -37,7 +41,7 @@ function getIdToken(): string | null {
 // ——— User Role Detection ———
 interface UserInfo {
     sub: string
-    role: 'admin' | 'user' | 'editor'
+    role: "admin" | "user" | "editor"
     organization?: string
     organizations?: string[]
 }
@@ -59,24 +63,24 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
-        
-        console.log('fetchUserInfo - raw user data from API:', responseData)
-        
+
+        console.log("fetchUserInfo - raw user data from API:", responseData)
+
         // Handle nested response structure
         const userData = responseData.user || responseData
-        
+
         const processedUserInfo = {
             sub: cognitoSub,
-            role: userData.role || 'user', // Default to user if role not found
+            role: userData.role || "user", // Default to user if role not found
             organization: userData.organization,
-            organizations: userData.organizations || []
+            organizations: userData.organizations || [],
         }
-        
-        console.log('fetchUserInfo - processed user info:', processedUserInfo)
-        
+
+        console.log("fetchUserInfo - processed user info:", processedUserInfo)
+
         return processedUserInfo
     } catch (error) {
-        console.error('Failed to fetch user info:', error)
+        console.error("Failed to fetch user info:", error)
         return null
     }
 }
@@ -87,32 +91,31 @@ function getUserInfo(): UserInfo | null {
         if (!token) return null
 
         // Decode JWT to get cognito sub
-        const payload = JSON.parse(atob(token.split('.')[1]))
-        
+        const payload = JSON.parse(atob(token.split(".")[1]))
+
         // Return basic info with sub - role will be fetched separately
         return {
             sub: payload.sub,
-            role: 'user', // Temporary default, will be updated by fetchUserInfo
+            role: "user", // Temporary default, will be updated by fetchUserInfo
             organization: undefined,
-            organizations: []
+            organizations: [],
         }
     } catch (error) {
-        console.error('Failed to decode user info:', error)
+        console.error("Failed to decode user info:", error)
         return null
     }
 }
 
 function isAdmin(userInfo: UserInfo | null): boolean {
-    return userInfo?.role === 'admin'
+    return userInfo?.role === "admin"
 }
 
 // ——— API Functions ———
 
 // Fetch organization field configuration by organization name
-async function fetchOrganizationConfigByName(orgName: string): Promise<Record<
-    string,
-    { visible: boolean; required: boolean }
-> | null> {
+async function fetchOrganizationConfigByName(
+    orgName: string
+): Promise<Record<string, { visible: boolean; required: boolean }> | null> {
     try {
         const token = getIdToken()
         const headers: Record<string, string> = {
@@ -120,11 +123,14 @@ async function fetchOrganizationConfigByName(orgName: string): Promise<Record<
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${ORGANIZATION_PATH}?name=${encodeURIComponent(orgName)}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${ORGANIZATION_PATH}?name=${encodeURIComponent(orgName)}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const json = await res.json()
@@ -140,10 +146,10 @@ async function fetchOrganizationConfigByName(orgName: string): Promise<Record<
 }
 
 // Fetch organization field configuration - role-aware
-async function fetchOrganizationConfig(userInfo: UserInfo | null, selectedOrganization?: string | null): Promise<Record<
-    string,
-    { visible: boolean; required: boolean }
-> | null> {
+async function fetchOrganizationConfig(
+    userInfo: UserInfo | null,
+    selectedOrganization?: string | null
+): Promise<Record<string, { visible: boolean; required: boolean }> | null> {
     try {
         const token = getIdToken()
         const headers: Record<string, string> = {
@@ -162,33 +168,51 @@ async function fetchOrganizationConfig(userInfo: UserInfo | null, selectedOrgani
         }
 
         // If showing all organizations, merge configurations from all user organizations
-        if (selectedOrganization === "ALL_ORGANIZATIONS" && userInfo?.organizations && userInfo.organizations.length > 0) {
+        if (
+            selectedOrganization === "ALL_ORGANIZATIONS" &&
+            userInfo?.organizations &&
+            userInfo.organizations.length > 0
+        ) {
             const allConfigs = await Promise.all(
-                userInfo.organizations.map(org => fetchOrganizationConfigByName(org))
+                userInfo.organizations.map((org) =>
+                    fetchOrganizationConfigByName(org)
+                )
             )
-            
+
             // Merge all configurations - field is visible if visible in ANY organization
             // Field is required if required in ANY organization
-            const mergedConfig: Record<string, { visible: boolean; required: boolean }> = {}
-            
-            allConfigs.forEach(config => {
+            const mergedConfig: Record<
+                string,
+                { visible: boolean; required: boolean }
+            > = {}
+
+            allConfigs.forEach((config) => {
                 if (config) {
                     Object.entries(config).forEach(([field, settings]) => {
                         if (!mergedConfig[field]) {
-                            mergedConfig[field] = { visible: settings.visible, required: settings.required }
+                            mergedConfig[field] = {
+                                visible: settings.visible,
+                                required: settings.required,
+                            }
                         } else {
-                            mergedConfig[field].visible = mergedConfig[field].visible || settings.visible
-                            mergedConfig[field].required = mergedConfig[field].required || settings.required
+                            mergedConfig[field].visible =
+                                mergedConfig[field].visible || settings.visible
+                            mergedConfig[field].required =
+                                mergedConfig[field].required ||
+                                settings.required
                         }
                     })
                 }
             })
-            
+
             return Object.keys(mergedConfig).length > 0 ? mergedConfig : null
         }
 
         // For selected single organization
-        if (selectedOrganization && userInfo?.organizations?.includes(selectedOrganization)) {
+        if (
+            selectedOrganization &&
+            userInfo?.organizations?.includes(selectedOrganization)
+        ) {
             return await fetchOrganizationConfigByName(selectedOrganization)
         }
 
@@ -236,7 +260,7 @@ async function fetchBoats(organizationFilter?: string): Promise<any[]> {
         "Content-Type": "application/json",
     }
     if (token) headers.Authorization = `Bearer ${token}`
-    
+
     let url = `${API_BASE_URL}${BOAT_PATH}`
     if (organizationFilter) {
         url += `?organization=${encodeURIComponent(organizationFilter)}`
@@ -253,7 +277,10 @@ async function fetchBoats(organizationFilter?: string): Promise<any[]> {
 }
 
 // ——— Role-aware Boat Fetching ———
-async function fetchBoatsForUser(userInfo: UserInfo | null, selectedOrganization?: string | null): Promise<any[]> {
+async function fetchBoatsForUser(
+    userInfo: UserInfo | null,
+    selectedOrganization?: string | null
+): Promise<any[]> {
     if (isAdmin(userInfo)) {
         // Admin sees all boats
         return await fetchBoats()
@@ -264,7 +291,7 @@ async function fetchBoatsForUser(userInfo: UserInfo | null, selectedOrganization
         // Fetch boats from all user organizations
         if (userInfo?.organizations && userInfo.organizations.length > 0) {
             const allBoats = await Promise.all(
-                userInfo.organizations.map(org => fetchBoats(org))
+                userInfo.organizations.map((org) => fetchBoats(org))
             )
             return allBoats.flat()
         }
@@ -346,7 +373,10 @@ async function deleteBoat(boatId: string | number): Promise<void> {
 }
 
 // Update boat
-async function updateBoat(boatId: string | number, formData: any): Promise<void> {
+async function updateBoat(
+    boatId: string | number,
+    formData: any
+): Promise<void> {
     const token = getIdToken()
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -412,13 +442,6 @@ const COLUMNS: {
         width: "120px",
     },
     {
-        key: "boatNumber",
-        label: "Boat #",
-        priority: 1,
-        group: "essential",
-        width: "80px",
-    },
-    {
         key: "boatBrand",
         label: "Brand",
         priority: 1,
@@ -447,6 +470,13 @@ const COLUMNS: {
         priority: 2,
         group: "additional",
         width: "110px",
+    },
+    {
+        key: "boatNumber",
+        label: "Boat #",
+        priority: 1,
+        group: "additional",
+        width: "80px",
     },
     {
         key: "insuranceEndDate",
@@ -643,27 +673,30 @@ function filterBoats(
     boats: any[],
     searchTerm: string,
     selectedOrganizations: Set<string>,
-    organizations: string[]
+    organizations: string[],
+    isAdminUser: boolean = false
 ): any[] {
     return boats.filter((boat) => {
         // Search filter
         if (searchTerm) {
             const matchesSearch = Object.values(boat).some((value) =>
-                String(value)
-                    .toLowerCase()
-                    .includes(searchTerm.toLowerCase())
+                String(value).toLowerCase().includes(searchTerm.toLowerCase())
             )
             if (!matchesSearch) return false
         }
 
-        // Organization filter - only filter if organizations are selected
-        if (
-            selectedOrganizations.size > 0 &&
-            selectedOrganizations.size < organizations.length
-        ) {
-            const boatOrg = boat.organization
-            if (!boatOrg || !selectedOrganizations.has(boatOrg))
-                return false
+        // Organization filter - only apply if we're in admin mode and have organization filters
+        if (isAdminUser && organizations.length > 0) {
+            // Only filter if not all organizations are selected
+            if (
+                selectedOrganizations.size > 0 &&
+                selectedOrganizations.size < organizations.length
+            ) {
+                const boatOrg = boat.organization
+                if (!boatOrg || !selectedOrganizations.has(boatOrg)) {
+                    return false
+                }
+            }
         }
 
         return true
@@ -686,9 +719,7 @@ function renderBoatCellValue(col: any, cellValue: any): React.ReactNode {
 
     if (col.key === "status") {
         const statusConfig =
-            STATUS_COLORS[
-                cellValue as keyof typeof STATUS_COLORS
-            ]
+            STATUS_COLORS[cellValue as keyof typeof STATUS_COLORS]
         return (
             <span
                 style={{
@@ -1256,46 +1287,54 @@ function SearchAndFilterBar({
                 </div>
 
                 {/* User Organization Selector for Multi-Org Users */}
-                {!isAdmin(userInfo) && userInfo?.organizations && userInfo.organizations.length > 1 && (
-                    <div style={{ position: "relative" }}>
-                        <select
-                            value={selectedUserOrganization || ""}
-                            onChange={(e) => onUserOrganizationChange?.(e.target.value)}
-                            style={{
-                                padding: "12px 16px",
-                                backgroundColor: "#f8fafc",
-                                color: "#374151",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "8px",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                cursor: "pointer",
-                                fontFamily: FONT_STACK,
-                                transition: "all 0.2s",
-                                minWidth: "150px",
-                            }}
-                            onMouseOver={(e) =>
-                                (e.target.style.backgroundColor = "#f1f5f9")
-                            }
-                            onMouseOut={(e) =>
-                                (e.target.style.backgroundColor = "#f8fafc")
-                            }
-                        >
-                            <option value="ALL_ORGANIZATIONS">All Organizations</option>
-                            {userInfo.organizations.map((org) => (
-                                <option key={org} value={org}>
-                                    {org}
+                {!isAdmin(userInfo) &&
+                    userInfo?.organizations &&
+                    userInfo.organizations.length > 1 && (
+                        <div style={{ position: "relative" }}>
+                            <select
+                                value={selectedUserOrganization || ""}
+                                onChange={(e) =>
+                                    onUserOrganizationChange?.(e.target.value)
+                                }
+                                style={{
+                                    padding: "12px 16px",
+                                    backgroundColor: "#f8fafc",
+                                    color: "#374151",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                    transition: "all 0.2s",
+                                    minWidth: "150px",
+                                }}
+                                onMouseOver={(e) =>
+                                    (e.target.style.backgroundColor = "#f1f5f9")
+                                }
+                                onMouseOut={(e) =>
+                                    (e.target.style.backgroundColor = "#f8fafc")
+                                }
+                            >
+                                <option value="ALL_ORGANIZATIONS">
+                                    All Organizations
                                 </option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                                {userInfo.organizations.map((org) => (
+                                    <option key={org} value={org}>
+                                        {org}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                 {showOrgFilter && (
                     <div style={{ position: "relative" }}>
                         <button
                             ref={setOrgButtonRef}
-                            onClick={() => setShowOrgFilterDropdown(!showOrgFilterDropdown)}
+                            onClick={() =>
+                                setShowOrgFilterDropdown(!showOrgFilterDropdown)
+                            }
                             style={{
                                 padding: "12px 16px",
                                 backgroundColor: "#f3f4f6",
@@ -1356,7 +1395,8 @@ function SearchAndFilterBar({
             </div>
 
             {/* Organization Filter Dropdown */}
-            {showOrgFilter && showOrgFilterDropdown &&
+            {showOrgFilter &&
+                showOrgFilterDropdown &&
                 ReactDOM.createPortal(
                     <>
                         <div
@@ -1757,9 +1797,7 @@ function GeneralActionButtons({
                 onMouseOver={(e) =>
                     (e.target.style.backgroundColor = "#2563eb")
                 }
-                onMouseOut={(e) =>
-                    (e.target.style.backgroundColor = "#3b82f6")
-                }
+                onMouseOut={(e) => (e.target.style.backgroundColor = "#3b82f6")}
             >
                 <FaEdit size={9} /> Edit
             </button>
@@ -1783,9 +1821,7 @@ function GeneralActionButtons({
                 onMouseOver={(e) =>
                     (e.target.style.backgroundColor = "#dc2626")
                 }
-                onMouseOut={(e) =>
-                    (e.target.style.backgroundColor = "#ef4444")
-                }
+                onMouseOut={(e) => (e.target.style.backgroundColor = "#ef4444")}
             >
                 <FaTrashAlt size={9} /> Delete
             </button>
@@ -1940,13 +1976,18 @@ function EditBoatForm({
         })
 
     // For edit form, we need to fetch the specific boat's organization config
-    const [boatOrgConfig, setBoatOrgConfig] = useState<Record<string, { visible: boolean; required: boolean }> | null>(null)
+    const [boatOrgConfig, setBoatOrgConfig] = useState<Record<
+        string,
+        { visible: boolean; required: boolean }
+    > | null>(null)
     const [isLoadingBoatConfig, setIsLoadingBoatConfig] = useState(true)
 
     useEffect(() => {
         const loadBoatOrgConfig = async () => {
             if (boat.organization) {
-                const config = await fetchOrganizationConfigByName(boat.organization)
+                const config = await fetchOrganizationConfigByName(
+                    boat.organization
+                )
                 setBoatOrgConfig(config)
             }
             setIsLoadingBoatConfig(false)
@@ -2284,11 +2325,13 @@ export function BoatPageOverride(): Override {
     const [decliningBoatId, setDecliningBoatId] = useState<
         string | number | null
     >(null)
-    
+
     // Role-aware state
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
-    const [selectedUserOrganization, setSelectedUserOrganization] = useState<string | null>(null)
+    const [selectedUserOrganization, setSelectedUserOrganization] = useState<
+        string | null
+    >(null)
 
     const refresh = useCallback(() => {
         if (userInfo) {
@@ -2307,27 +2350,36 @@ export function BoatPageOverride(): Override {
         const loadUserInfo = async () => {
             setIsLoadingUserInfo(true)
             const basicUserInfo = getUserInfo()
-            
+
             if (basicUserInfo?.sub) {
                 // Fetch complete user info from backend
                 const completeUserInfo = await fetchUserInfo(basicUserInfo.sub)
                 if (completeUserInfo) {
                     setUserInfo(completeUserInfo)
-                    console.log('User info loaded successfully:', completeUserInfo)
-                    
+                    console.log(
+                        "User info loaded successfully:",
+                        completeUserInfo
+                    )
+
                     // Set initial selected organization for multi-org users
-                    if (!isAdmin(completeUserInfo) && completeUserInfo.organizations && completeUserInfo.organizations.length > 0) {
+                    if (
+                        !isAdmin(completeUserInfo) &&
+                        completeUserInfo.organizations &&
+                        completeUserInfo.organizations.length > 0
+                    ) {
                         if (completeUserInfo.organizations.length > 1) {
                             setSelectedUserOrganization("ALL_ORGANIZATIONS")
                         } else {
-                            setSelectedUserOrganization(completeUserInfo.organizations[0])
+                            setSelectedUserOrganization(
+                                completeUserInfo.organizations[0]
+                            )
                         }
                     }
                 } else {
-                    console.error('Failed to load complete user info')
+                    console.error("Failed to load complete user info")
                 }
             } else {
-                console.error('No basic user info found')
+                console.error("No basic user info found")
                 setUserInfo(null)
             }
             setIsLoadingUserInfo(false)
@@ -2347,18 +2399,21 @@ export function BoatPageOverride(): Override {
                         // Only apply config-based column visibility for non-admin users
                         const configuredVisibleColumns = new Set<string>()
 
-                        COLUMNS.filter((col) => col.group === "essential").forEach(
-                            (col) => {
-                                const fieldConfigForCol = config[col.key]
-                                if (fieldConfigForCol?.visible !== false) {
-                                    configuredVisibleColumns.add(col.key)
-                                }
+                        COLUMNS.filter(
+                            (col) => col.group === "essential"
+                        ).forEach((col) => {
+                            const fieldConfigForCol = config[col.key]
+                            if (fieldConfigForCol?.visible !== false) {
+                                configuredVisibleColumns.add(col.key)
                             }
-                        )
+                        })
 
                         // Show organization column when viewing boats from multiple organizations
-                        if (selectedUserOrganization === "ALL_ORGANIZATIONS" || 
-                            (userInfo?.organizations && userInfo.organizations.length > 1)) {
+                        if (
+                            selectedUserOrganization === "ALL_ORGANIZATIONS" ||
+                            (userInfo?.organizations &&
+                                userInfo.organizations.length > 1)
+                        ) {
                             configuredVisibleColumns.add("organization")
                         }
 
@@ -2366,9 +2421,9 @@ export function BoatPageOverride(): Override {
                     } else if (isAdmin(userInfo)) {
                         // Admin sees all essential columns by default plus organization
                         const essentialColumns = new Set(
-                            COLUMNS.filter((col) => col.group === "essential").map(
-                                (col) => col.key
-                            )
+                            COLUMNS.filter(
+                                (col) => col.group === "essential"
+                            ).map((col) => col.key)
                         )
                         essentialColumns.add("organization") // Always show organization for admins
                         setVisibleColumns(essentialColumns)
@@ -2403,8 +2458,15 @@ export function BoatPageOverride(): Override {
     }, [userInfo, isLoadingUserInfo, refresh])
 
     // Role-aware filtering
-    const filteredBoats = boats ? 
-        filterBoats(boats, searchTerm, selectedOrganizations, organizations) : []
+    const filteredBoats = boats
+        ? filterBoats(
+              boats,
+              searchTerm,
+              selectedOrganizations,
+              organizations,
+              isAdmin(userInfo)
+          )
+        : []
 
     // Debug logging
     console.log(
@@ -2497,7 +2559,9 @@ export function BoatPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    {isLoadingUserInfo ? "Loading user information..." : "Loading boats..."}
+                    {isLoadingUserInfo
+                        ? "Loading user information..."
+                        : "Loading boats..."}
                 </div>
             ),
         }
@@ -2577,30 +2641,105 @@ export function BoatPageOverride(): Override {
                                 }}
                             >
                                 <div>
-                                    <h1
-                                        style={{
-                                            fontSize: "28px",
-                                            fontWeight: "700",
-                                            color: "#1f2937",
-                                            margin: 0,
-                                            marginBottom: "4px",
-                                        }}
-                                    >
-                                        {isAdmin(userInfo) ? "Boat Management - Admin" : "My Fleet"}
-                                    </h1>
                                     <div
                                         style={{
-                                            fontSize: "13px",
-                                            color: "#6b7280",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px",
                                             marginBottom: "8px",
                                         }}
                                     >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                            }}
+                                        >
+                                            <FaShip
+                                                size={24}
+                                                style={{
+                                                    color: "#3b82f6",
+                                                }}
+                                            />
+                                            <h1
+                                                style={{
+                                                    fontSize: "32px",
+                                                    fontWeight: "600",
+                                                    color: "#1f2937",
+                                                    margin: 0,
+                                                    letterSpacing: "-0.025em",
+                                                }}
+                                            >
+                                                {isAdmin(userInfo)
+                                                    ? "Fleet Management"
+                                                    : "My Fleet"}
+                                            </h1>
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "6px",
+                                                padding: "6px 12px",
+                                                backgroundColor: isAdmin(
+                                                    userInfo
+                                                )
+                                                    ? "#fef3c7"
+                                                    : userInfo?.role ===
+                                                        "editor"
+                                                      ? "#ecfdf5"
+                                                      : "#f3f4f6",
+                                                color: isAdmin(userInfo)
+                                                    ? "#92400e"
+                                                    : userInfo?.role ===
+                                                        "editor"
+                                                      ? "#059669"
+                                                      : "#6b7280",
+                                                borderRadius: "20px",
+                                                fontSize: "12px",
+                                                fontWeight: "500",
+                                                border: `1px solid ${isAdmin(userInfo) ? "#fde68a" : userInfo?.role === "editor" ? "#a7f3d0" : "#e5e7eb"}`,
+                                            }}
+                                        >
+                                            {isAdmin(userInfo) ? (
+                                                <>
+                                                    <FaUserShield size={12} />{" "}
+                                                    Admin
+                                                </>
+                                            ) : userInfo?.role === "editor" ? (
+                                                <>
+                                                    <FaUserEdit size={12} />{" "}
+                                                    Editor
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FaUser size={12} /> User
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#6b7280",
+                                            marginBottom: "8px",
+                                            fontWeight: "400",
+                                        }}
+                                    >
                                         {isAdmin(userInfo) ? (
-                                            "Viewing as Admin"
+                                            "Manage all boats across all organizations"
                                         ) : userInfo?.organization ? (
-                                            <>Viewing as {userInfo.role === 'editor' ? 'Editor' : 'User'} with access to: <strong>{userInfo.organization}</strong></>
+                                            <>
+                                                Managing boats for{" "}
+                                                <strong
+                                                    style={{ color: "#374151" }}
+                                                >
+                                                    {userInfo.organization}
+                                                </strong>
+                                            </>
                                         ) : (
-                                            `Viewing as ${userInfo?.role === 'editor' ? 'Editor' : 'User'}`
+                                            "Managing your boat fleet"
                                         )}
                                     </div>
                                 </div>
@@ -2614,6 +2753,18 @@ export function BoatPageOverride(): Override {
                                     }}
                                 >
                                     {filteredBoats.length} boats
+                                    {isAdmin(userInfo) &&
+                                        organizations.length > 0 && (
+                                            <span
+                                                style={{
+                                                    marginLeft: "8px",
+                                                    fontSize: "12px",
+                                                }}
+                                            >
+                                                • {selectedOrganizations.size}/
+                                                {organizations.length} orgs
+                                            </span>
+                                        )}
                                     {fieldConfig && (
                                         <span
                                             style={{
@@ -2638,8 +2789,12 @@ export function BoatPageOverride(): Override {
                                 onOrganizationChange={toggleOrganization}
                                 showOrgFilter={isAdmin(userInfo)}
                                 userInfo={userInfo}
-                                selectedUserOrganization={selectedUserOrganization}
-                                onUserOrganizationChange={setSelectedUserOrganization}
+                                selectedUserOrganization={
+                                    selectedUserOrganization
+                                }
+                                onUserOrganizationChange={
+                                    setSelectedUserOrganization
+                                }
                             />
                         </div>
 
@@ -2687,7 +2842,7 @@ export function BoatPageOverride(): Override {
                                                     textAlign: "left",
                                                     padding: "12px 8px",
                                                     borderBottom:
- "2px solid #e5e7eb",
+                                                        "2px solid #e5e7eb",
                                                     fontWeight: "600",
                                                     color: "#374151",
                                                     width: "140px",
@@ -2785,14 +2940,24 @@ export function BoatPageOverride(): Override {
                                                 >
                                                     <StatusActionButtons
                                                         boat={boat}
-                                                        onApprove={handleApprove}
-                                                        onDecline={(id) => setDecliningBoatId(id)}
+                                                        onApprove={
+                                                            handleApprove
+                                                        }
+                                                        onDecline={(id) =>
+                                                            setDecliningBoatId(
+                                                                id
+                                                            )
+                                                        }
                                                     />
                                                 </td>
                                             )}
                                             {visibleColumnsList.map((col) => {
                                                 const cellValue = boat[col.key]
-                                                const displayValue = renderBoatCellValue(col, cellValue)
+                                                const displayValue =
+                                                    renderBoatCellValue(
+                                                        col,
+                                                        cellValue
+                                                    )
 
                                                 return (
                                                     <td
@@ -2856,7 +3021,6 @@ export function BoatPageOverride(): Override {
 
                 {deletingBoatId != null &&
                     ReactDOM.createPortal(
-                       
                         <div
                             style={{
                                 position: "fixed",

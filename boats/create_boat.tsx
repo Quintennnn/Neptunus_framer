@@ -6,6 +6,8 @@ import { FaPlus, FaTimes } from "react-icons/fa"
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
 const BOAT_PATH = "/neptunus/boat"
+const ORGANIZATION_PATH = "/neptunus/organization"
+const USER_PATH = "/neptunus/user"
 
 // Enhanced font stack for better typography
 const FONT_STACK =
@@ -15,9 +17,27 @@ function getIdToken(): string | null {
     return sessionStorage.getItem("idToken")
 }
 
+function getUserId(): string | null {
+    return sessionStorage.getItem("userId")
+}
+
+// Type for organization field configuration
+type FieldConfig = {
+    required: boolean
+    visible: boolean
+}
+
+type OrganizationConfig = {
+    organization: {
+        id: string
+        name: string
+        boat_fields_config: Record<string, FieldConfig>
+        [key: string]: any
+    }
+}
+
 // Define our form state shape matching backend NeptunusBoatData
 type BoatFormState = {
-    status: string
     mooringLocation: string
     numberOfEngines: number
     engineType: string
@@ -40,34 +60,94 @@ type BoatFormState = {
     notes?: string
 }
 
-// Validation helper
-function validateForm(form: BoatFormState): string[] {
+// Validation helper - now takes organization config
+function validateForm(
+    form: BoatFormState,
+    orgConfig?: Record<string, FieldConfig>
+): string[] {
     const errors: string[] = []
 
-    if (!form.mooringLocation.trim())
-        errors.push("Mooring location is required")
-    if (!form.engineType.trim()) errors.push("Engine type is required")
-    if (!form.boatBrand.trim()) errors.push("Boat brand is required")
-    if (!form.boatType.trim()) errors.push("Boat type is required")
-    if (!form.insuranceStartDate)
-        errors.push("Insurance start date is required")
-    if (!form.organization.trim()) errors.push("Organization is required")
+    // If no org config provided, fall back to basic validation
+    if (!orgConfig) {
+        if (!form.mooringLocation.trim())
+            errors.push("Mooring location is required")
+        if (!form.engineType.trim()) errors.push("Engine type is required")
+        if (!form.boatBrand.trim()) errors.push("Boat brand is required")
+        if (!form.boatType.trim()) errors.push("Boat type is required")
+        if (!form.insuranceStartDate)
+            errors.push("Insurance start date is required")
+        if (!form.organization.trim()) errors.push("Organization is required")
 
-    if (form.numberOfEngines <= 0)
-        errors.push("Number of engines must be greater than 0")
-    if (
-        form.yearOfConstruction <= 1900 ||
-        form.yearOfConstruction > new Date().getFullYear()
-    )
-        errors.push(
-            "Year of construction must be between 1900 and current year"
+        if (form.numberOfEngines <= 0)
+            errors.push("Number of engines must be greater than 0")
+        if (
+            form.yearOfConstruction <= 1900 ||
+            form.yearOfConstruction > new Date().getFullYear()
         )
-    if (form.value <= 0) errors.push("Value must be greater than 0")
-    if (form.premiumPerMille <= 0)
-        errors.push("Premium per mille must be greater than 0")
-    if (form.deductible < 0) errors.push("Deductible cannot be negative")
-    if (form.numberOfInsuredDays <= 0)
-        errors.push("Number of insured days must be greater than 0")
+            errors.push(
+                "Year of construction must be between 1900 and current year"
+            )
+        if (form.value <= 0) errors.push("Value must be greater than 0")
+        if (form.premiumPerMille <= 0)
+            errors.push("Premium per mille must be greater than 0")
+        if (form.deductible < 0) errors.push("Deductible cannot be negative")
+        if (form.numberOfInsuredDays <= 0)
+            errors.push("Number of insured days must be greater than 0")
+
+        return errors
+    }
+
+    // Validate based on organization configuration
+    Object.entries(form).forEach(([fieldName, value]) => {
+        const fieldConfig = orgConfig?.[fieldName]
+        if (fieldConfig?.required) {
+            // Check if field is empty based on type
+            if (typeof value === "string" && !value.trim()) {
+                const label = fieldName
+                    .replace(/([A-Z])/g, " $1")
+                    .replace(/^./, (str) => str.toUpperCase())
+                    .trim()
+                errors.push(`${label} is required`)
+            } else if (typeof value === "number") {
+                // For required number fields, check if empty or invalid
+                if (value === "" || isNaN(value)) {
+                    const label = fieldName
+                        .replace(/([A-Z])/g, " $1")
+                        .replace(/^./, (str) => str.toUpperCase())
+                        .trim()
+                    errors.push(`${label} is required`)
+                } else if (value <= 0) {
+                    // Only check greater than 0 if field has a value and is required
+                    const label = fieldName
+                        .replace(/([A-Z])/g, " $1")
+                        .replace(/^./, (str) => str.toUpperCase())
+                        .trim()
+                    errors.push(
+                        `${label} must be a valid number greater than 0`
+                    )
+                }
+            }
+        }
+    })
+
+    // Additional business logic validations for visible fields
+    if (
+        orgConfig.yearOfConstruction?.visible &&
+        orgConfig.yearOfConstruction?.required
+    ) {
+        if (
+            form.yearOfConstruction <= 1900 ||
+            form.yearOfConstruction > new Date().getFullYear()
+        ) {
+            errors.push(
+                "Year of construction must be between 1900 and current year"
+            )
+        }
+    }
+
+    if (orgConfig.deductible?.visible && form.deductible < 0) {
+        errors.push("Deductible cannot be negative")
+    }
 
     return errors
 }
@@ -118,7 +198,6 @@ function BoatForm({
     onSuccess?: () => void
 }) {
     const [form, setForm] = React.useState<BoatFormState>({
-        status: "Pending",
         mooringLocation: "",
         numberOfEngines: 1,
         engineType: "",
@@ -142,6 +221,120 @@ function BoatForm({
     const [error, setError] = React.useState<string | null>(null)
     const [success, setSuccess] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [isLoadingConfig, setIsLoadingConfig] = React.useState(true)
+    const [orgConfig, setOrgConfig] = React.useState<Record<
+        string,
+        FieldConfig
+    > | null>(null)
+    const [userOrganizationName, setUserOrganizationName] = React.useState<
+        string | null
+    >(null)
+
+    // Function to fetch user's organization name
+    async function fetchUserOrganization() {
+        try {
+            const token = getIdToken()
+            if (!token) throw new Error("No id token found")
+
+            const user_id = getUserId()
+            if (!user_id) throw new Error("No user ID found")
+
+            const response = await fetch(
+                `${API_BASE_URL}${USER_PATH}/${user_id}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            )
+
+            if (response.ok) {
+                const json = await response.json()
+                const userData = json.user
+
+                // Users are tied to a single organization, so take the first organization name
+                const orgName =
+                    userData.organizations && userData.organizations.length > 0
+                        ? userData.organizations[0]
+                        : null
+
+                return orgName
+            } else {
+                console.warn(
+                    "Failed to fetch user data:",
+                    response.status,
+                    response.statusText
+                )
+            }
+        } catch (err) {
+            console.warn("Could not fetch user organization:", err)
+        }
+        return null
+    }
+
+    // Function to fetch organization configuration
+    async function fetchOrganizationConfig(organizationName: string) {
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}${ORGANIZATION_PATH}/by-name/${organizationName}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${getIdToken()}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            )
+
+            if (response.ok) {
+                const data: OrganizationConfig = await response.json()
+                return data.organization.boat_fields_config
+            } else {
+                console.warn(
+                    "Failed to fetch organization config:",
+                    response.status,
+                    response.statusText
+                )
+            }
+        } catch (err) {
+            console.warn("Error fetching organization config:", err)
+        }
+        return null
+    }
+
+    // Load organization configuration on component mount
+    React.useEffect(() => {
+        async function loadConfig() {
+            setIsLoadingConfig(true)
+            try {
+                // First, try to get user's organization
+                const orgName = await fetchUserOrganization()
+                if (orgName) {
+                    setUserOrganizationName(orgName)
+                    // Set the organization in the form
+                    setForm((prev) => ({ ...prev, organization: orgName }))
+
+                    // Fetch the organization's field configuration
+                    const config = await fetchOrganizationConfig(orgName)
+                    if (config) {
+                        setOrgConfig(config)
+                    }
+                } else {
+                    // If we can't get user's org, provide more specific error
+                    setError(
+                        "Could not determine your organization. Please ensure you are logged in and assigned to an organization."
+                    )
+                }
+            } catch (err) {
+                setError("Failed to load organization configuration")
+                console.error("Error loading org config:", err)
+            } finally {
+                setIsLoadingConfig(false)
+            }
+        }
+
+        loadConfig()
+    }, [])
 
     function handleChange(
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -151,7 +344,12 @@ function BoatForm({
         setSuccess(null)
         setForm((prev) => ({
             ...prev,
-            [name]: type === "number" ? parseFloat(value) : value,
+            [name]:
+                type === "number"
+                    ? value === ""
+                        ? ""
+                        : parseFloat(value)
+                    : value,
         }))
     }
 
@@ -159,7 +357,7 @@ function BoatForm({
         e.preventDefault()
 
         // Client-side validation
-        const validationErrors = validateForm(form)
+        const validationErrors = validateForm(form, orgConfig || undefined)
         if (validationErrors.length > 0) {
             setError(validationErrors.join("\n"))
             return
@@ -201,6 +399,14 @@ function BoatForm({
     }
 
     const renderInput = (key: string, val: any) => {
+        // Check if field should be visible based on org config
+        if (orgConfig && !orgConfig[key]?.visible) {
+            return null // Don't render hidden fields
+        }
+
+        // Remove status field from rendering
+        if (key === "status") return null
+
         const isNumber = typeof val === "number"
         const isTextArea = key === "notes"
         const inputType = isNumber
@@ -209,13 +415,23 @@ function BoatForm({
               ? "date"
               : "text"
 
-        const isOptional = [
-            "boatNumber",
-            "engineNumber",
-            "cinNumber",
-            "insuranceEndDate",
-            "notes",
-        ].includes(key)
+        // Determine if field is required based on org config
+        const isRequired = orgConfig
+            ? orgConfig[key]?.required || false
+            : [
+                  "mooringLocation",
+                  "engineType",
+                  "boatBrand",
+                  "boatType",
+                  "insuranceStartDate",
+                  "organization",
+                  "numberOfEngines",
+                  "yearOfConstruction",
+                  "value",
+                  "premiumPerMille",
+                  "deductible",
+                  "numberOfInsuredDays",
+              ].includes(key)
 
         // Format label from camelCase to Title Case with spaces
         const label = key
@@ -244,7 +460,7 @@ function BoatForm({
                     }}
                 >
                     {label}
-                    {!isOptional && <span style={{ color: "#ef4444" }}>*</span>}
+                    {isRequired && <span style={{ color: "#dc2626" }}> *</span>}
                 </label>
                 <Component
                     id={key}
@@ -252,6 +468,7 @@ function BoatForm({
                     value={val === null ? "" : val}
                     onChange={handleChange}
                     disabled={isSubmitting}
+                    required={isRequired}
                     {...(Component === "input"
                         ? { type: inputType }
                         : { rows: 3 })}
@@ -279,6 +496,57 @@ function BoatForm({
                         target.style.borderColor = "#d1d5db"
                     }}
                 />
+            </div>
+        )
+    }
+
+    // Show loading state while fetching configuration
+    if (isLoadingConfig) {
+        return (
+            <div
+                style={{
+                    position: "fixed",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: "min(90vw, 400px)",
+                    padding: "32px",
+                    background: "#fff",
+                    borderRadius: "16px",
+                    boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
+                    fontFamily: FONT_STACK,
+                    zIndex: 1001,
+                    textAlign: "center",
+                }}
+            >
+                <div
+                    style={{
+                        marginBottom: "16px",
+                        fontSize: "18px",
+                        fontWeight: "500",
+                    }}
+                >
+                    Loading form configuration...
+                </div>
+                <div
+                    style={{
+                        display: "inline-block",
+                        width: "20px",
+                        height: "20px",
+                        border: "2px solid #f3f3f3",
+                        borderTop: "2px solid #10b981",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                    }}
+                />
+                <style>
+                    {`
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `}
+                </style>
             </div>
         )
     }
@@ -317,7 +585,7 @@ function BoatForm({
                         color: "#1f2937",
                     }}
                 >
-                    Create New Boat Insurance
+                    Add New Boat
                 </div>
                 <button
                     onClick={onClose}
@@ -431,8 +699,10 @@ function BoatForm({
                             }
                         }}
                         onMouseOut={(e) => {
-                            const target = e.target as HTMLElement
-                            target.style.backgroundColor = "#f3f4f6"
+                            if (!isSubmitting) {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = "#f3f4f6"
+                            }
                         }}
                     >
                         Cancel
@@ -443,7 +713,7 @@ function BoatForm({
                         style={{
                             padding: "12px 24px",
                             backgroundColor: isSubmitting
-                                ? "#9ca3af"
+                                ? "#6b7280"
                                 : "#10b981",
                             color: "white",
                             border: "none",
@@ -460,7 +730,7 @@ function BoatForm({
                         onMouseOver={(e) => {
                             if (!isSubmitting) {
                                 const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#2563eb"
+                                target.style.backgroundColor = "#059669"
                             }
                         }}
                         onMouseOut={(e) => {
@@ -487,7 +757,7 @@ function BoatForm({
                         ) : (
                             <>
                                 <FaPlus size={12} />
-                                Create Boat Insurance
+                                Add New Boat
                             </>
                         )}
                     </button>
@@ -564,25 +834,25 @@ function BoatFormManager() {
                     alignItems: "center",
                     gap: "8px",
                     transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
+                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
                 }}
                 onMouseOver={(e) => {
                     const target = e.target as HTMLElement
-                    target.style.backgroundColor = "#2563eb"
+                    target.style.backgroundColor = "#059669"
                     target.style.transform = "translateY(-1px)"
                     target.style.boxShadow =
-                        "0 6px 16px rgba(59, 130, 246, 0.4)"
+                        "0 6px 16px rgba(16, 185, 129, 0.4)"
                 }}
                 onMouseOut={(e) => {
                     const target = e.target as HTMLElement
                     target.style.backgroundColor = "#10b981"
                     target.style.transform = "translateY(0)"
                     target.style.boxShadow =
-                        "0 4px 12px rgba(59, 130, 246, 0.3)"
+                        "0 4px 12px rgba(16, 185, 129, 0.3)"
                 }}
             >
                 <FaPlus size={14} />
-                Create New Boat Insurance
+                Add New Boat
             </button>
             {overlay}
         </Frame>

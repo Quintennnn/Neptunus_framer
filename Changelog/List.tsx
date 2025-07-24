@@ -44,7 +44,12 @@ async function fetchChangelog(): Promise<any[]> {
 function getRelativeTime(timestamp: string): string {
     const now = new Date()
     const changeTime = new Date(timestamp)
-    const diffMs = now.getTime() - changeTime.getTime()
+    
+    // Handle potential timezone issues by ensuring we're comparing UTC times
+    const nowUTC = new Date(now.getTime() + (now.getTimezoneOffset() * 60000))
+    const changeTimeUTC = new Date(changeTime.getTime() + (changeTime.getTimezoneOffset() * 60000))
+    
+    const diffMs = nowUTC.getTime() - changeTimeUTC.getTime()
     const diffSeconds = Math.floor(diffMs / 1000)
     const diffMinutes = Math.floor(diffSeconds / 60)
     const diffHours = Math.floor(diffMinutes / 60)
@@ -86,6 +91,104 @@ function getActionStyle(action: string) {
                 border: "1px solid #e5e7eb",
             }
     }
+}
+
+// ——— Data Formatting Helper ———
+function formatDynamoDBValue(value: any): any {
+    if (value === null || value === undefined) {
+        return null
+    }
+
+    // Handle DynamoDB format objects
+    if (typeof value === "object" && value !== null) {
+        // Check for DynamoDB type annotations
+        if (value.S !== undefined) return value.S // String
+        if (value.N !== undefined) return Number(value.N) // Number
+        if (value.BOOL !== undefined) return value.BOOL // Boolean
+        if (value.NULL !== undefined) return null // Null
+        if (value.L !== undefined) return value.L.map(formatDynamoDBValue) // List
+        if (value.M !== undefined) {
+            // Map/Object
+            const formatted: any = {}
+            for (const [key, val] of Object.entries(value.M)) {
+                formatted[key] = formatDynamoDBValue(val)
+            }
+            return formatted
+        }
+        if (value.SS !== undefined) return value.SS // String Set
+        if (value.NS !== undefined) return value.NS.map(Number) // Number Set
+        if (value.BS !== undefined) return value.BS // Binary Set
+
+        // If no DynamoDB type annotation, recursively format object properties
+        const formatted: any = {}
+        for (const [key, val] of Object.entries(value)) {
+            formatted[key] = formatDynamoDBValue(val)
+        }
+        return formatted
+    }
+
+    return value
+}
+
+function formatChangeValue(value: any): string {
+    if (value === null || value === undefined) {
+        return "null"
+    }
+
+    if (typeof value === "boolean") {
+        return value ? "✓ Yes" : "✗ No"
+    }
+
+    if (typeof value === "string") {
+        // Check if it's a date string
+        if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+            return new Date(value).toLocaleString()
+        }
+        return value
+    }
+
+    if (typeof value === "number") {
+        return value.toLocaleString()
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) return "Empty list"
+        if (value.length <= 3) {
+            return value.map(formatChangeValue).join(", ")
+        }
+        return `${value.slice(0, 3).map(formatChangeValue).join(", ")} ... (+${value.length - 3} more)`
+    }
+
+    if (typeof value === "object") {
+        const keys = Object.keys(value)
+        if (keys.length === 0) return "Empty object"
+        
+        // Special handling for configuration objects with required/visible pattern
+        if (keys.length > 5 && keys.every(key => 
+            typeof value[key] === "object" && 
+            value[key] && 
+            ("required" in value[key] || "visible" in value[key])
+        )) {
+            const requiredFields = keys.filter(key => value[key]?.required === true)
+            const visibleFields = keys.filter(key => value[key]?.visible === true)
+            
+            let summary = `Configuration for ${keys.length} fields`
+            if (requiredFields.length > 0) {
+                summary += ` • Required: ${requiredFields.join(", ")}`
+            }
+            if (visibleFields.length > 0 && visibleFields.length !== requiredFields.length) {
+                summary += ` • Visible: ${visibleFields.join(", ")}`
+            }
+            return summary
+        }
+        
+        if (keys.length <= 3) {
+            return keys.map(key => `${key}: ${formatChangeValue(value[key])}`).join(", ")
+        }
+        return `${keys.slice(0, 3).map(key => `${key}: ${formatChangeValue(value[key])}`).join(", ")} ... (+${keys.length - 3} more fields)`
+    }
+
+    return String(value)
 }
 
 // ——— Column Definitions ———
@@ -185,9 +288,9 @@ function ExpandableChanges({
                     color: "#374151",
                 }}
                 onMouseOver={(e) =>
-                    (e.target.style.backgroundColor = "#e5e7eb")
+                    ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
                 }
-                onMouseOut={(e) => (e.target.style.backgroundColor = "#f3f4f6")}
+                onMouseOut={(e) => ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")}
             >
                 {isExpanded ? (
                     <FaChevronDown size={10} />
@@ -211,29 +314,46 @@ function ExpandableChanges({
                     }}
                 >
                     {Object.entries(changes || {}).map(
-                        ([key, value]: [string, any]) => (
-                            <div
-                                key={key}
-                                style={{
-                                    marginBottom: "4px",
-                                    wordBreak: "break-all",
-                                }}
-                            >
-                                <span
+                        ([key, value]: [string, any]) => {
+                            const formattedValue = formatDynamoDBValue(value)
+                            const displayValue = formatChangeValue(formattedValue)
+                            
+                            return (
+                                <div
+                                    key={key}
                                     style={{
-                                        fontWeight: "600",
-                                        color: "#374151",
+                                        marginBottom: "8px",
+                                        wordBreak: "break-word",
+                                        padding: "8px",
+                                        backgroundColor: "#ffffff",
+                                        borderRadius: "4px",
+                                        border: "1px solid #e5e7eb",
                                     }}
                                 >
-                                    {key}:
-                                </span>{" "}
-                                <span style={{ color: "#6b7280" }}>
-                                    {typeof value === "object"
-                                        ? JSON.stringify(value)
-                                        : String(value)}
-                                </span>
-                            </div>
-                        )
+                                    <div
+                                        style={{
+                                            fontWeight: "600",
+                                            color: "#374151",
+                                            marginBottom: "4px",
+                                            fontSize: "13px",
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    >
+                                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                    </div>
+                                    <div 
+                                        style={{ 
+                                            color: "#6b7280",
+                                            fontFamily: FONT_STACK,
+                                            fontSize: "12px",
+                                            lineHeight: "1.4",
+                                        }}
+                                    >
+                                        {displayValue}
+                                    </div>
+                                </div>
+                            )
+                        }
                     )}
                 </div>
             )}
@@ -392,10 +512,10 @@ function ChangelogSearchAndFilterBar({
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
+                            ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
                         }
                         onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
+                            ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")
                         }
                     >
                         <FaFilter /> Columns ({visibleColumns.size})

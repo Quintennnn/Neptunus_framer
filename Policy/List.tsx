@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
@@ -15,6 +15,92 @@ const FONT_STACK =
 
 function getIdToken(): string | null {
     return sessionStorage.getItem("idToken")
+}
+
+// ——— User Role Detection ———
+interface UserInfo {
+    sub: string
+    role: "admin" | "user" | "editor"
+    organization?: string
+    organizations?: string[]
+}
+
+// Fetch user info from backend API
+async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const responseData = await res.json()
+
+        console.log("fetchUserInfo - raw user data from API:", responseData)
+
+        // Handle nested response structure
+        const userData = responseData.user || responseData
+
+        const processedUserInfo = {
+            sub: cognitoSub,
+            role: userData.role || "user", // Default to user if role not found
+            organization: userData.organization,
+            organizations: userData.organizations || [],
+        }
+
+        console.log("fetchUserInfo - processed user info:", processedUserInfo)
+
+        return processedUserInfo
+    } catch (error) {
+        console.error("Failed to fetch user info:", error)
+        return null
+    }
+}
+
+function getUserInfo(): UserInfo | null {
+    try {
+        const token = getIdToken()
+        if (!token) return null
+
+        // Decode JWT to get cognito sub
+        const payload = JSON.parse(atob(token.split(".")[1]))
+
+        // Return basic info with sub - role will be fetched separately
+        return {
+            sub: payload.sub,
+            role: "user", // Temporary default, will be updated by fetchUserInfo
+            organization: undefined,
+            organizations: [],
+        }
+    } catch (error) {
+        console.error("Failed to decode token:", error)
+        return null
+    }
+}
+
+// Check if user is admin
+function isAdmin(userInfo: UserInfo | null): boolean {
+    return userInfo?.role === "admin"
+}
+
+// Check if user is broker/editor
+function isBroker(userInfo: UserInfo | null): boolean {
+    return userInfo?.role === "editor"
+}
+
+// Check if user has access to an organization
+function hasOrganizationAccess(userInfo: UserInfo | null, organization: string): boolean {
+    if (!userInfo) return false
+    if (isAdmin(userInfo)) return true // Admins can see everything
+    if (userInfo.organization === organization) return true
+    return userInfo.organizations?.includes(organization) || false
 }
 function navigateToBoats(policy: any) {
     // Store the selected policy data for the boats page
@@ -32,7 +118,7 @@ function navigateToBoats(policy: any) {
     window.open("/voorradscherm_overrides", "_blank")
 }
 
-async function fetchPolicies(): Promise<any[]> {
+async function fetchPolicies(userInfo: UserInfo | null): Promise<any[]> {
     const token = getIdToken()
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -45,7 +131,16 @@ async function fetchPolicies(): Promise<any[]> {
     })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const json = await res.json()
-    return json.policies
+    let policies = json.policies || []
+    
+    // Filter policies based on user role and organization access
+    if (userInfo && !isAdmin(userInfo)) {
+        policies = policies.filter((policy: any) => 
+            hasOrganizationAccess(userInfo, policy.organization)
+        )
+    }
+    
+    return policies
 }
 
 // ——— Column Groups and Definitions ———
@@ -909,19 +1004,42 @@ export function PolicyPageOverride(): Override {
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
         new Set(COLUMNS.map((col) => col.key)) // Show all columns by default
     )
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+    const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
 
     const refresh = useCallback(() => {
-        fetchPolicies()
+        fetchPolicies(userInfo)
             .then(setPolicies)
             .catch((err) => {
                 console.error(err)
                 setError(err.message)
             })
+    }, [userInfo])
+
+    // Load user info on mount
+    useEffect(() => {
+        async function loadUserInfo() {
+            const basicUserInfo = getUserInfo()
+            if (basicUserInfo) {
+                setUserInfo(basicUserInfo)
+                
+                // Fetch detailed user info from backend
+                const detailedUserInfo = await fetchUserInfo(basicUserInfo.sub)
+                if (detailedUserInfo) {
+                    setUserInfo(detailedUserInfo)
+                }
+            }
+            setIsLoadingUserInfo(false)
+        }
+        
+        loadUserInfo()
     }, [])
 
     useEffect(() => {
-        refresh()
-    }, [refresh])
+        if (!isLoadingUserInfo) {
+            refresh()
+        }
+    }, [refresh, isLoadingUserInfo])
 
     const filteredPolicies =
         policies?.filter((policy) => {
@@ -965,7 +1083,7 @@ export function PolicyPageOverride(): Override {
         }
     }
 
-    if (policies === null) {
+    if (policies === null || isLoadingUserInfo) {
         return {
             children: (
                 <div
@@ -1041,16 +1159,31 @@ export function PolicyPageOverride(): Override {
                                     marginBottom: "20px",
                                 }}
                             >
-                                <h1
+                                <div
                                     style={{
-                                        fontSize: "28px",
-                                        fontWeight: "700",
-                                        color: "#1f2937",
-                                        margin: 0,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
                                     }}
                                 >
-                                    Policy Management
-                                </h1>
+                                    <FaFileContract
+                                        size={24}
+                                        style={{
+                                            color: "#3b82f6",
+                                        }}
+                                    />
+                                    <h1
+                                        style={{
+                                            fontSize: "32px",
+                                            fontWeight: "600",
+                                            color: "#1f2937",
+                                            margin: 0,
+                                            letterSpacing: "-0.025em",
+                                        }}
+                                    >
+                                        {isAdmin(userInfo) ? "Policy Management" : "My Policies"}
+                                    </h1>
+                                </div>
                                 <div
                                     style={{
                                         fontSize: "14px",
@@ -1178,7 +1311,7 @@ export function PolicyPageOverride(): Override {
                                                         style={{
                                                             padding: "8px 12px",
                                                             backgroundColor:
-                                                                "#10b981",
+                                                                "#3b82f6",
                                                             color: "#fff",
                                                             border: "none",
                                                             borderRadius: "6px",
@@ -1196,11 +1329,11 @@ export function PolicyPageOverride(): Override {
                                                         }}
                                                         onMouseOver={(e) =>
                                                             ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#059669")
+                                                                "#2563eb")
                                                         }
                                                         onMouseOut={(e) =>
                                                             ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#10b981")
+                                                                "#3b82f6")
                                                         }
                                                     >
                                                         View Fleet

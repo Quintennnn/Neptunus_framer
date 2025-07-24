@@ -333,7 +333,7 @@ function OrganizationForm({
                         }}
                         onMouseOver={(e) =>
                             !isSubmitting &&
-                            (e.target.style.backgroundColor = "#2563eb")
+                            (e.target.style.backgroundColor = "#059669")
                         }
                         onMouseOut={(e) =>
                             !isSubmitting &&
@@ -434,19 +434,19 @@ function OrganizationFormManager() {
                     alignItems: "center",
                     gap: "8px",
                     transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
+                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
                 }}
                 onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#2563eb"
+                    e.target.style.backgroundColor = "#059669"
                     e.target.style.transform = "translateY(-1px)"
                     e.target.style.boxShadow =
-                        "0 6px 16px rgba(59, 130, 246, 0.4)"
+                        "0 6px 16px rgba(16, 185, 129, 0.4)"
                 }}
                 onMouseOut={(e) => {
                     e.target.style.backgroundColor = "#10b981"
                     e.target.style.transform = "translateY(0)"
                     e.target.style.boxShadow =
-                        "0 4px 12px rgba(59, 130, 246, 0.3)"
+                        "0 4px 12px rgba(16, 185, 129, 0.3)"
                 }}
             >
                 <FaPlus size={14} />

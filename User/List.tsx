@@ -2,7 +2,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
@@ -15,11 +15,100 @@ const FONT_STACK =
 function getIdToken(): string | null {
     return sessionStorage.getItem("idToken")
 }
+
+// ——— User Role Detection ———
+interface UserInfo {
+    sub: string
+    role: "admin" | "user" | "editor"
+    organization?: string
+    organizations?: string[]
+}
+
+// Fetch user info from backend API
+async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const responseData = await res.json()
+
+        console.log("fetchUserInfo - raw user data from API:", responseData)
+
+        // Handle nested response structure
+        const userData = responseData.user || responseData
+
+        const processedUserInfo = {
+            sub: cognitoSub,
+            role: userData.role || "user", // Default to user if role not found
+            organization: userData.organization,
+            organizations: userData.organizations || [],
+        }
+
+        console.log("fetchUserInfo - processed user info:", processedUserInfo)
+
+        return processedUserInfo
+    } catch (error) {
+        console.error("Failed to fetch user info:", error)
+        return null
+    }
+}
+
+function getCurrentUserInfo(): UserInfo | null {
+    try {
+        const token = getIdToken()
+        if (!token) return null
+
+        // Decode JWT to get cognito sub
+        const payload = JSON.parse(atob(token.split(".")[1]))
+
+        // Return basic info with sub - role will be fetched separately
+        return {
+            sub: payload.sub,
+            role: "user", // Temporary default, will be updated by fetchUserInfo
+            organization: undefined,
+            organizations: [],
+        }
+    } catch (error) {
+        console.error("Failed to decode token:", error)
+        return null
+    }
+}
+
+// Check if user is admin
+function isAdmin(userInfo: UserInfo | null): boolean {
+    return userInfo?.role === "admin"
+}
+
+// Check if user is broker/editor
+function isBroker(userInfo: UserInfo | null): boolean {
+    return userInfo?.role === "editor"
+}
+
+// Check if user has access to an organization
+function hasOrganizationAccess(
+    userInfo: UserInfo | null,
+    organization: string
+): boolean {
+    if (!userInfo) return false
+    if (isAdmin(userInfo)) return true // Admins can see everything
+    if (userInfo.organization === organization) return true
+    return userInfo.organizations?.includes(organization) || false
+}
 export function getUserId(): string | null {
     return sessionStorage.getItem("userId")
 }
 
-async function fetchUsers(): Promise<any[]> {
+async function fetchUsers(userInfo: UserInfo | null): Promise<any[]> {
     const token = getIdToken()
     if (!token) {
         throw new Error("No authentication token found. Please log in again.")
@@ -35,12 +124,27 @@ async function fetchUsers(): Promise<any[]> {
     })
     if (!res.ok) {
         if (res.status === 403) {
-            throw new Error("Authentication failed. Your session may have expired. Please log in again.")
+            throw new Error(
+                "Authentication failed. Your session may have expired. Please log in again."
+            )
         }
         throw new Error(`${res.status} ${res.statusText}`)
     }
     const json = await res.json()
-    return json.users || json.data || json
+    let users = json.users || json.data || json
+
+    // Filter users based on user role and organization access
+    if (userInfo && !isAdmin(userInfo)) {
+        // Non-admin users can only see users from their own organizations
+        users = users.filter((user: any) => {
+            if (!user.organizations) return false
+            return user.organizations.some((org: string) =>
+                hasOrganizationAccess(userInfo, org)
+            )
+        })
+    }
+
+    return users
 }
 
 async function fetchOrganizations(): Promise<any[]> {
@@ -343,10 +447,11 @@ function EditUserForm({
                 return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
             }
 
-            // Convert organizations array back to appropriate format for API
+            const toLower = (str: string) => str.trim().toLowerCase()
+
             const submitData = {
                 ...form,
-                role: capitalizeFirstLetter(form.role), // Capitalize the role before submission
+                role: toLower(form.role), // ← send lowercase only
                 organizations:
                     form.organizations.length === 0
                         ? "none"
@@ -377,8 +482,13 @@ function EditUserForm({
             setTimeout(() => {
                 // Check if we're editing the current user - if so, we might need to handle session changes
                 const currentUserId = getUserId()
-                if (user.username === currentUserId || user.id === currentUserId) {
-                    setSuccess("User updated successfully. Note: If you changed your own permissions, you may need to log in again.")
+                if (
+                    user.username === currentUserId ||
+                    user.id === currentUserId
+                ) {
+                    setSuccess(
+                        "User updated successfully. Note: If you changed your own permissions, you may need to log in again."
+                    )
                     setTimeout(() => {
                         onClose()
                         // Don't refresh automatically if editing own user to avoid 403 errors
@@ -1231,23 +1341,51 @@ export function UserPageOverride(): Override {
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
         new Set(COLUMNS.map((col) => col.key)) // Show all columns by default
     )
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+    const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
 
     const refresh = useCallback(() => {
-        fetchUsers()
+        fetchUsers(userInfo)
             .then(setUsers)
             .catch((err) => {
                 console.error(err)
-                if (err.message.includes("Authentication failed") || err.message.includes("session may have expired")) {
-                    setError("Authentication failed. Please log in again to continue managing users.")
+                if (
+                    err.message.includes("Authentication failed") ||
+                    err.message.includes("session may have expired")
+                ) {
+                    setError(
+                        "Authentication failed. Please log in again to continue managing users."
+                    )
                 } else {
                     setError(err.message)
                 }
             })
+    }, [userInfo])
+
+    // Load user info on mount
+    useEffect(() => {
+        async function loadUserInfo() {
+            const basicUserInfo = getCurrentUserInfo()
+            if (basicUserInfo) {
+                setUserInfo(basicUserInfo)
+
+                // Fetch detailed user info from backend
+                const detailedUserInfo = await fetchUserInfo(basicUserInfo.sub)
+                if (detailedUserInfo) {
+                    setUserInfo(detailedUserInfo)
+                }
+            }
+            setIsLoadingUserInfo(false)
+        }
+
+        loadUserInfo()
     }, [])
 
     useEffect(() => {
-        refresh()
-    }, [refresh])
+        if (!isLoadingUserInfo) {
+            refresh()
+        }
+    }, [refresh, isLoadingUserInfo])
 
     const filteredUsers =
         users?.filter((user) => {
@@ -1279,7 +1417,14 @@ export function UserPageOverride(): Override {
         const id = deletingUserId
         setDeletingUserId(null)
         try {
-            const res = await fetch(`${API_BASE_URL}${USER_PATH}/${id}`, {
+            // Find the user by ID to get their username
+            const userToDelete = users?.find((u) => u.id === id)
+            if (!userToDelete) {
+                throw new Error("User not found")
+            }
+            
+            // Use username for the API call instead of user ID
+            const res = await fetch(`${API_BASE_URL}${USER_PATH}/${userToDelete.username}`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${getIdToken()}` },
             })
@@ -1291,7 +1436,7 @@ export function UserPageOverride(): Override {
         }
     }
 
-    if (users === null) {
+    if (users === null || isLoadingUserInfo) {
         return {
             children: (
                 <div
@@ -1367,16 +1512,33 @@ export function UserPageOverride(): Override {
                                     marginBottom: "20px",
                                 }}
                             >
-                                <h1
+                                <div
                                     style={{
-                                        fontSize: "28px",
-                                        fontWeight: "700",
-                                        color: "#1f2937",
-                                        margin: 0,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
                                     }}
                                 >
-                                    User Management
-                                </h1>
+                                    <FaUsers
+                                        size={24}
+                                        style={{
+                                            color: "#3b82f6",
+                                        }}
+                                    />
+                                    <h1
+                                        style={{
+                                            fontSize: "32px",
+                                            fontWeight: "600",
+                                            color: "#1f2937",
+                                            margin: 0,
+                                            letterSpacing: "-0.025em",
+                                        }}
+                                    >
+                                        {isAdmin(userInfo)
+                                            ? "User Management"
+                                            : "Team Members"}
+                                    </h1>
+                                </div>
                                 <div
                                     style={{
                                         fontSize: "14px",

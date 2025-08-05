@@ -2,24 +2,19 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes } from "react-icons/fa"
-
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const BOAT_PATH = "/neptunus/boat"
-const ORGANIZATION_PATH = "/neptunus/organization"
-const USER_PATH = "/neptunus/user"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
-
-function getUserId(): string | null {
-    return sessionStorage.getItem("userId")
-}
+import { colors, styles, hover, animations, FONT_STACK } from "../theme"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    getUserId,
+    formatErrorMessage, 
+    formatSuccessMessage,
+    validateRequired,
+    validateYear,
+    validateNumberRange,
+    formatLabel
+} from "../utils"
 
 // Type for organization field configuration
 type FieldConfig = {
@@ -78,21 +73,18 @@ function validateForm(
             errors.push("Insurance start date is required")
         if (!form.organization.trim()) errors.push("Organization is required")
 
-        if (form.numberOfEngines <= 0)
-            errors.push("Number of engines must be greater than 0")
-        if (
-            form.yearOfConstruction <= 1900 ||
-            form.yearOfConstruction > new Date().getFullYear()
-        )
-            errors.push(
-                "Year of construction must be between 1900 and current year"
-            )
-        if (form.value <= 0) errors.push("Value must be greater than 0")
-        if (form.premiumPerMille <= 0)
-            errors.push("Premium per mille must be greater than 0")
-        if (form.deductible < 0) errors.push("Deductible cannot be negative")
-        if (form.numberOfInsuredDays <= 0)
-            errors.push("Number of insured days must be greater than 0")
+        const enginesError = validateNumberRange(form.numberOfEngines, "Number of engines", 1)
+        if (enginesError) errors.push(enginesError)
+        const yearError = validateYear(form.yearOfConstruction, "Year of construction")
+        if (yearError) errors.push(yearError)
+        const valueError = validateNumberRange(form.value, "Value", 1)
+        if (valueError) errors.push(valueError)
+        const premiumError = validateNumberRange(form.premiumPerMille, "Premium per mille", 0.01)
+        if (premiumError) errors.push(premiumError)
+        const deductibleError = validateNumberRange(form.deductible, "Deductible", 0)
+        if (deductibleError) errors.push(deductibleError)
+        const daysError = validateNumberRange(form.numberOfInsuredDays, "Number of insured days", 1)
+        if (daysError) errors.push(daysError)
 
         return errors
     }
@@ -103,25 +95,16 @@ function validateForm(
         if (fieldConfig?.required) {
             // Check if field is empty based on type
             if (typeof value === "string" && !value.trim()) {
-                const label = fieldName
-                    .replace(/([A-Z])/g, " $1")
-                    .replace(/^./, (str) => str.toUpperCase())
-                    .trim()
+                const label = formatLabel(fieldName)
                 errors.push(`${label} is required`)
             } else if (typeof value === "number") {
                 // For required number fields, check if empty or invalid
                 if (value === "" || isNaN(value)) {
-                    const label = fieldName
-                        .replace(/([A-Z])/g, " $1")
-                        .replace(/^./, (str) => str.toUpperCase())
-                        .trim()
+                    const label = formatLabel(fieldName)
                     errors.push(`${label} is required`)
                 } else if (value <= 0) {
                     // Only check greater than 0 if field has a value and is required
-                    const label = fieldName
-                        .replace(/([A-Z])/g, " $1")
-                        .replace(/^./, (str) => str.toUpperCase())
-                        .trim()
+                    const label = formatLabel(fieldName)
                     errors.push(
                         `${label} must be a valid number greater than 0`
                     )
@@ -152,42 +135,7 @@ function validateForm(
     return errors
 }
 
-// Helper function to parse and format error messages
-function formatErrorMessage(error: any): string {
-    if (typeof error === "string") return error
-    if (error && typeof error === "object") {
-        if (error.message) return error.message
-        if (error.errors && Array.isArray(error.errors)) {
-            return error.errors
-                .map((err: any) =>
-                    typeof err === "string"
-                        ? err
-                        : err.message || "Validation error"
-                )
-                .join("\n")
-        }
-        if (error.fieldErrors || error.validationErrors) {
-            const fieldErrors = error.fieldErrors || error.validationErrors
-            return Object.entries(fieldErrors)
-                .map(([field, message]) => `${field}: ${message}`)
-                .join("\n")
-        }
-        return JSON.stringify(error, null, 2)
-    }
-    return "An unexpected error occurred"
-}
-
-// Helper function to format success messages
-function formatSuccessMessage(data: any): string {
-    if (typeof data === "string") return data
-    if (data && typeof data === "object") {
-        if (data.message) return data.message
-        if (data.id)
-            return `Boat insurance created successfully! ID: ${data.id}`
-        return "Boat insurance has been created successfully!"
-    }
-    return "Operation completed successfully!"
-}
+// Helper functions moved to utils.ts
 
 // Core form component with enhanced styling
 function BoatForm({
@@ -240,7 +188,7 @@ function BoatForm({
             if (!user_id) throw new Error("No user ID found")
 
             const response = await fetch(
-                `${API_BASE_URL}${USER_PATH}/${user_id}`,
+                `${API_BASE_URL}${API_PATHS.USER}/${user_id}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -277,7 +225,7 @@ function BoatForm({
     async function fetchOrganizationConfig(organizationName: string) {
         try {
             const response = await fetch(
-                `${API_BASE_URL}${ORGANIZATION_PATH}/by-name/${organizationName}`,
+                `${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${organizationName}`,
                 {
                     headers: {
                         Authorization: `Bearer ${getIdToken()}`,
@@ -368,7 +316,7 @@ function BoatForm({
         setIsSubmitting(true)
 
         try {
-            const res = await fetch(API_BASE_URL + BOAT_PATH, {
+            const res = await fetch(API_BASE_URL + API_PATHS.BOAT, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -381,7 +329,7 @@ function BoatForm({
             if (!res.ok) {
                 setError(formatErrorMessage(data))
             } else {
-                setSuccess(formatSuccessMessage(data))
+                setSuccess(formatSuccessMessage(data, "Boat insurance"))
                 // Auto-close after success
                 setTimeout(() => {
                     onSuccess?.()
@@ -434,10 +382,7 @@ function BoatForm({
               ].includes(key)
 
         // Format label from camelCase to Title Case with spaces
-        const label = key
-            .replace(/([A-Z])/g, " $1")
-            .replace(/^./, (str) => str.toUpperCase())
-            .trim()
+        const label = formatLabel(key)
 
         const Component = isTextArea ? "textarea" : "input"
 
@@ -449,18 +394,9 @@ function BoatForm({
                     width: "100%",
                 }}
             >
-                <label
-                    htmlFor={key}
-                    style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        color: "#374151",
-                    }}
-                >
+                <label htmlFor={key} style={styles.label}>
                     {label}
-                    {isRequired && <span style={{ color: "#dc2626" }}> *</span>}
+                    {isRequired && <span style={{ color: colors.error }}> *</span>}
                 </label>
                 <Component
                     id={key}
@@ -474,26 +410,17 @@ function BoatForm({
                         : { rows: 3 })}
                     placeholder={`Enter ${label.toLowerCase()}`}
                     style={{
-                        width: "100%",
-                        padding: "12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontFamily: FONT_STACK,
-                        transition: "border-color 0.2s",
-                        backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                        ...styles.input,
+                        backgroundColor: isSubmitting ? colors.gray50 : colors.white,
                         cursor: isSubmitting ? "not-allowed" : "text",
-                        boxSizing: "border-box",
                     }}
                     onFocus={(e) => {
                         if (!isSubmitting) {
-                            const target = e.target as HTMLElement
-                            target.style.borderColor = "#10b981"
+                            hover.input(e.target as HTMLElement)
                         }
                     }}
                     onBlur={(e) => {
-                        const target = e.target as HTMLElement
-                        target.style.borderColor = "#d1d5db"
+                        hover.resetInput(e.target as HTMLElement)
                     }}
                 />
             </div>
@@ -505,17 +432,9 @@ function BoatForm({
         return (
             <div
                 style={{
-                    position: "fixed",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)",
+                    ...styles.modal,
                     width: "min(90vw, 400px)",
                     padding: "32px",
-                    background: "#fff",
-                    borderRadius: "16px",
-                    boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                    fontFamily: FONT_STACK,
-                    zIndex: 1001,
                     textAlign: "center",
                 }}
             >
@@ -530,13 +449,12 @@ function BoatForm({
                 </div>
                 <div
                     style={{
+                        ...styles.spinner,
                         display: "inline-block",
                         width: "20px",
                         height: "20px",
-                        border: "2px solid #f3f3f3",
-                        borderTop: "2px solid #10b981",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
+                        border: `2px solid ${colors.gray100}`,
+                        borderTop: `2px solid ${colors.primary}`,
                     }}
                 />
                 <style>
@@ -554,61 +472,22 @@ function BoatForm({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "min(90vw, 800px)",
                 maxHeight: "90vh",
                 padding: "32px",
-                background: "#fff",
-                borderRadius: "16px",
-                boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
-                overflow: "auto",
             }}
         >
             {/* Header */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "24px",
-                }}
-            >
-                <div
-                    style={{
-                        fontSize: "24px",
-                        fontWeight: "600",
-                        color: "#1f2937",
-                    }}
-                >
+            <div style={styles.header}>
+                <div style={styles.title}>
                     Add New Boat
                 </div>
                 <button
                     onClick={onClose}
-                    style={{
-                        padding: "8px",
-                        backgroundColor: "transparent",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        color: "#6b7280",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) => {
-                        const target = e.target as HTMLElement
-                        target.style.backgroundColor = "#f3f4f6"
-                    }}
-                    onMouseOut={(e) => {
-                        const target = e.target as HTMLElement
-                        target.style.backgroundColor = "transparent"
-                    }}
+                    style={styles.iconButton}
+                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
+                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
                 >
                     <FaTimes size={16} />
                 </button>
@@ -616,35 +495,14 @@ function BoatForm({
 
             {/* Error Display */}
             {error && (
-                <div
-                    style={{
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #fecaca",
-                        whiteSpace: "pre-wrap",
-                    }}
-                >
+                <div style={styles.errorAlert}>
                     {error}
                 </div>
             )}
 
             {/* Success Display */}
             {success && (
-                <div
-                    style={{
-                        color: "#059669",
-                        backgroundColor: "#ecfdf5",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #a7f3d0",
-                    }}
-                >
+                <div style={styles.successAlert}>
                     {success}
                 </div>
             )}
@@ -665,43 +523,24 @@ function BoatForm({
                 </div>
 
                 {/* Submit Buttons */}
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "12px",
-                        paddingTop: "24px",
-                        borderTop: "1px solid #e5e7eb",
-                        marginTop: "24px",
-                    }}
-                >
+                <div style={{ ...styles.buttonGroup, marginTop: "24px" }}>
                     <button
                         type="button"
                         onClick={onClose}
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                            ...styles.secondaryButton,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
                             opacity: isSubmitting ? 0.6 : 1,
                         }}
                         onMouseOver={(e) => {
                             if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#e5e7eb"
+                                hover.secondaryButton(e.target as HTMLElement)
                             }
                         }}
                         onMouseOut={(e) => {
                             if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#f3f4f6"
+                                hover.resetSecondaryButton(e.target as HTMLElement)
                             }
                         }}
                     >
@@ -711,47 +550,24 @@ function BoatForm({
                         type="submit"
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: isSubmitting
-                                ? "#6b7280"
-                                : "#10b981",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                            ...styles.primaryButton,
+                            backgroundColor: isSubmitting ? colors.disabled : colors.primary,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
                         }}
                         onMouseOver={(e) => {
                             if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#059669"
+                                hover.primaryButton(e.target as HTMLElement)
                             }
                         }}
                         onMouseOut={(e) => {
                             if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#10b981"
+                                hover.resetPrimaryButton(e.target as HTMLElement)
                             }
                         }}
                     >
                         {isSubmitting ? (
                             <>
-                                <div
-                                    style={{
-                                        width: "16px",
-                                        height: "16px",
-                                        border: "2px solid #ffffff",
-                                        borderTop: "2px solid transparent",
-                                        borderRadius: "50%",
-                                        animation: "spin 1s linear infinite",
-                                    }}
-                                />
+                                <div style={styles.spinner} />
                                 Submitting...
                             </>
                         ) : (
@@ -765,14 +581,7 @@ function BoatForm({
             </form>
 
             {/* Add spinning animation for loading spinner */}
-            <style>
-                {`
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                `}
-            </style>
+            <style>{animations}</style>
         </div>
     )
 }
@@ -789,21 +598,7 @@ function BoatFormManager() {
 
     const overlay = showForm
         ? ReactDOM.createPortal(
-              <div
-                  style={{
-                      position: "fixed",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(0, 0, 0, 0.5)",
-                      backdropFilter: "blur(4px)",
-                      zIndex: 1000,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                  }}
-              >
+              <div style={styles.modalOverlay}>
                   <BoatForm
                       onClose={() => setShowForm(false)}
                       onSuccess={handleSuccess}
@@ -818,37 +613,22 @@ function BoatFormManager() {
             <button
                 onClick={() => setShowForm(true)}
                 style={{
+                    ...styles.primaryButton,
                     position: "absolute",
                     top: 20,
                     left: 20,
                     padding: "12px 20px",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    fontFamily: FONT_STACK,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                    boxShadow: `0 4px 12px ${colors.primary}30`,
                 }}
                 onMouseOver={(e) => {
-                    const target = e.target as HTMLElement
-                    target.style.backgroundColor = "#059669"
-                    target.style.transform = "translateY(-1px)"
-                    target.style.boxShadow =
-                        "0 6px 16px rgba(16, 185, 129, 0.4)"
+                    hover.primaryButton(e.target as HTMLElement)
+                    e.target.style.transform = "translateY(-1px)"
+                    e.target.style.boxShadow = `0 6px 16px ${colors.primary}40`
                 }}
                 onMouseOut={(e) => {
-                    const target = e.target as HTMLElement
-                    target.style.backgroundColor = "#10b981"
-                    target.style.transform = "translateY(0)"
-                    target.style.boxShadow =
-                        "0 4px 12px rgba(16, 185, 129, 0.3)"
+                    hover.resetPrimaryButton(e.target as HTMLElement)
+                    e.target.style.transform = "translateY(0)"
+                    e.target.style.boxShadow = `0 4px 12px ${colors.primary}30`
                 }}
             >
                 <FaPlus size={14} />

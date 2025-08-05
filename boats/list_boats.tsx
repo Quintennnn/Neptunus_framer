@@ -16,15 +16,11 @@ import {
     FaUser,
     FaUserEdit,
 } from "react-icons/fa"
+import { colors, styles, hover, FONT_STACK } from "../theme"
+import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
 
 // ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const BOAT_PATH = "/neptunus/boat"
-const ORGANIZATION_PATH = "/neptunus/organization"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+// API constants and FONT_STACK moved to theme.ts and utils.ts
 
 // Status color mapping
 const STATUS_COLORS = {
@@ -55,7 +51,7 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
             method: "GET",
             headers,
             mode: "cors",
@@ -124,7 +120,7 @@ async function fetchOrganizationConfigByName(
         if (token) headers.Authorization = `Bearer ${token}`
 
         const res = await fetch(
-            `${API_BASE_URL}${ORGANIZATION_PATH}?name=${encodeURIComponent(orgName)}`,
+            `${API_BASE_URL}${API_PATHS.ORGANIZATION}?name=${encodeURIComponent(orgName)}`,
             {
                 method: "GET",
                 headers,
@@ -232,7 +228,7 @@ async function fetchOrganizations(): Promise<string[]> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${ORGANIZATION_PATH}`, {
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
             method: "GET",
             headers,
             mode: "cors",
@@ -261,7 +257,7 @@ async function fetchBoats(organizationFilter?: string): Promise<any[]> {
     }
     if (token) headers.Authorization = `Bearer ${token}`
 
-    let url = `${API_BASE_URL}${BOAT_PATH}`
+    let url = `${API_BASE_URL}${API_PATHS.BOAT}`
     if (organizationFilter) {
         url += `?organization=${encodeURIComponent(organizationFilter)}`
     }
@@ -316,7 +312,7 @@ async function approveBoat(boatId: string | number): Promise<void> {
     }
     if (token) headers.Authorization = `Bearer ${token}`
 
-    const res = await fetch(`${API_BASE_URL}${BOAT_PATH}/${boatId}/approve`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.BOAT}/${boatId}/approve`, {
         method: "PUT",
         headers,
         mode: "cors",
@@ -339,7 +335,7 @@ async function declineBoat(
     }
     if (token) headers.Authorization = `Bearer ${token}`
 
-    const res = await fetch(`${API_BASE_URL}${BOAT_PATH}/${boatId}/decline`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.BOAT}/${boatId}/decline`, {
         method: "PUT",
         headers,
         body: JSON.stringify({ reason }),
@@ -360,7 +356,7 @@ async function deleteBoat(boatId: string | number): Promise<void> {
     }
     if (token) headers.Authorization = `Bearer ${token}`
 
-    const res = await fetch(`${API_BASE_URL}${BOAT_PATH}/${boatId}`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.BOAT}/${boatId}`, {
         method: "DELETE",
         headers,
         mode: "cors",
@@ -383,7 +379,7 @@ async function updateBoat(
     }
     if (token) headers.Authorization = `Bearer ${token}`
 
-    const res = await fetch(`${API_BASE_URL}${BOAT_PATH}/${boatId}`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.BOAT}/${boatId}`, {
         method: "PUT",
         headers,
         body: JSON.stringify(formData),
@@ -709,7 +705,7 @@ function renderBoatCellValue(col: any, cellValue: any): React.ReactNode {
         return (
             <span
                 style={{
-                    color: "#9ca3af",
+                    color: colors.gray400,
                 }}
             >
                 -
@@ -727,8 +723,8 @@ function renderBoatCellValue(col: any, cellValue: any): React.ReactNode {
                     borderRadius: "12px",
                     fontSize: "12px",
                     fontWeight: "500",
-                    backgroundColor: statusConfig?.bg || "#6b7280",
-                    color: statusConfig?.text || "#ffffff",
+                    backgroundColor: statusConfig?.bg || colors.gray500,
+                    color: statusConfig?.text || colors.white,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "4px",
@@ -798,7 +794,7 @@ function DeclineReasonDialog({
                         fontSize: "18px",
                         fontWeight: "600",
                         marginBottom: "16px",
-                        color: "#1f2937",
+                        color: colors.gray800,
                     }}
                 >
                     Decline Boat
@@ -806,7 +802,7 @@ function DeclineReasonDialog({
                 <div
                     style={{
                         fontSize: "14px",
-                        color: "#6b7280",
+                        color: colors.gray500,
                         marginBottom: "16px",
                         lineHeight: "1.5",
                     }}
@@ -820,12 +816,7 @@ function DeclineReasonDialog({
                     required
                     rows={4}
                     style={{
-                        width: "100%",
-                        padding: "12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontFamily: FONT_STACK,
+                        ...styles.input,
                         resize: "vertical",
                         marginBottom: "24px",
                     }}
@@ -842,8 +833,8 @@ function DeclineReasonDialog({
                         onClick={onCancel}
                         style={{
                             padding: "10px 20px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
+                            backgroundColor: colors.gray100,
+                            color: colors.gray700,
                             border: "none",
                             borderRadius: "8px",
                             fontSize: "14px",
@@ -853,10 +844,10 @@ function DeclineReasonDialog({
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
+                            (e.target.style.backgroundColor = colors.gray200)
                         }
                         onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
+                            (e.target.style.backgroundColor = colors.gray100)
                         }
                     >
                         Cancel
@@ -901,25 +892,18 @@ function ConfirmDeleteDialog({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "400px",
                 padding: "24px",
-                background: "#fff",
                 borderRadius: "12px",
                 boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
             }}
         >
             <div
                 style={{
+                    ...styles.title,
                     fontSize: "18px",
-                    fontWeight: "600",
                     marginBottom: "16px",
-                    color: "#1f2937",
                 }}
             >
                 Delete Boat
@@ -927,7 +911,7 @@ function ConfirmDeleteDialog({
             <div
                 style={{
                     fontSize: "14px",
-                    color: "#6b7280",
+                    color: colors.gray500,
                     marginBottom: "24px",
                     lineHeight: "1.5",
                 }}
@@ -935,56 +919,27 @@ function ConfirmDeleteDialog({
                 Are you sure you want to delete this boat? This action cannot be
                 undone.
             </div>
-            <div
-                style={{
-                    display: "flex",
-                    gap: "12px",
-                    justifyContent: "flex-end",
-                }}
-            >
+            <div style={styles.buttonGroup}>
                 <button
                     onClick={onCancel}
                     style={{
+                        ...styles.secondaryButton,
                         padding: "10px 20px",
-                        backgroundColor: "#f3f4f6",
-                        color: "#374151",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#e5e7eb")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#f3f4f6")
-                    }
+                    onMouseOver={(e) => hover.secondaryButton(e.target)}
+                    onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
                 >
                     Cancel
                 </button>
                 <button
                     onClick={onConfirm}
                     style={{
+                        ...styles.primaryButton,
                         padding: "10px 20px",
-                        backgroundColor: "#ef4444",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
+                        backgroundColor: colors.error,
                     }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#dc2626")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#ef4444")
-                    }
+                    onMouseOver={(e) => (e.target.style.backgroundColor = "#dc2626")}
+                    onMouseOut={(e) => (e.target.style.backgroundColor = colors.error)}
                 >
                     Delete
                 </button>
@@ -1261,7 +1216,7 @@ function SearchAndFilterBar({
                             left: "12px",
                             top: "50%",
                             transform: "translateY(-50%)",
-                            color: "#6b7280",
+                            color: colors.gray500,
                             fontSize: "14px",
                         }}
                     />
@@ -1351,10 +1306,10 @@ function SearchAndFilterBar({
                                 transition: "all 0.2s",
                             }}
                             onMouseOver={(e) =>
-                                (e.target.style.backgroundColor = "#e5e7eb")
+                                (e.target.style.backgroundColor = colors.gray200)
                             }
                             onMouseOut={(e) =>
-                                (e.target.style.backgroundColor = "#f3f4f6")
+                                (e.target.style.backgroundColor = colors.gray100)
                             }
                         >
                             <FaBuilding /> Organizations (
@@ -1369,8 +1324,8 @@ function SearchAndFilterBar({
                         onClick={() => setShowColumnFilter(!showColumnFilter)}
                         style={{
                             padding: "12px 16px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
+                            backgroundColor: colors.gray100,
+                            color: colors.gray700,
                             border: "none",
                             borderRadius: "8px",
                             fontSize: "14px",
@@ -1383,10 +1338,10 @@ function SearchAndFilterBar({
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
+                            (e.target.style.backgroundColor = colors.gray200)
                         }
                         onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
+                            (e.target.style.backgroundColor = colors.gray100)
                         }
                     >
                         <FaFilter /> Columns ({visibleColumns.size})
@@ -1451,12 +1406,9 @@ function SearchAndFilterBar({
                                             })
                                         }}
                                         style={{
+                                            ...styles.secondaryButton,
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: "pointer",
                                         }}
                                     >
                                         Select All
@@ -1474,12 +1426,9 @@ function SearchAndFilterBar({
                                             })
                                         }}
                                         style={{
+                                            ...styles.secondaryButton,
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: "pointer",
                                         }}
                                     >
                                         Clear All
@@ -1601,12 +1550,9 @@ function SearchAndFilterBar({
                                                 })
                                         }}
                                         style={{
+                                            ...styles.secondaryButton,
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: "pointer",
                                         }}
                                     >
                                         Essential Only
@@ -1621,12 +1567,9 @@ function SearchAndFilterBar({
                                             )
                                         }
                                         style={{
+                                            ...styles.secondaryButton,
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: "pointer",
                                         }}
                                     >
                                         Show All
@@ -1672,7 +1615,7 @@ function SearchAndFilterBar({
                                                 <span
                                                     style={{
                                                         fontSize: "11px",
-                                                        color: "#6b7280",
+                                                        color: colors.gray500,
                                                     }}
                                                 >
                                                     {visibleInGroup}/
@@ -2248,8 +2191,8 @@ function EditBoatForm({
                         onClick={onClose}
                         style={{
                             padding: "12px 24px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
+                            backgroundColor: colors.gray100,
+                            color: colors.gray700,
                             border: "none",
                             borderRadius: "8px",
                             fontSize: "14px",
@@ -2259,10 +2202,10 @@ function EditBoatForm({
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
+                            (e.target.style.backgroundColor = colors.gray200)
                         }
                         onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
+                            (e.target.style.backgroundColor = colors.gray100)
                         }
                     >
                         Cancel
@@ -2555,7 +2498,7 @@ export function BoatPageOverride(): Override {
                         alignItems: "center",
                         height: "200px",
                         fontSize: "16px",
-                        color: "#6b7280",
+                        color: colors.gray500,
                         fontFamily: FONT_STACK,
                     }}
                 >
@@ -2666,7 +2609,7 @@ export function BoatPageOverride(): Override {
                                                 style={{
                                                     fontSize: "32px",
                                                     fontWeight: "600",
-                                                    color: "#1f2937",
+                                                    color: colors.gray800,
                                                     margin: 0,
                                                     letterSpacing: "-0.025em",
                                                 }}
@@ -2722,7 +2665,7 @@ export function BoatPageOverride(): Override {
                                     <div
                                         style={{
                                             fontSize: "14px",
-                                            color: "#6b7280",
+                                            color: colors.gray500,
                                             marginBottom: "8px",
                                             fontWeight: "400",
                                         }}
@@ -2746,7 +2689,7 @@ export function BoatPageOverride(): Override {
                                 <div
                                     style={{
                                         fontSize: "14px",
-                                        color: "#6b7280",
+                                        color: colors.gray500,
                                         backgroundColor: "#f3f4f6",
                                         padding: "6px 12px",
                                         borderRadius: "6px",

@@ -3,18 +3,15 @@ import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers } from "react-icons/fa"
-
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const USER_PATH = "/neptunus/user"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
+import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    getUserId,
+    formatErrorMessage, 
+    formatSuccessMessage
+} from "../Utils.tsx"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -33,7 +30,7 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
             method: "GET",
             headers,
             mode: "cors",
@@ -104,9 +101,6 @@ function hasOrganizationAccess(
     if (userInfo.organization === organization) return true
     return userInfo.organizations?.includes(organization) || false
 }
-export function getUserId(): string | null {
-    return sessionStorage.getItem("userId")
-}
 
 async function fetchUsers(userInfo: UserInfo | null): Promise<any[]> {
     const token = getIdToken()
@@ -117,7 +111,7 @@ async function fetchUsers(userInfo: UserInfo | null): Promise<any[]> {
         "Content-Type": "application/json",
     }
     headers.Authorization = `Bearer ${token}`
-    const res = await fetch(`${API_BASE_URL}${USER_PATH}`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}`, {
         method: "GET",
         headers,
         mode: "cors",
@@ -153,7 +147,7 @@ async function fetchOrganizations(): Promise<any[]> {
         "Content-Type": "application/json",
     }
     if (token) headers.Authorization = `Bearer ${token}`
-    const res = await fetch(`${API_BASE_URL}/neptunus/organization`, {
+    const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
         method: "GET",
         headers,
         mode: "cors",
@@ -265,92 +259,28 @@ function ConfirmDeleteDialog({
     onCancel(): void
 }) {
     return (
-        <div
-            style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "400px",
-                padding: "24px",
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
-            }}
-        >
-            <div
-                style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    marginBottom: "16px",
-                    color: "#1f2937",
-                }}
-            >
+        <div style={styles.modal}>
+            <div style={styles.title}>
                 Delete User
             </div>
-            <div
-                style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
-                    marginBottom: "24px",
-                    lineHeight: "1.5",
-                }}
-            >
+            <div style={styles.description}>
                 Are you sure you want to delete this user? This action cannot be
                 undone.
             </div>
-            <div
-                style={{
-                    display: "flex",
-                    gap: "12px",
-                    justifyContent: "flex-end",
-                }}
-            >
+            <div style={styles.buttonGroup}>
                 <button
                     onClick={onCancel}
-                    style={{
-                        padding: "10px 20px",
-                        backgroundColor: "#f3f4f6",
-                        color: "#374151",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#e5e7eb")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#f3f4f6")
-                    }
+                    style={styles.secondaryButton}
+                    onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
+                    onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
                 >
                     Cancel
                 </button>
                 <button
                     onClick={onConfirm}
-                    style={{
-                        padding: "10px 20px",
-                        backgroundColor: "#ef4444",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#dc2626")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#ef4444")
-                    }
+                    style={styles.dangerButton}
+                    onMouseOver={(e) => hover.dangerButton(e.target as HTMLElement)}
+                    onMouseOut={(e) => hover.resetDangerButton(e.target as HTMLElement)}
                 >
                     Delete
                 </button>
@@ -459,7 +389,7 @@ function EditUserForm({
             }
             // Use the user being edited, not the current session user
             const res = await fetch(
-                `${API_BASE_URL}${USER_PATH}/${user.username}`, // ✅ Use user.username instead of getUserId()
+                `${API_BASE_URL}${API_PATHS.USER}/${user.username}`, // ✅ Use user.username instead of getUserId()
                 {
                     method: "PUT",
                     headers: {
@@ -471,14 +401,10 @@ function EditUserForm({
             )
             const data = await res.json()
             if (!res.ok) {
-                setError(
-                    typeof data === "object"
-                        ? JSON.stringify(data)
-                        : String(data)
-                )
+                setError(formatErrorMessage(data))
                 return
             }
-            setSuccess("User updated successfully.")
+            setSuccess(formatSuccessMessage(data, "User"))
             setTimeout(() => {
                 // Check if we're editing the current user - if so, we might need to handle session changes
                 const currentUserId = getUserId()
@@ -507,29 +433,14 @@ function EditUserForm({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "min(90vw, 700px)",
                 maxHeight: "90vh",
                 padding: "32px",
-                background: "#fff",
-                borderRadius: "16px",
-                boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
                 overflow: "auto",
             }}
         >
-            <div
-                style={{
-                    fontSize: "24px",
-                    fontWeight: "600",
-                    marginBottom: "24px",
-                    color: "#1f2937",
-                }}
-            >
+            <div style={styles.title}>
                 Edit User
             </div>
 
@@ -575,51 +486,19 @@ function EditUserForm({
             </div>
 
             {error && (
-                <div
-                    style={{
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #fecaca",
-                        whiteSpace: "pre-wrap",
-                    }}
-                >
+                <div style={styles.errorAlert}>
                     {error}
                 </div>
             )}
 
             {success && (
-                <div
-                    style={{
-                        color: "#059669",
-                        backgroundColor: "#ecfdf5",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #a7f3d0",
-                    }}
-                >
+                <div style={styles.successAlert}>
                     {success}
                 </div>
             )}
 
             {organizationsError && (
-                <div
-                    style={{
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #fecaca",
-                        fontWeight: "600",
-                    }}
-                >
+                <div style={styles.errorAlert}>
                     {organizationsError}
                 </div>
             )}
@@ -633,15 +512,7 @@ function EditUserForm({
                 }}
             >
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label
-                        htmlFor="email"
-                        style={{
-                            marginBottom: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151",
-                        }}
-                    >
+                    <label htmlFor="email" style={styles.label}>
                         Email
                     </label>
                     <input
@@ -650,31 +521,14 @@ function EditUserForm({
                         type="email"
                         value={form.email}
                         onChange={handleChange}
-                        style={{
-                            padding: "12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontFamily: FONT_STACK,
-                            transition: "border-color 0.2s",
-                        }}
-                        onFocus={(e) =>
-                            (e.target.style.borderColor = "#3b82f6")
-                        }
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        style={styles.input}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
                     />
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label
-                        htmlFor="role"
-                        style={{
-                            marginBottom: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151",
-                        }}
-                    >
+                    <label htmlFor="role" style={styles.label}>
                         Role
                     </label>
                     <select
@@ -682,19 +536,9 @@ function EditUserForm({
                         name="role"
                         value={form.role}
                         onChange={handleChange}
-                        style={{
-                            padding: "12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontFamily: FONT_STACK,
-                            transition: "border-color 0.2s",
-                            backgroundColor: "#fff",
-                        }}
-                        onFocus={(e) =>
-                            (e.target.style.borderColor = "#3b82f6")
-                        }
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        style={{ ...styles.input, backgroundColor: colors.white }}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
                     >
                         <option value="user">User</option>
                         <option value="editor">Editor</option>
@@ -703,14 +547,7 @@ function EditUserForm({
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label
-                        style={{
-                            marginBottom: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151",
-                        }}
-                    >
+                    <label style={styles.label}>
                         Organizations
                     </label>
                     <div
@@ -737,24 +574,12 @@ function EditUserForm({
                             >
                                 <div
                                     style={{
-                                        width: "20px",
-                                        height: "20px",
-                                        border: "2px solid #e5e7eb",
-                                        borderTop: "2px solid #3b82f6",
-                                        borderRadius: "50%",
-                                        animation: "spin 1s linear infinite",
+                                        ...styles.spinner,
                                         marginRight: "8px",
                                     }}
                                 />
                                 Loading organizations...
-                                <style>
-                                    {`
-                                        @keyframes spin {
-                                            0% { transform: rotate(0deg); }
-                                            100% { transform: rotate(360deg); }
-                                        }
-                                    `}
-                                </style>
+                                <style>{animations}</style>
                             </div>
                         ) : organizationsError ? (
                             <div
@@ -871,24 +696,9 @@ function EditUserForm({
                     <button
                         type="button"
                         onClick={onClose}
-                        style={{
-                            padding: "12px 24px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
-                        }}
-                        onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
-                        }
-                        onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
-                        }
+                        style={styles.secondaryButton}
+                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
+                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
                     >
                         Cancel
                     </button>
@@ -896,29 +706,18 @@ function EditUserForm({
                         type="submit"
                         disabled={organizationsError !== null}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: organizationsError
-                                ? "#9ca3af"
-                                : "#3b82f6",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            cursor: organizationsError
-                                ? "not-allowed"
-                                : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
+                            ...styles.primaryButton,
+                            backgroundColor: organizationsError ? colors.disabled : colors.primary,
+                            cursor: organizationsError ? "not-allowed" : "pointer",
                         }}
                         onMouseOver={(e) => {
                             if (!organizationsError) {
-                                e.target.style.backgroundColor = "#2563eb"
+                                hover.primaryButton(e.target as HTMLElement)
                             }
                         }}
                         onMouseOut={(e) => {
                             if (!organizationsError) {
-                                e.target.style.backgroundColor = "#3b82f6"
+                                hover.resetPrimaryButton(e.target as HTMLElement)
                             }
                         }}
                     >
@@ -939,62 +738,19 @@ function ErrorNotification({
     onClose(): void
 }) {
     return (
-        <div
-            style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "400px",
-                padding: "24px",
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
-            }}
-        >
-            <div
-                style={{
-                    fontSize: "18px",
-                    fontWeight: "600",
-                    color: "#dc2626",
-                    marginBottom: "16px",
-                }}
-            >
+        <div style={styles.modal}>
+            <div style={{ ...styles.title, color: colors.error }}>
                 Error
             </div>
-            <div
-                style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
-                    marginBottom: "24px",
-                    lineHeight: "1.5",
-                }}
-            >
+            <div style={styles.description}>
                 {message}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                     onClick={onClose}
-                    style={{
-                        padding: "10px 20px",
-                        backgroundColor: "#3b82f6",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#2563eb")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#3b82f6")
-                    }
+                    style={styles.primaryButton}
+                    onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
+                    onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
                 >
                     OK
                 </button>
@@ -1082,18 +838,12 @@ function SearchAndFilterBar({
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         style={{
+                            ...styles.input,
                             width: "100%",
-                            padding: "12px 12px 12px 40px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontFamily: FONT_STACK,
-                            transition: "border-color 0.2s",
+                            paddingLeft: "40px",
                         }}
-                        onFocus={(e) =>
-                            (e.target.style.borderColor = "#3b82f6")
-                        }
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
                     />
                 </div>
 
@@ -1102,26 +852,13 @@ function SearchAndFilterBar({
                         ref={setButtonRef}
                         onClick={() => setShowColumnFilter(!showColumnFilter)}
                         style={{
-                            padding: "12px 16px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                            fontFamily: FONT_STACK,
+                            ...styles.secondaryButton,
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
-                            transition: "all 0.2s",
                         }}
-                        onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
-                        }
-                        onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
-                        }
+                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
+                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
                     >
                         <FaFilter /> Columns ({visibleColumns.size})
                     </button>
@@ -1424,7 +1161,7 @@ export function UserPageOverride(): Override {
             }
             
             // Use username for the API call instead of user ID
-            const res = await fetch(`${API_BASE_URL}${USER_PATH}/${userToDelete.username}`, {
+            const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${userToDelete.username}`, {
                 method: "DELETE",
                 headers: { Authorization: `Bearer ${getIdToken()}` },
             })
@@ -1661,32 +1398,15 @@ export function UserPageOverride(): Override {
                                                             handleEdit(user.id)
                                                         }
                                                         style={{
+                                                            ...styles.primaryButton,
                                                             padding: "8px 12px",
-                                                            backgroundColor:
-                                                                "#3b82f6",
-                                                            color: "#fff",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: "pointer",
                                                             fontSize: "12px",
-                                                            fontWeight: "500",
                                                             display: "flex",
-                                                            alignItems:
-                                                                "center",
+                                                            alignItems: "center",
                                                             gap: "4px",
-                                                            fontFamily:
-                                                                FONT_STACK,
-                                                            transition:
-                                                                "all 0.2s",
                                                         }}
-                                                        onMouseOver={(e) =>
-                                                            (e.target.style.backgroundColor =
-                                                                "#2563eb")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            (e.target.style.backgroundColor =
-                                                                "#3b82f6")
-                                                        }
+                                                        onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
+                                                        onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
                                                     >
                                                         <FaEdit size={10} />{" "}
                                                         Edit
@@ -1698,32 +1418,15 @@ export function UserPageOverride(): Override {
                                                             )
                                                         }
                                                         style={{
+                                                            ...styles.dangerButton,
                                                             padding: "8px 12px",
-                                                            backgroundColor:
-                                                                "#ef4444",
-                                                            color: "#fff",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: "pointer",
                                                             fontSize: "12px",
-                                                            fontWeight: "500",
                                                             display: "flex",
-                                                            alignItems:
-                                                                "center",
+                                                            alignItems: "center",
                                                             gap: "4px",
-                                                            fontFamily:
-                                                                FONT_STACK,
-                                                            transition:
-                                                                "all 0.2s",
                                                         }}
-                                                        onMouseOver={(e) =>
-                                                            (e.target.style.backgroundColor =
-                                                                "#dc2626")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            (e.target.style.backgroundColor =
-                                                                "#ef4444")
-                                                        }
+                                                        onMouseOver={(e) => hover.dangerButton(e.target as HTMLElement)}
+                                                        onMouseOut={(e) => hover.resetDangerButton(e.target as HTMLElement)}
                                                     >
                                                         <FaTrashAlt size={10} />{" "}
                                                         Delete
@@ -1831,25 +1534,11 @@ export function UserPageOverride(): Override {
                         </div>
                     </div>
                 </div>
-
+                                
                 {/* Overlays */}
                 {editingUser &&
                     ReactDOM.createPortal(
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                                backdropFilter: "blur(4px)",
-                                zIndex: 1000,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
+                        <div style={styles.modalOverlay}>
                             <EditUserForm
                                 user={editingUser}
                                 onClose={() => setEditingUser(null)}
@@ -1861,21 +1550,7 @@ export function UserPageOverride(): Override {
 
                 {deletingUserId != null &&
                     ReactDOM.createPortal(
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                                backdropFilter: "blur(4px)",
-                                zIndex: 1000,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
+                        <div style={styles.modalOverlay}>
                             <ConfirmDeleteDialog
                                 onConfirm={handleDelete}
                                 onCancel={() => setDeletingUserId(null)}
@@ -1886,21 +1561,7 @@ export function UserPageOverride(): Override {
 
                 {deleteError &&
                     ReactDOM.createPortal(
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                                backdropFilter: "blur(4px)",
-                                zIndex: 1000,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
+                        <div style={styles.modalOverlay}>
                             <ErrorNotification
                                 message={deleteError}
                                 onClose={() => setDeleteError(null)}

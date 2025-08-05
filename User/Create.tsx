@@ -3,19 +3,16 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes } from "react-icons/fa"
-
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const USER_PATH = "/neptunus/signup"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-// Fixed function to get ID token from sessionStorage
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
+import { colors, styles, hover, animations, FONT_STACK } from "../theme"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    formatErrorMessage, 
+    formatSuccessMessage,
+    validateEmail,
+    validateRequired
+} from "../utils"
 
 // Define our form state shape for a User
 type UserFormState = {
@@ -26,52 +23,12 @@ type UserFormState = {
 function validateForm(form: UserFormState): string[] {
     const errors: string[] = []
 
-    if (!form.email.trim()) errors.push("Email address is required")
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (form.email.trim() && !emailRegex.test(form.email.trim())) {
-        errors.push("Please enter a valid email address")
-    }
+    const emailError = validateEmail(form.email)
+    if (emailError) errors.push(emailError)
 
     return errors
 }
 
-// Enhanced error formatting
-function formatErrorMessage(error: any): string {
-    if (typeof error === "string") return error
-    if (error && typeof error === "object") {
-        if (error.message) return error.message
-        if (error.errors && Array.isArray(error.errors)) {
-            return error.errors
-                .map((err: any) =>
-                    typeof err === "string"
-                        ? err
-                        : err.message || "Validation error"
-                )
-                .join("\n")
-        }
-        if (error.fieldErrors || error.validationErrors) {
-            const fieldErrors = error.fieldErrors || error.validationErrors
-            return Object.entries(fieldErrors)
-                .map(([field, message]) => `${field}: ${message}`)
-                .join("\n")
-        }
-        return JSON.stringify(error, null, 2)
-    }
-    return "An unexpected error occurred"
-}
-
-// Enhanced success formatting
-function formatSuccessMessage(data: any): string {
-    if (typeof data === "string") return data
-    if (data && typeof data === "object") {
-        if (data.message) return data.message
-        if (data.id) return `User created successfully!`
-        return "User has been created successfully!"
-    }
-    return "Operation completed successfully!"
-}
 
 // Core form component with enhanced styling
 function UserForm({
@@ -120,7 +77,7 @@ function UserForm({
 
         try {
             console.log("Creating user with payload:", form)
-            const res = await fetch(API_BASE_URL + USER_PATH, {
+            const res = await fetch(API_BASE_URL + API_PATHS.SIGNUP, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -135,7 +92,7 @@ function UserForm({
             if (!res.ok) {
                 setError(formatErrorMessage(data))
             } else {
-                setSuccess(formatSuccessMessage(data))
+                setSuccess(formatSuccessMessage(data, "User"))
                 // Auto-close after success
                 setTimeout(() => {
                     onSuccess?.()
@@ -153,59 +110,22 @@ function UserForm({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "min(90vw, 500px)",
                 maxHeight: "90vh",
                 padding: "32px",
-                background: "#fff",
-                borderRadius: "16px",
-                boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
-                overflow: "auto",
             }}
         >
             {/* Header */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "24px",
-                }}
-            >
-                <div
-                    style={{
-                        fontSize: "24px",
-                        fontWeight: "600",
-                        color: "#1f2937",
-                    }}
-                >
+            <div style={styles.header}>
+                <div style={styles.title}>
                     Create New User
                 </div>
                 <button
                     onClick={onClose}
-                    style={{
-                        padding: "8px",
-                        backgroundColor: "transparent",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        color: "#6b7280",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) =>
-                        (e.currentTarget.style.backgroundColor = "#f3f4f6")
-                    }
-                    onMouseOut={(e) =>
-                        (e.currentTarget.style.backgroundColor = "transparent")
-                    }
+                    style={styles.iconButton}
+                    onMouseOver={(e) => hover.iconButton(e.currentTarget)}
+                    onMouseOut={(e) => hover.resetIconButton(e.currentTarget)}
                 >
                     <FaTimes size={16} />
                 </button>
@@ -213,35 +133,14 @@ function UserForm({
 
             {/* Error Display */}
             {error && (
-                <div
-                    style={{
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #fecaca",
-                        whiteSpace: "pre-wrap",
-                    }}
-                >
+                <div style={styles.errorAlert}>
                     {error}
                 </div>
             )}
 
             {/* Success Display */}
             {success && (
-                <div
-                    style={{
-                        color: "#059669",
-                        backgroundColor: "#ecfdf5",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #a7f3d0",
-                    }}
-                >
+                <div style={styles.successAlert}>
                     {success}
                 </div>
             )}
@@ -249,18 +148,9 @@ function UserForm({
             {/* Form */}
             <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: "24px" }}>
-                    <label
-                        htmlFor="email"
-                        style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151",
-                        }}
-                    >
+                    <label htmlFor="email" style={styles.label}>
                         Email Address
-                        <span style={{ color: "#ef4444" }}>*</span>
+                        <span style={{ color: colors.error }}>*</span>
                     </label>
                     <input
                         id="email"
@@ -271,59 +161,28 @@ function UserForm({
                         disabled={isSubmitting}
                         placeholder="Enter user email address"
                         style={{
-                            width: "100%",
-                            padding: "12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontFamily: FONT_STACK,
-                            transition: "border-color 0.2s",
-                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
                             cursor: isSubmitting ? "not-allowed" : "text",
-                            boxSizing: "border-box",
                         }}
-                        onFocus={(e) =>
-                            !isSubmitting &&
-                            (e.target.style.borderColor = "#10b981")
-                        }
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
                     />
                 </div>
 
                 {/* Submit Buttons */}
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "12px",
-                        paddingTop: "24px",
-                        borderTop: "1px solid #e5e7eb",
-                    }}
-                >
+                <div style={styles.buttonGroup}>
                     <button
                         type="button"
                         onClick={onClose}
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                            ...styles.secondaryButton,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
                             opacity: isSubmitting ? 0.6 : 1,
                         }}
-                        onMouseOver={(e) =>
-                            !isSubmitting &&
-                            (e.currentTarget.style.backgroundColor = "#e5e7eb")
-                        }
-                        onMouseOut={(e) =>
-                            (e.currentTarget.style.backgroundColor = "#f3f4f6")
-                        }
+                        onMouseOver={(e) => !isSubmitting && hover.secondaryButton(e.currentTarget)}
+                        onMouseOut={(e) => hover.resetSecondaryButton(e.currentTarget)}
                     >
                         Cancel
                     </button>
@@ -331,43 +190,16 @@ function UserForm({
                         type="submit"
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: isSubmitting
-                                ? "#9ca3af"
-                                : "#10b981",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                            ...styles.primaryButton,
+                            backgroundColor: isSubmitting ? colors.disabled : colors.primary,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
                         }}
-                        onMouseOver={(e) =>
-                            !isSubmitting &&
-                            (e.currentTarget.style.backgroundColor = "#2563eb")
-                        }
-                        onMouseOut={(e) =>
-                            !isSubmitting &&
-                            (e.currentTarget.style.backgroundColor = "#10b981")
-                        }
+                        onMouseOver={(e) => !isSubmitting && hover.primaryButton(e.currentTarget)}
+                        onMouseOut={(e) => hover.resetPrimaryButton(e.currentTarget)}
                     >
                         {isSubmitting ? (
                             <>
-                                <div
-                                    style={{
-                                        width: "16px",
-                                        height: "16px",
-                                        border: "2px solid #ffffff",
-                                        borderTop: "2px solid transparent",
-                                        borderRadius: "50%",
-                                        animation: "spin 1s linear infinite",
-                                    }}
-                                />
+                                <div style={styles.spinner} />
                                 Creating...
                             </>
                         ) : (
@@ -381,14 +213,7 @@ function UserForm({
             </form>
 
             {/* Add spinning animation for loading spinner */}
-            <style>
-                {`
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                `}
-            </style>
+            <style>{animations}</style>
         </div>
     )
 }
@@ -405,21 +230,7 @@ function UserFormManager() {
 
     const overlay = showForm
         ? ReactDOM.createPortal(
-              <div
-                  style={{
-                      position: "fixed",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(0, 0, 0, 0.5)",
-                      backdropFilter: "blur(4px)",
-                      zIndex: 1000,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                  }}
-              >
+              <div style={styles.modalOverlay}>
                   <UserForm
                       onClose={() => setShowForm(false)}
                       onSuccess={handleSuccess}
@@ -434,35 +245,22 @@ function UserFormManager() {
             <button
                 onClick={() => setShowForm(true)}
                 style={{
+                    ...styles.primaryButton,
                     position: "absolute",
                     top: 20,
                     left: 20,
                     padding: "12px 20px",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    fontFamily: FONT_STACK,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(59, 130, 246, 0.3)",
+                    boxShadow: `0 4px 12px ${colors.primary}30`,
                 }}
                 onMouseOver={(e) => {
-                    e.currentTarget.style.backgroundColor = "#2563eb"
+                    hover.primaryButton(e.currentTarget)
                     e.currentTarget.style.transform = "translateY(-1px)"
-                    e.currentTarget.style.boxShadow =
-                        "0 6px 16px rgba(59, 130, 246, 0.4)"
+                    e.currentTarget.style.boxShadow = `0 6px 16px ${colors.primary}40`
                 }}
                 onMouseOut={(e) => {
-                    e.currentTarget.style.backgroundColor = "#10b981"
+                    hover.resetPrimaryButton(e.currentTarget)
                     e.currentTarget.style.transform = "translateY(0)"
-                    e.currentTarget.style.boxShadow =
-                        "0 4px 12px rgba(59, 130, 246, 0.3)"
+                    e.currentTarget.style.boxShadow = `0 4px 12px ${colors.primary}30`
                 }}
             >
                 <FaPlus size={14} />

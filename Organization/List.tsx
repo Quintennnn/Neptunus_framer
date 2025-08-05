@@ -16,16 +16,8 @@ import {
     FaCheckCircle,
     FaExclamationTriangle,
 } from "react-icons/fa"
-
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const ORG_PATH = "/neptunus/organization"
-
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
+import { colors, styles, hover, animations, FONT_STACK } from "../theme"
+import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -44,7 +36,7 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
             method: "GET",
             headers,
             mode: "cors",
@@ -121,31 +113,35 @@ const ORG_COLUMNS = [
     { key: "lastUpdatedBy", label: "Updated By", width: "180px" },
 ]
 
-// Available boat fields that can be configured
+// Available boat fields that can be configured (Dutch field names)
 const BOAT_FIELDS = [
-    { key: "premiumPerMille", label: "Premium Per Mille" },
-    { key: "mooringLocation", label: "Mooring Location" },
-    { key: "notes", label: "Notes" },
-    { key: "numberOfEngines", label: "Number of Engines" },
-    { key: "boatNumber", label: "Boat Number" },
-    { key: "engineNumber", label: "Engine Number" },
-    { key: "numberOfInsuredDays", label: "Number of Insured Days" },
-    { key: "engineType", label: "Engine Type" },
-    { key: "yearOfConstruction", label: "Year of Construction" },
-    { key: "cinNumber", label: "CIN Number" },
-    { key: "insuranceEndDate", label: "Insurance End Date" },
-    { key: "boatType", label: "Boat Type" },
-    { key: "deductible", label: "Deductible" },
+    { key: "premiepromillage", label: "Premie Promillage" }, // premiumPerMille
+    { key: "notitie", label: "Notitie" }, // notes
+    { key: "aantalMotoren", label: "Aantal Motoren" }, // numberOfEngines
+    { key: "bootnummer", label: "Bootnummer" }, // boatNumber
+    { key: "motornummer", label: "Motornummer" }, // engineNumber
+    { key: "aantalVerzekerdeDagen", label: "Aantal Verzekerde Dagen" }, // numberOfInsuredDays
+    { key: "typeMerkMotor", label: "Type/Merk Motor" }, // engineType
+    { key: "bouwjaar", label: "Bouwjaar" }, // yearOfConstruction
+    { key: "cinNummer", label: "CIN Nummer" }, // cinNumber
+    { key: "uitgangsdatum", label: "Uitgangsdatum" }, // insuranceEndDate
+    { key: "typeBoot", label: "Type Boot" }, // boatType
+    { key: "eigenRisico", label: "Eigen Risico" }, // deductible
     { key: "organization", label: "Organization" },
     {
-        key: "totalPremiumForInsuredPeriod",
-        label: "Total Premium for Insured Period",
+        key: "totalePremieOverDeVerzekerdePeriode",
+        label: "Totale Premie Over De Verzekerde Periode", // totalPremiumForInsuredPeriod
     },
-    { key: "insuranceStartDate", label: "Insurance Start Date" },
-    { key: "totalAnnualPremium", label: "Total Annual Premium" },
-    { key: "boatBrand", label: "Boat Brand" },
-    { key: "value", label: "Value" },
+    { key: "totalePremieOverHetJaar", label: "Totale Premie Over Het Jaar" }, // totalAnnualPremium
+    { key: "merkBoot", label: "Merk Boot" }, // boatBrand
     { key: "status", label: "Status" },
+]
+
+// Non-adjustable fields that are always required and visible for every organization
+const REQUIRED_BOAT_FIELDS = [
+    { key: "waarde", label: "Waarde" }, // value - always required and visible
+    { key: "ligplaats", label: "Ligplaats" }, // mooringLocation - always required and visible
+    { key: "ingangsdatum", label: "Ingangsdatum" }, // insuranceStartDate - always required and visible
 ]
 
 function ColumnFilterDropdown({
@@ -166,8 +162,8 @@ function ColumnFilterDropdown({
                 top: "100%",
                 right: 0,
                 marginTop: 4,
-                background: "#fff",
-                border: "1px solid #d1d5db",
+                background: colors.white,
+                border: `1px solid ${colors.gray300}`,
                 borderRadius: 8,
                 boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
                 zIndex: 1000,
@@ -244,53 +240,42 @@ function ConfirmDeleteDialog({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                background: "#fff",
+                ...styles.modal,
                 padding: "24px",
                 borderRadius: "12px",
                 boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                zIndex: 1001,
-                fontFamily: FONT_STACK,
             }}
         >
             <div
-                style={{ fontSize: "18px", fontWeight: 600, marginBottom: 12 }}
+                style={{ ...styles.title, fontSize: "18px", marginBottom: 12 }}
             >
                 Delete Organization
             </div>
-            <p style={{ fontSize: 14, marginBottom: 20 }}>
+            <p style={{ fontSize: 14, marginBottom: 20, color: colors.gray500 }}>
                 Are you sure you want to delete this organization?
             </p>
-            <div
-                style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}
-            >
+            <div style={styles.buttonGroup}>
                 <button
                     onClick={onCancel}
                     style={{
+                        ...styles.secondaryButton,
                         padding: "10px 16px",
-                        backgroundColor: "#e5e7eb",
-                        borderRadius: 8,
-                        border: "none",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
+                        backgroundColor: colors.gray200,
                     }}
+                    onMouseOver={(e) => hover.secondaryButton(e.target)}
+                    onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
                 >
                     Cancel
                 </button>
                 <button
                     onClick={onConfirm}
                     style={{
+                        ...styles.primaryButton,
                         padding: "10px 16px",
-                        backgroundColor: "#ef4444",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
+                        backgroundColor: colors.error,
                     }}
+                    onMouseOver={(e) => (e.target.style.backgroundColor = "#dc2626")}
+                    onMouseOut={(e) => (e.target.style.backgroundColor = colors.error)}
                 >
                     Delete
                 </button>
@@ -335,28 +320,28 @@ const OPERATORS = {
     ]
 }
 
-// Field types mapping - determines which operators are available for each field
+// Field types mapping - determines which operators are available for each field (Dutch field names)
 // Example usage:
-// - value: numeric field, supports <, >, between, etc.
-// - mooringLocation: string field, supports contains, in list (with fuzzy matching), etc.
-// - boatType: string field with fuzzy matching against predefined types
+// - waarde: numeric field, supports <, >, between, etc.
+// - ligplaats: string field, supports contains, in list (with fuzzy matching), etc.
+// - typeBoot: string field with fuzzy matching against predefined types
 const FIELD_TYPES = {
-    value: "numeric",
-    yearOfConstruction: "numeric", 
-    numberOfEngines: "numeric",
-    numberOfInsuredDays: "numeric",
-    premiumPerMille: "numeric",
-    deductible: "numeric",
-    totalAnnualPremium: "numeric",
-    totalPremiumForInsuredPeriod: "numeric",
-    mooringLocation: "string",
-    boatType: "string",
-    engineType: "string",
-    boatBrand: "string",
-    boatNumber: "string",
-    engineNumber: "string",
-    cinNumber: "string",
-    notes: "string"
+    waarde: "numeric", // value
+    bouwjaar: "numeric", // yearOfConstruction
+    aantalMotoren: "numeric", // numberOfEngines
+    aantalVerzekerdeDagen: "numeric", // numberOfInsuredDays
+    premiepromillage: "numeric", // premiumPerMille
+    eigenRisico: "numeric", // deductible
+    totalePremieOverHetJaar: "numeric", // totalAnnualPremium
+    totalePremieOverDeVerzekerdePeriode: "numeric", // totalPremiumForInsuredPeriod
+    ligplaats: "string", // mooringLocation
+    typeBoot: "string", // boatType
+    typeMerkMotor: "string", // engineType
+    merkBoot: "string", // boatBrand
+    bootnummer: "string", // boatNumber
+    motornummer: "string", // engineNumber
+    cinNummer: "string", // cinNumber
+    notitie: "string" // notes
 }
 
 function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange: (config: any) => void, orgName: string }) {
@@ -470,10 +455,10 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
     return (
         <div>
             <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+                <h3 style={{ ...styles.title, fontSize: 16, marginBottom: 8 }}>
                     Auto-Approval Configuration
                 </h3>
-                <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 16 }}>
+                <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 16 }}>
                     Configure rules to automatically approve boats that meet specific criteria.
                 </p>
                 
@@ -496,15 +481,13 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                             type="button"
                             onClick={addRule}
                             style={{
+                                ...styles.primaryButton,
                                 padding: "8px 12px",
-                                backgroundColor: "#10b981",
-                                color: "white",
-                                border: "none",
-                                borderRadius: 6,
-                                cursor: "pointer",
                                 fontSize: 12,
-                                fontFamily: FONT_STACK,
+                                borderRadius: 6,
                             }}
+                            onMouseOver={(e) => hover.primaryButton(e.target)}
+                            onMouseOut={(e) => hover.resetPrimaryButton(e.target)}
                         >
                             + Add Rule
                         </button>
@@ -513,10 +496,10 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                     {config.rules.length === 0 ? (
                         <div style={{ 
                             padding: 20, 
-                            border: "2px dashed #d1d5db", 
+                            border: `2px dashed ${colors.gray300}`, 
                             borderRadius: 8, 
                             textAlign: "center", 
-                            color: "#6b7280" 
+                            color: colors.gray500 
                         }}>
                             No rules configured. Click "Add Rule" to create your first auto-approval rule.
                         </div>
@@ -535,20 +518,19 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                         ))
                     )}
 
-                    <div style={{ marginTop: 20, padding: 16, backgroundColor: "#f9fafb", borderRadius: 8 }}>
-                        <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Default Action</h4>
-                        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+                    <div style={{ ...styles.card, marginTop: 20, backgroundColor: colors.gray50 }}>
+                        <h4 style={{ ...styles.title, fontSize: 14, marginBottom: 8 }}>Default Action</h4>
+                        <p style={{ fontSize: 12, color: colors.gray500, marginBottom: 12 }}>
                             What should happen when no rules match?
                         </p>
                         <select
                             value={config.default_action}
                             onChange={(e) => onChange({ ...config, default_action: e.target.value })}
                             style={{
+                                ...styles.input,
                                 padding: "8px 12px",
-                                border: "1px solid #d1d5db",
                                 borderRadius: 6,
                                 fontSize: 14,
-                                fontFamily: FONT_STACK,
                             }}
                         >
                             <option value="pending">Keep as Pending (Manual Review)</option>
@@ -557,9 +539,9 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                     </div>
 
                     {config.rules.length > 0 && (
-                        <div style={{ marginTop: 20, padding: 16, backgroundColor: "#eff6ff", borderRadius: 8, border: "1px solid #dbeafe" }}>
-                            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Apply to Existing Boats</h4>
-                            <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+                        <div style={{ ...styles.card, marginTop: 20, backgroundColor: "#eff6ff", border: "1px solid #dbeafe" }}>
+                            <h4 style={{ ...styles.title, fontSize: 14, marginBottom: 8 }}>Apply to Existing Boats</h4>
+                            <p style={{ fontSize: 12, color: colors.gray500, marginBottom: 12 }}>
                                 Apply these auto-approval rules to boats that are currently pending.
                             </p>
                             
@@ -569,17 +551,13 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                                     onClick={() => handleRetroactiveApproval(true)}
                                     disabled={retroactiveStatus === 'testing' || retroactiveStatus === 'applying'}
                                     style={{
+                                        ...styles.primaryButton,
                                         padding: "8px 12px",
                                         backgroundColor: "#3b82f6",
-                                        color: "white",
-                                        border: "none",
                                         borderRadius: 6,
-                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
                                         fontSize: 12,
-                                        fontFamily: FONT_STACK,
-                                        display: "flex",
-                                        alignItems: "center",
                                         gap: 4,
+                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
                                         opacity: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? 0.6 : 1,
                                     }}
                                 >
@@ -592,19 +570,16 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                                     onClick={() => handleRetroactiveApproval(false)}
                                     disabled={retroactiveStatus === 'testing' || retroactiveStatus === 'applying'}
                                     style={{
+                                        ...styles.primaryButton,
                                         padding: "8px 12px",
-                                        backgroundColor: "#10b981",
-                                        color: "white",
-                                        border: "none",
                                         borderRadius: 6,
-                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
                                         fontSize: 12,
-                                        fontFamily: FONT_STACK,
-                                        display: "flex",
-                                        alignItems: "center",
                                         gap: 4,
+                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
                                         opacity: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? 0.6 : 1,
                                     }}
+                                    onMouseOver={(e) => !e.target.disabled && hover.primaryButton(e.target)}
+                                    onMouseOut={(e) => !e.target.disabled && hover.resetPrimaryButton(e.target)}
                                 >
                                     <FaCheckCircle size={12} />
                                     {retroactiveStatus === 'applying' ? 'Applying...' : 'Apply Rules Now'}
@@ -614,8 +589,8 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                             {retroactiveResult && (
                                 <div style={{ 
                                     padding: 12, 
-                                    backgroundColor: retroactiveStatus === 'error' ? "#fef2f2" : "#f0fdf4", 
-                                    border: `1px solid ${retroactiveStatus === 'error' ? "#fecaca" : "#bbf7d0"}`,
+                                    backgroundColor: retroactiveStatus === 'error' ? colors.errorBg : colors.successBg, 
+                                    border: `1px solid ${retroactiveStatus === 'error' ? colors.errorBorder : colors.successBorder}`,
                                     borderRadius: 6,
                                     fontSize: 12
                                 }}>
@@ -914,9 +889,16 @@ function EditOrgForm({
 }) {
     const [name, setName] = useState(org.name || "")
     const [isSuperOrg, setIsSuperOrg] = useState(org.is_superorg || false)
-    const [boatFieldsConfig, setBoatFieldsConfig] = useState(
-        org.boat_fields_config || {}
-    )
+    const [boatFieldsConfig, setBoatFieldsConfig] = useState(() => {
+        const initialConfig = org.boat_fields_config || {}
+        // Ensure required fields are always set to visible and required
+        return {
+            ...initialConfig,
+            waarde: { visible: true, required: true },
+            ligplaats: { visible: true, required: true },
+            ingangsdatum: { visible: true, required: true },
+        }
+    })
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<"basic" | "fields" | "approval">("basic")
@@ -942,14 +924,23 @@ function EditOrgForm({
         e.preventDefault()
         setError(null)
         try {
+            // Ensure required fields are always set to visible and required
+            const updatedBoatFieldsConfig = {
+                ...boatFieldsConfig,
+                // Force required fields to always be visible and required
+                waarde: { visible: true, required: true },
+                ligplaats: { visible: true, required: true },
+                ingangsdatum: { visible: true, required: true },
+            }
+
             const payload = {
                 name,
                 is_superorg: isSuperOrg,
-                boat_fields_config: boatFieldsConfig,
+                boat_fields_config: updatedBoatFieldsConfig,
                 auto_approval_config: autoApprovalConfig,
             }
 
-            const res = await fetch(`${API_BASE_URL}${ORG_PATH}/${org.id}`, {
+            const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}/${org.id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -978,12 +969,10 @@ function EditOrgForm({
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                background: "#fff",
+                ...styles.modal,
                 padding: 32,
                 borderRadius: 12,
                 boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
                 minWidth: 600,
                 maxWidth: "90vw",
                 maxHeight: "90vh",
@@ -1130,136 +1119,173 @@ function EditOrgForm({
                         </div>
 
                         <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                            <table style={{ width: "100%", fontSize: 14 }}>
-                                <thead
-                                    style={{
-                                        position: "sticky",
-                                        top: 0,
-                                        backgroundColor: "#f9fafb",
-                                    }}
-                                >
-                                    <tr>
-                                        <th
-                                            style={{
-                                                textAlign: "left",
-                                                padding: 12,
-                                                fontWeight: 600,
-                                            }}
-                                        >
-                                            Field
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "center",
-                                                padding: 12,
-                                                fontWeight: 600,
-                                            }}
-                                        >
-                                            Visible
-                                        </th>
-                                        <th
-                                            style={{
-                                                textAlign: "center",
-                                                padding: 12,
-                                                fontWeight: 600,
-                                            }}
-                                        >
-                                            Required
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {BOAT_FIELDS.map((field) => {
-                                        const config = boatFieldsConfig[
-                                            field.key
-                                        ] || { visible: false, required: false }
-                                        return (
-                                            <tr
-                                                key={field.key}
+                            {/* Required Fields Section */}
+                            <div style={{ marginBottom: 24 }}>
+                                <h4 style={{ 
+                                    fontSize: 14, 
+                                    fontWeight: 600, 
+                                    marginBottom: 8,
+                                    color: colors.primary 
+                                }}>
+                                    Required Fields (Always Visible & Required)
+                                </h4>
+                                <div style={{ 
+                                    padding: 12, 
+                                    backgroundColor: "#f0f9ff", 
+                                    border: "1px solid #bae6fd", 
+                                    borderRadius: 6, 
+                                    fontSize: 12 
+                                }}>
+                                    {REQUIRED_BOAT_FIELDS.map((field, index) => (
+                                        <span key={field.key}>
+                                            {field.label}
+                                            {index < REQUIRED_BOAT_FIELDS.length - 1 ? ", " : ""}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Configurable Fields Section */}
+                            <div>
+                                <h4 style={{ 
+                                    fontSize: 14, 
+                                    fontWeight: 600, 
+                                    marginBottom: 12,
+                                    color: colors.gray700 
+                                }}>
+                                    Optional Fields (Configurable)
+                                </h4>
+                                <table style={{ width: "100%", fontSize: 14 }}>
+                                    <thead
+                                        style={{
+                                            position: "sticky",
+                                            top: 0,
+                                            backgroundColor: "#f9fafb",
+                                        }}
+                                    >
+                                        <tr>
+                                            <th
                                                 style={{
-                                                    borderBottom:
-                                                        "1px solid #f3f4f6",
+                                                    textAlign: "left",
+                                                    padding: 12,
+                                                    fontWeight: 600,
                                                 }}
                                             >
-                                                <td style={{ padding: 12 }}>
-                                                    {field.label}
-                                                </td>
-                                                <td
+                                                Field
+                                            </th>
+                                            <th
+                                                style={{
+                                                    textAlign: "center",
+                                                    padding: 12,
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                Visible
+                                            </th>
+                                            <th
+                                                style={{
+                                                    textAlign: "center",
+                                                    padding: 12,
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                Required
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {BOAT_FIELDS.map((field) => {
+                                            const config = boatFieldsConfig[
+                                                field.key
+                                            ] || { visible: false, required: false }
+                                            return (
+                                                <tr
+                                                    key={field.key}
                                                     style={{
-                                                        textAlign: "center",
-                                                        padding: 12,
+                                                        borderBottom:
+                                                            "1px solid #f3f4f6",
                                                     }}
                                                 >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            updateFieldConfig(
-                                                                field.key,
-                                                                "visible",
-                                                                !config.visible
-                                                            )
-                                                        }
+                                                    <td style={{ padding: 12 }}>
+                                                        {field.label}
+                                                    </td>
+                                                    <td
                                                         style={{
-                                                            border: "none",
-                                                            background: "none",
-                                                            cursor: "pointer",
-                                                            color: config.visible
-                                                                ? "#10b981"
-                                                                : "#d1d5db",
-                                                            fontSize: 18,
+                                                            textAlign: "center",
+                                                            padding: 12,
                                                         }}
                                                     >
-                                                        {config.visible ? (
-                                                            <FaToggleOn />
-                                                        ) : (
-                                                            <FaToggleOff />
-                                                        )}
-                                                    </button>
-                                                </td>
-                                                <td
-                                                    style={{
-                                                        textAlign: "center",
-                                                        padding: 12,
-                                                    }}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            updateFieldConfig(
-                                                                field.key,
-                                                                "required",
-                                                                !config.required
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            !config.visible
-                                                        }
-                                                        style={{
-                                                            border: "none",
-                                                            background: "none",
-                                                            cursor: config.visible
-                                                                ? "pointer"
-                                                                : "not-allowed",
-                                                            color:
-                                                                config.visible &&
-                                                                config.required
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                updateFieldConfig(
+                                                                    field.key,
+                                                                    "visible",
+                                                                    !config.visible
+                                                                )
+                                                            }
+                                                            style={{
+                                                                border: "none",
+                                                                background: "none",
+                                                                cursor: "pointer",
+                                                                color: config.visible
                                                                     ? "#10b981"
                                                                     : "#d1d5db",
-                                                            fontSize: 18,
+                                                                fontSize: 18,
+                                                            }}
+                                                        >
+                                                            {config.visible ? (
+                                                                <FaToggleOn />
+                                                            ) : (
+                                                                <FaToggleOff />
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                    <td
+                                                        style={{
+                                                            textAlign: "center",
+                                                            padding: 12,
                                                         }}
                                                     >
-                                                        {config.required ? (
-                                                            <FaToggleOn />
-                                                        ) : (
-                                                            <FaToggleOff />
-                                                        )}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                updateFieldConfig(
+                                                                    field.key,
+                                                                    "required",
+                                                                    !config.required
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !config.visible
+                                                            }
+                                                            style={{
+                                                                border: "none",
+                                                                background: "none",
+                                                                cursor: config.visible
+                                                                    ? "pointer"
+                                                                    : "not-allowed",
+                                                                color:
+                                                                    config.visible &&
+                                                                    config.required
+                                                                        ? colors.primary
+                                                                        : colors.gray300,
+                                                                fontSize: 18,
+                                                            }}
+                                                        >
+                                                            {config.required ? (
+                                                                <FaToggleOn />
+                                                            ) : (
+                                                                <FaToggleOff />
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1273,59 +1299,36 @@ function EditOrgForm({
                 )}
 
                 {error && (
-                    <div
-                        style={{
-                            color: "#dc2626",
-                            marginBottom: 12,
-                            fontSize: 14,
-                        }}
-                    >
+                    <div style={{ ...styles.errorAlert, marginBottom: 12, padding: 0, border: "none", backgroundColor: "transparent" }}>
                         {error}
                     </div>
                 )}
                 {success && (
-                    <div
-                        style={{
-                            color: "#059669",
-                            marginBottom: 12,
-                            fontSize: 14,
-                        }}
-                    >
+                    <div style={{ ...styles.successAlert, marginBottom: 12, padding: 0, border: "none", backgroundColor: "transparent" }}>
                         {success}
                     </div>
                 )}
 
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: 10,
-                        marginTop: 24,
-                        paddingTop: 16,
-                        borderTop: "1px solid #e5e7eb",
-                    }}
-                >
+                <div style={{ ...styles.buttonGroup, marginTop: 24 }}>
                     <button
                         type="button"
                         onClick={onClose}
                         style={{
+                            ...styles.secondaryButton,
                             padding: "12px 20px",
-                            backgroundColor: "#e5e7eb",
-                            border: "none",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                            fontFamily: FONT_STACK,
+                            backgroundColor: colors.gray200,
                         }}
+                        onMouseOver={(e) => hover.secondaryButton(e.target)}
+                        onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         style={{
+                            ...styles.primaryButton,
                             padding: "12px 20px",
                             backgroundColor: "#3b82f6",
-                            color: "white",
-                            border: "none",
                             borderRadius: 8,
                             cursor: "pointer",
                             fontFamily: FONT_STACK,
@@ -1355,7 +1358,7 @@ export function OrganizationPageOverride(): Override {
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
 
     const refresh = useCallback(() => {
-        fetch(`${API_BASE_URL}${ORG_PATH}`, {
+        fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -1420,7 +1423,7 @@ export function OrganizationPageOverride(): Override {
     async function handleDelete() {
         if (deletingOrgId == null) return
         try {
-            await fetch(`${API_BASE_URL}${ORG_PATH}/${deletingOrgId}`, {
+            await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}/${deletingOrgId}`, {
                 method: "DELETE",
                 headers: {
                     Authorization: `Bearer ${getIdToken()}`,
@@ -1503,7 +1506,7 @@ export function OrganizationPageOverride(): Override {
                 >
                     <div
                         style={{
-                            background: "#fff",
+                            ...styles.card,
                             borderRadius: 12,
                             boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                             overflow: "hidden",
@@ -1551,8 +1554,8 @@ export function OrganizationPageOverride(): Override {
                                 <div
                                     style={{
                                         fontSize: "14px",
-                                        color: "#6b7280",
-                                        backgroundColor: "#f3f4f6",
+                                        color: colors.gray500,
+                                        backgroundColor: colors.gray100,
                                         padding: "6px 12px",
                                         borderRadius: "6px",
                                     }}
@@ -1568,7 +1571,7 @@ export function OrganizationPageOverride(): Override {
                                             top: "50%",
                                             left: 12,
                                             transform: "translateY(-50%)",
-                                            color: "#9ca3af",
+                                            color: colors.gray400,
                                         }}
                                     />
                                     <input
@@ -1578,12 +1581,8 @@ export function OrganizationPageOverride(): Override {
                                             setSearchTerm(e.target.value)
                                         }
                                         style={{
-                                            width: "100%",
+                                            ...styles.input,
                                             padding: "12px 12px 12px 36px",
-                                            border: "1px solid #d1d5db",
-                                            borderRadius: 8,
-                                            fontSize: 14,
-                                            fontFamily: FONT_STACK,
                                         }}
                                     />
                                 </div>
@@ -1659,7 +1658,7 @@ export function OrganizationPageOverride(): Override {
                                                     textAlign: "left",
                                                     padding: 12,
                                                     fontWeight: 600,
-                                                    color: "#374151",
+                                                    color: colors.gray700,
                                                     width: col.width,
                                                 }}
                                             >
@@ -1676,7 +1675,7 @@ export function OrganizationPageOverride(): Override {
                                                 style={{
                                                     padding: 24,
                                                     textAlign: "center",
-                                                    color: "#9ca3af",
+                                                    color: colors.gray400,
                                                 }}
                                             >
                                                 No organizations to display with
@@ -1690,8 +1689,8 @@ export function OrganizationPageOverride(): Override {
                                                 style={{
                                                     backgroundColor:
                                                         i % 2 === 0
-                                                            ? "#ffffff"
-                                                            : "#f9fafb",
+                                                            ? colors.white
+                                                            : colors.gray50,
                                                 }}
                                             >
                                                 <td style={{ padding: 12 }}>
@@ -1708,18 +1707,11 @@ export function OrganizationPageOverride(): Override {
                                                                 )
                                                             }
                                                             style={{
-                                                                padding:
-                                                                    "8px 12px",
-                                                                backgroundColor:
-                                                                    "#3b82f6",
-                                                                color: "#fff",
-                                                                border: "none",
-                                                                borderRadius: 6,
-                                                                cursor: "pointer",
+                                                                ...styles.primaryButton,
+                                                                padding: "8px 12px",
+                                                                backgroundColor: "#3b82f6",
                                                                 fontSize: 12,
-                                                                display: "flex",
-                                                                alignItems:
-                                                                    "center",
+                                                                borderRadius: 6,
                                                                 gap: "4px",
                                                             }}
                                                         >
@@ -1733,18 +1725,11 @@ export function OrganizationPageOverride(): Override {
                                                                 )
                                                             }
                                                             style={{
-                                                                padding:
-                                                                    "8px 12px",
-                                                                backgroundColor:
-                                                                    "#ef4444",
-                                                                color: "#fff",
-                                                                border: "none",
-                                                                borderRadius: 6,
-                                                                cursor: "pointer",
+                                                                ...styles.primaryButton,
+                                                                padding: "8px 12px",
+                                                                backgroundColor: colors.error,
                                                                 fontSize: 12,
-                                                                display: "flex",
-                                                                alignItems:
-                                                                    "center",
+                                                                borderRadius: 6,
                                                                 gap: "4px",
                                                             }}
                                                         >
@@ -1760,7 +1745,7 @@ export function OrganizationPageOverride(): Override {
                                                         key={col.key}
                                                         style={{
                                                             padding: 12,
-                                                            color: "#374151",
+                                                            color: colors.gray700,
                                                         }}
                                                     >
                                                         {col.key ===
@@ -1791,21 +1776,7 @@ export function OrganizationPageOverride(): Override {
                 {/* Delete Modal */}
                 {deletingOrgId &&
                     ReactDOM.createPortal(
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                                backdropFilter: "blur(4px)",
-                                zIndex: 1000,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
+                        <div style={styles.modalOverlay}>
                             <ConfirmDeleteDialog
                                 onConfirm={handleDelete}
                                 onCancel={() => setDeletingOrgId(null)}
@@ -1817,21 +1788,7 @@ export function OrganizationPageOverride(): Override {
                 {/* Edit Modal */}
                 {editingOrg &&
                     ReactDOM.createPortal(
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                                backdropFilter: "blur(4px)",
-                                zIndex: 1000,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
+                        <div style={styles.modalOverlay}>
                             <EditOrgForm
                                 org={editingOrg}
                                 onClose={() => setEditingOrg(null)}

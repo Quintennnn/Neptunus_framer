@@ -3,18 +3,16 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes } from "react-icons/fa"
-
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const ORG_PATH = "/neptunus/organization"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
+import { colors, styles, hover, animations } from "../theme"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    formatErrorMessage, 
+    formatSuccessMessage,
+    validateRequired,
+    validateStringLength
+} from "../utils"
 
 // Define our form state shape for an Organization
 type OrganizationFormState = {
@@ -25,50 +23,13 @@ type OrganizationFormState = {
 function validateForm(form: OrganizationFormState): string[] {
     const errors: string[] = []
 
-    if (!form.name.trim()) errors.push("Organization name is required")
-    if (form.name.trim().length < 2)
-        errors.push("Organization name must be at least 2 characters")
-    if (form.name.trim().length > 100)
-        errors.push("Organization name must be less than 100 characters")
+    const nameError = validateRequired(form.name, "Organization name") || 
+                      validateStringLength(form.name, "Organization name", 2, 100)
+    if (nameError) errors.push(nameError)
 
     return errors
 }
 
-// Enhanced error formatting
-function formatErrorMessage(error: any): string {
-    if (typeof error === "string") return error
-    if (error && typeof error === "object") {
-        if (error.message) return error.message
-        if (error.errors && Array.isArray(error.errors)) {
-            return error.errors
-                .map((err: any) =>
-                    typeof err === "string"
-                        ? err
-                        : err.message || "Validation error"
-                )
-                .join("\n")
-        }
-        if (error.fieldErrors || error.validationErrors) {
-            const fieldErrors = error.fieldErrors || error.validationErrors
-            return Object.entries(fieldErrors)
-                .map(([field, message]) => `${field}: ${message}`)
-                .join("\n")
-        }
-        return JSON.stringify(error, null, 2)
-    }
-    return "An unexpected error occurred"
-}
-
-// Enhanced success formatting
-function formatSuccessMessage(data: any): string {
-    if (typeof data === "string") return data
-    if (data && typeof data === "object") {
-        if (data.message) return data.message
-        if (data.id) return `Organization created successfully!`
-        return "Organization has been created successfully!"
-    }
-    return "Operation completed successfully!"
-}
 
 // Core form component with enhanced styling
 function OrganizationForm({
@@ -107,7 +68,7 @@ function OrganizationForm({
         setIsSubmitting(true)
 
         try {
-            const res = await fetch(API_BASE_URL + ORG_PATH, {
+            const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -120,7 +81,7 @@ function OrganizationForm({
             if (!res.ok) {
                 setError(formatErrorMessage(data))
             } else {
-                setSuccess(formatSuccessMessage(data))
+                setSuccess(formatSuccessMessage(data, "Organization"))
                 // Auto-close after success
                 setTimeout(() => {
                     onSuccess?.()

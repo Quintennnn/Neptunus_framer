@@ -3,19 +3,17 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes } from "react-icons/fa"
-
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const POLICY_PATH = "/neptunus/policy"
-const ORGANIZATIONS_PATH = "/neptunus/organization"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
-
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
+import { colors, styles, hover, animations } from "../Theme.tsx"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    formatErrorMessage, 
+    formatSuccessMessage,
+    validateRequired,
+    isValidContactInfo,
+    apiRequest
+} from "../Utils.tsx"
 
 // Define our form state shape for a Policy
 type PolicyFormState = {
@@ -32,55 +30,22 @@ type PolicyFormState = {
 function validateForm(form: PolicyFormState): string[] {
     const errors: string[] = []
 
-    if (!form.client_name.trim()) errors.push("Client name is required")
-    if (!form.policy_number.trim()) errors.push("Policy number is required")
-    if (!form.organization.trim()) errors.push("Organization is required")
-    if (
-        form.broker_contact &&
-        !form.broker_contact.includes("@") &&
-        !form.broker_contact.match(/^\+?[\d\s-()]+$/)
-    ) {
+    const clientNameError = validateRequired(form.client_name, "Client name")
+    if (clientNameError) errors.push(clientNameError)
+    
+    const policyNumberError = validateRequired(form.policy_number, "Policy number")
+    if (policyNumberError) errors.push(policyNumberError)
+    
+    const organizationError = validateRequired(form.organization, "Organization")
+    if (organizationError) errors.push(organizationError)
+    
+    if (form.broker_contact && !isValidContactInfo(form.broker_contact)) {
         errors.push("Broker contact should be a valid email or phone number")
     }
 
     return errors
 }
 
-// Enhanced error formatting
-function formatErrorMessage(error: any): string {
-    if (typeof error === "string") return error
-    if (error && typeof error === "object") {
-        if (error.message) return error.message
-        if (error.errors && Array.isArray(error.errors)) {
-            return error.errors
-                .map((err: any) =>
-                    typeof err === "string"
-                        ? err
-                        : err.message || "Validation error"
-                )
-                .join("\n")
-        }
-        if (error.fieldErrors || error.validationErrors) {
-            const fieldErrors = error.fieldErrors || error.validationErrors
-            return Object.entries(fieldErrors)
-                .map(([field, message]) => `${field}: ${message}`)
-                .join("\n")
-        }
-        return JSON.stringify(error, null, 2)
-    }
-    return "An unexpected error occurred"
-}
-
-// Enhanced success formatting
-function formatSuccessMessage(data: any): string {
-    if (typeof data === "string") return data
-    if (data && typeof data === "object") {
-        if (data.message) return data.message
-        if (data.id) return `Policy created successfully!`
-        return "Policy has been created successfully!"
-    }
-    return "Operation completed successfully!"
-}
 
 // Add type for organization
 type Organization = {
@@ -120,20 +85,14 @@ function PolicyForm({
     React.useEffect(() => {
         async function fetchOrganizations() {
             try {
-                const res = await fetch(API_BASE_URL + ORGANIZATIONS_PATH, {
-                    headers: {
-                        Authorization: `Bearer ${getIdToken()}`,
-                    },
-                })
-                const data = await res.json()
-
-                if (res.ok && data.organizations) {
+                const data = await apiRequest(API_PATHS.ORGANIZATION)
+                if (data.organizations) {
                     setOrganizations(data.organizations)
                 } else {
                     setError("Failed to load organizations")
                 }
             } catch (err: any) {
-                setError("Failed to load organizations: " + err.message)
+                setError(formatErrorMessage(err))
             } finally {
                 setIsLoadingOrganizations(false)
             }
@@ -168,35 +127,35 @@ function PolicyForm({
         setIsSubmitting(true)
 
         try {
-            const res = await fetch(API_BASE_URL + POLICY_PATH, {
+            const data = await apiRequest(API_PATHS.POLICY, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${getIdToken()}`,
-                },
                 body: JSON.stringify(form),
             })
-            const data = await res.json()
-
-            if (!res.ok) {
-                setError(formatErrorMessage(data))
-            } else {
-                setSuccess(formatSuccessMessage(data))
-                // Auto-close after success
-                setTimeout(() => {
-                    onSuccess?.()
-                    onClose()
-                }, 2000)
-            }
+            
+            setSuccess(formatSuccessMessage(data, "Policy"))
+            // Auto-close after success
+            setTimeout(() => {
+                onSuccess?.()
+                onClose()
+            }, 2000)
         } catch (err: any) {
-            setError(err.message || "Failed to submit form. Please try again.")
+            setError(formatErrorMessage(err))
         } finally {
             setIsSubmitting(false)
         }
     }
 
+    // Define the field configuration type
+    type FieldConfig = {
+        type: "text" | "textarea" | "select"
+        placeholder?: string
+        required?: boolean
+        options?: string[]
+        loading?: boolean
+    }
+
     // Form field configurations for better UX
-    const fieldConfigs = {
+    const fieldConfigs: Record<keyof PolicyFormState, FieldConfig> = {
         client_name: {
             type: "text",
             placeholder: "Enter client name",
@@ -229,59 +188,22 @@ function PolicyForm({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "min(90vw, 700px)",
                 maxHeight: "90vh",
                 padding: "32px",
-                background: "#fff",
-                borderRadius: "16px",
-                boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
-                overflow: "auto",
             }}
         >
             {/* Header */}
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "24px",
-                }}
-            >
-                <div
-                    style={{
-                        fontSize: "24px",
-                        fontWeight: "600",
-                        color: "#1f2937",
-                    }}
-                >
+            <div style={styles.header}>
+                <div style={styles.title}>
                     Create New Policy
                 </div>
                 <button
                     onClick={onClose}
-                    style={{
-                        padding: "8px",
-                        backgroundColor: "transparent",
-                        border: "none",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        color: "#6b7280",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        transition: "all 0.2s",
-                    }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#f3f4f6")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "transparent")
-                    }
+                    style={styles.iconButton}
+                    onMouseEnter={(e) => hover.iconButton(e.target as HTMLElement)}
+                    onMouseLeave={(e) => hover.resetIconButton(e.target as HTMLElement)}
                 >
                     <FaTimes size={16} />
                 </button>
@@ -289,35 +211,14 @@ function PolicyForm({
 
             {/* Error Display */}
             {error && (
-                <div
-                    style={{
-                        color: "#dc2626",
-                        backgroundColor: "#fef2f2",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #fecaca",
-                        whiteSpace: "pre-wrap",
-                    }}
-                >
+                <div style={styles.errorAlert}>
                     {error}
                 </div>
             )}
 
             {/* Success Display */}
             {success && (
-                <div
-                    style={{
-                        color: "#059669",
-                        backgroundColor: "#ecfdf5",
-                        padding: "12px 16px",
-                        borderRadius: "8px",
-                        marginBottom: "24px",
-                        fontSize: "14px",
-                        border: "1px solid #a7f3d0",
-                    }}
-                >
+                <div style={styles.successAlert}>
                     {success}
                 </div>
             )}
@@ -333,8 +234,8 @@ function PolicyForm({
             >
                 {Object.entries(form).map(([key, val]) => {
                     const config = fieldConfigs[
-                        key as keyof typeof fieldConfigs
-                    ] || { type: "text" }
+                        key as keyof PolicyFormState
+                    ] || { type: "text" as const }
                     const label = key
                         .replace(/_/g, " ")
                         .replace(/^\w/, (c) => c.toUpperCase())
@@ -352,16 +253,11 @@ function PolicyForm({
                         >
                             <label
                                 htmlFor={key}
-                                style={{
-                                    marginBottom: "8px",
-                                    fontSize: "14px",
-                                    fontWeight: "500",
-                                    color: "#374151",
-                                }}
+                                style={styles.label}
                             >
                                 {label}
                                 {config.required && (
-                                    <span style={{ color: "#ef4444" }}>*</span>
+                                    <span style={{ color: colors.error }}>*</span>
                                 )}
                             </label>
 
@@ -375,26 +271,21 @@ function PolicyForm({
                                     placeholder={config.placeholder}
                                     rows={3}
                                     style={{
-                                        padding: "12px",
-                                        border: "1px solid #d1d5db",
-                                        borderRadius: "8px",
-                                        fontSize: "14px",
-                                        fontFamily: FONT_STACK,
+                                        ...styles.input,
                                         resize: "vertical",
-                                        transition: "border-color 0.2s",
                                         backgroundColor: isSubmitting
-                                            ? "#f9fafb"
-                                            : "#fff",
+                                            ? colors.gray50
+                                            : colors.white,
                                         cursor: isSubmitting
                                             ? "not-allowed"
                                             : "text",
                                     }}
                                     onFocus={(e) =>
                                         !isSubmitting &&
-                                        (e.target.style.borderColor = "#3b82f6")
+                                        hover.input(e.target as HTMLElement)
                                     }
                                     onBlur={(e) =>
-                                        (e.target.style.borderColor = "#d1d5db")
+                                        hover.resetInput(e.target as HTMLElement)
                                     }
                                 />
                             ) : isSelect ? (
@@ -405,25 +296,20 @@ function PolicyForm({
                                     onChange={handleChange}
                                     disabled={isSubmitting || (key === 'organization' && isLoadingOrganizations)}
                                     style={{
-                                        padding: "12px",
-                                        border: "1px solid #d1d5db",
-                                        borderRadius: "8px",
-                                        fontSize: "14px",
-                                        fontFamily: FONT_STACK,
-                                        transition: "border-color 0.2s",
+                                        ...styles.input,
                                         backgroundColor: isSubmitting || (key === 'organization' && isLoadingOrganizations)
-                                            ? "#f9fafb"
-                                            : "#fff",
+                                            ? colors.gray50
+                                            : colors.white,
                                         cursor: isSubmitting || (key === 'organization' && isLoadingOrganizations)
                                             ? "not-allowed"
                                             : "pointer",
                                     }}
                                     onFocus={(e) =>
                                         !isSubmitting && !(key === 'organization' && isLoadingOrganizations) &&
-                                        (e.target.style.borderColor = "#3b82f6")
+                                        hover.input(e.target as HTMLElement)
                                     }
                                     onBlur={(e) =>
-                                        (e.target.style.borderColor = "#d1d5db")
+                                        hover.resetInput(e.target as HTMLElement)
                                     }
                                 >
                                     <option value="">
@@ -447,25 +333,20 @@ function PolicyForm({
                                     disabled={isSubmitting}
                                     placeholder={config.placeholder}
                                     style={{
-                                        padding: "12px",
-                                        border: "1px solid #d1d5db",
-                                        borderRadius: "8px",
-                                        fontSize: "14px",
-                                        fontFamily: FONT_STACK,
-                                        transition: "border-color 0.2s",
+                                        ...styles.input,
                                         backgroundColor: isSubmitting
-                                            ? "#f9fafb"
-                                            : "#fff",
+                                            ? colors.gray50
+                                            : colors.white,
                                         cursor: isSubmitting
                                             ? "not-allowed"
                                             : "text",
                                     }}
                                     onFocus={(e) =>
                                         !isSubmitting &&
-                                        (e.target.style.borderColor = "#3b82f6")
+                                        hover.input(e.target as HTMLElement)
                                     }
                                     onBlur={(e) =>
-                                        (e.target.style.borderColor = "#d1d5db")
+                                        hover.resetInput(e.target as HTMLElement)
                                     }
                                 />
                             )}
@@ -477,12 +358,7 @@ function PolicyForm({
                 <div
                     style={{
                         gridColumn: "1 / -1",
-                        display: "flex",
-                        justifyContent: "flex-end",
-                        gap: "12px",
-                        marginTop: "24px",
-                        paddingTop: "24px",
-                        borderTop: "1px solid #e5e7eb",
+                        ...styles.buttonGroup,
                     }}
                 >
                     <button
@@ -490,24 +366,16 @@ function PolicyForm({
                         onClick={onClose}
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                            ...styles.secondaryButton,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
                             opacity: isSubmitting ? 0.6 : 1,
                         }}
-                        onMouseOver={(e) =>
+                        onMouseEnter={(e) =>
                             !isSubmitting &&
-                            (e.target.style.backgroundColor = "#e5e7eb")
+                            hover.secondaryButton(e.target as HTMLElement)
                         }
-                        onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
+                        onMouseLeave={(e) =>
+                            hover.resetSecondaryButton(e.target as HTMLElement)
                         }
                     >
                         Cancel
@@ -516,43 +384,24 @@ function PolicyForm({
                         type="submit"
                         disabled={isSubmitting}
                         style={{
-                            padding: "12px 24px",
+                            ...styles.primaryButton,
                             backgroundColor: isSubmitting
-                                ? "#9ca3af"
-                                : "#10b981",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
+                                ? colors.disabled
+                                : colors.primary,
                             cursor: isSubmitting ? "not-allowed" : "pointer",
-                            fontFamily: FONT_STACK,
-                            transition: "all 0.2s",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
                         }}
-                        onMouseOver={(e) =>
+                        onMouseEnter={(e) =>
                             !isSubmitting &&
-                            (e.target.style.backgroundColor = "#059669")
+                            hover.primaryButton(e.target as HTMLElement)
                         }
-                        onMouseOut={(e) =>
+                        onMouseLeave={(e) =>
                             !isSubmitting &&
-                            (e.target.style.backgroundColor = "#10b981")
+                            hover.resetPrimaryButton(e.target as HTMLElement)
                         }
                     >
                         {isSubmitting ? (
                             <>
-                                <div
-                                    style={{
-                                        width: "16px",
-                                        height: "16px",
-                                        border: "2px solid #ffffff",
-                                        borderTop: "2px solid transparent",
-                                        borderRadius: "50%",
-                                        animation: "spin 1s linear infinite",
-                                    }}
-                                />
+                                <div style={styles.spinner} />
                                 Creating...
                             </>
                         ) : (
@@ -567,12 +416,7 @@ function PolicyForm({
 
             {/* Add spinning animation for loading spinner */}
             <style>
-                {`
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
-                `}
+                {animations}
             </style>
         </div>
     )
@@ -590,21 +434,7 @@ function PolicyFormManager() {
 
     const overlay = showForm
         ? ReactDOM.createPortal(
-              <div
-                  style={{
-                      position: "fixed",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      backgroundColor: "rgba(0, 0, 0, 0.5)",
-                      backdropFilter: "blur(4px)",
-                      zIndex: 1000,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                  }}
-              >
+              <div style={styles.modalOverlay}>
                   <PolicyForm
                       onClose={() => setShowForm(false)}
                       onSuccess={handleSuccess}
@@ -622,32 +452,19 @@ function PolicyFormManager() {
                     position: "absolute",
                     top: 20,
                     left: 20,
+                    ...styles.primaryButton,
                     padding: "12px 20px",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    fontFamily: FONT_STACK,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+                    boxShadow: `0 4px 12px ${colors.primary}4D`,
                 }}
-                onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#059669"
-                    e.target.style.transform = "translateY(-1px)"
-                    e.target.style.boxShadow =
-                        "0 6px 16px rgba(16, 185, 129, 0.4)"
+                onMouseEnter={(e) => {
+                    hover.primaryButton(e.target as HTMLElement)
+                    ;(e.target as HTMLElement).style.transform = "translateY(-1px)"
+                    ;(e.target as HTMLElement).style.boxShadow = `0 6px 16px ${colors.primary}66`
                 }}
-                onMouseOut={(e) => {
-                    e.target.style.backgroundColor = "#10b981"
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow =
-                        "0 4px 12px rgba(16, 185, 129, 0.3)"
+                onMouseLeave={(e) => {
+                    hover.resetPrimaryButton(e.target as HTMLElement)
+                    ;(e.target as HTMLElement).style.transform = "translateY(0)"
+                    ;(e.target as HTMLElement).style.boxShadow = `0 4px 12px ${colors.primary}4D`
                 }}
             >
                 <FaPlus size={14} />

@@ -3,6 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
+import { UserInfoBanner } from "../components/UserInfoBanner"
 import {
     FaEdit,
     FaTrashAlt,
@@ -1504,6 +1505,11 @@ export function OrganizationPageOverride(): Override {
                         minHeight: "100vh",
                     }}
                 >
+                    {/* User Info Banner */}
+                    <div style={{ marginBottom: "20px" }}>
+                        <UserInfoBanner />
+                    </div>
+
                     <div
                         style={{
                             ...styles.card,
@@ -1717,6 +1723,22 @@ export function OrganizationPageOverride(): Override {
                                                         >
                                                             <FaEdit size={10} />{" "}
                                                             Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                const orgParam = encodeURIComponent(org.name)
+                                                                window.location.href = `/insuredobjects?org=${orgParam}`
+                                                            }}
+                                                            style={{
+                                                                ...styles.primaryButton,
+                                                                padding: "8px 12px",
+                                                                backgroundColor: "#10b981",
+                                                                fontSize: 12,
+                                                                borderRadius: 6,
+                                                                gap: "4px",
+                                                            }}
+                                                        >
+                                                            Go to fleet
                                                         </button>
                                                         <button
                                                             onClick={() =>

@@ -30,3 +30,6 @@ Key backend files to reference:
 
 ## User Journey
 Users (organization owners) manage their boat fleet and add boats to insurance policies, with brokers helping facilitate the process and admins overseeing the system.
+
+## important import statement notice
+whenever you import other ts files, in framer they all start with a capital. So by defualt, for example, you write the import as import xxx from utils. but it should be import xxx from Utils.tsx

@@ -3,6 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
+import { UserInfoBanner } from "../components/UserInfoBanner"
 import {
     FaEdit,
     FaTrashAlt,
@@ -19,6 +20,7 @@ import {
     FaUser,
     FaUserEdit,
     FaChevronDown,
+    FaArrowLeft,
 } from "react-icons/fa"
 import { colors, styles, hover, FONT_STACK } from "../theme"
 import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
@@ -249,9 +251,17 @@ function filterObjects(
     selectedOrganizations: Set<string>,
     organizations: string[],
     selectedObjectTypes: Set<ObjectType>,
-    isAdminUser: boolean = false
+    isAdminUser: boolean = false,
+    currentOrganization?: string | null
 ): InsuredObject[] {
     return objects.filter((object) => {
+        // Organization-specific filter (when coming from organization page)
+        if (currentOrganization) {
+            if (object.organization !== currentOrganization) {
+                return false
+            }
+        }
+
         // Search filter
         if (searchTerm) {
             const matchesSearch = Object.values(object).some((value) =>
@@ -268,7 +278,8 @@ function filterObjects(
         }
 
         // Organization filter - only apply if we're in admin mode and have organization filters
-        if (isAdminUser && organizations.length > 0) {
+        // Skip this if we already have a specific organization context
+        if (!currentOrganization && isAdminUser && organizations.length > 0) {
             // Only filter if not all organizations are selected
             if (
                 selectedOrganizations.size > 0 &&
@@ -1710,6 +1721,7 @@ function InsuredObjectList() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+    const [currentOrganization, setCurrentOrganization] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState("")
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
         new Set(COLUMNS.filter((col) => col.group === "essential").map((col) => col.key))
@@ -1756,8 +1768,15 @@ function InsuredObjectList() {
         setSelectedObjectTypes(newSelected)
     }
 
-    // Load data
+    // Load data and parse URL parameters
     useEffect(() => {
+        // Parse URL parameters for organization context
+        const urlParams = new URLSearchParams(window.location.search)
+        const orgParam = urlParams.get('org')
+        if (orgParam) {
+            setCurrentOrganization(decodeURIComponent(orgParam))
+        }
+
         async function loadData() {
             setIsLoading(true)
             setError(null)
@@ -1777,8 +1796,13 @@ function InsuredObjectList() {
                     setUserInfo(basicUserInfo)
                 }
 
-                // Fetch objects and organizations
-                await Promise.all([fetchObjects(), loadOrganizations()])
+                // Load organizations
+                await loadOrganizations()
+                
+                // Don't fetch objects here if we have an org param - let the other useEffect handle it
+                if (!orgParam) {
+                    await fetchObjects()
+                }
             } catch (err: any) {
                 setError(err.message || "Failed to load data")
             } finally {
@@ -1799,13 +1823,37 @@ function InsuredObjectList() {
         loadData()
     }, [])
 
+    // Refetch objects when organization context changes
+    useEffect(() => {
+        if (userInfo && currentOrganization !== null) {
+            setIsLoading(true)
+            fetchObjects()
+                .catch(err => {
+                    console.error("Failed to refetch objects:", err)
+                    setError(err.message || "Failed to fetch objects")
+                })
+                .finally(() => {
+                    setIsLoading(false)
+                })
+        }
+    }, [currentOrganization, userInfo])
+
     async function fetchObjects() {
         try {
             const token = getIdToken()
             const headers: Record<string, string> = { "Content-Type": "application/json" }
             if (token) headers.Authorization = `Bearer ${token}`
 
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}`, {
+            // Build URL with organization parameter if needed
+            let url = `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}`
+            if (currentOrganization) {
+                url += `?organization=${encodeURIComponent(currentOrganization)}`
+            }
+
+            console.log(`Fetching objects from: ${url}`)
+            console.log(`Current organization: ${currentOrganization}`)
+
+            const res = await fetch(url, {
                 method: "GET",
                 headers,
                 mode: "cors",
@@ -1816,14 +1864,17 @@ function InsuredObjectList() {
             }
 
             const data = await res.json()
+            console.log(`Received data:`, data)
             const objectsList = Array.isArray(data) ? data : data.items || []
+            console.log(`Setting objects: ${objectsList.length} items`)
             setObjects(objectsList)
         } catch (err: any) {
+            console.error("Error in fetchObjects:", err)
             throw new Error(err.message || "Failed to fetch insured objects")
         }
     }
 
-    // Role-aware filtering
+    // Role-aware filtering with organization-specific context
     const filteredObjects = objects
         ? filterObjects(
               objects,
@@ -1831,7 +1882,8 @@ function InsuredObjectList() {
               selectedOrganizations,
               organizations,
               selectedObjectTypes,
-              isAdmin(userInfo)
+              isAdmin(userInfo),
+              currentOrganization // Pass current organization for filtering
           )
         : []
 
@@ -1968,6 +2020,51 @@ function InsuredObjectList() {
 
     return (
         <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+            {/* Back Navigation (when viewing specific organization) */}
+            {currentOrganization && (
+                <div style={{ marginBottom: "16px" }}>
+                    <button
+                        onClick={() => {
+                            window.location.href = "/organizations"
+                        }}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            padding: "10px 16px",
+                            backgroundColor: "transparent",
+                            color: colors.primary,
+                            border: `1px solid ${colors.primary}`,
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            cursor: "pointer",
+                            fontFamily: FONT_STACK,
+                            transition: "all 0.2s ease",
+                        }}
+                        onMouseOver={(e) => {
+                            e.target.style.backgroundColor = colors.primary
+                            e.target.style.color = "white"
+                        }}
+                        onMouseOut={(e) => {
+                            e.target.style.backgroundColor = "transparent"
+                            e.target.style.color = colors.primary
+                        }}
+                    >
+                        <FaArrowLeft size={14} />
+                        Back to Organizations
+                    </button>
+                </div>
+            )}
+
+            {/* User Info Banner */}
+            <div style={{ marginBottom: "20px" }}>
+                <UserInfoBanner 
+                    currentOrganization={currentOrganization}
+                    showCurrentOrg={!!currentOrganization}
+                />
+            </div>
+
             {/* Header */}
             <div style={{ marginBottom: "24px" }}>
                 <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
@@ -1983,11 +2080,14 @@ function InsuredObjectList() {
                             margin: 0,
                         }}
                     >
-                        Insured Objects
+                        {currentOrganization ? `${currentOrganization} Fleet` : "Insured Objects"}
                     </h1>
                 </div>
                 <div style={{ color: colors.gray600 }}>
-                    Manage boats, trailers, and motors
+                    {currentOrganization 
+                        ? `Managing boats, trailers, and motors for ${currentOrganization}`
+                        : "Manage boats, trailers, and motors"
+                    }
                 </div>
             </div>
 
@@ -2034,7 +2134,7 @@ function InsuredObjectList() {
                         onOrganizationChange={toggleOrganization}
                         selectedObjectTypes={selectedObjectTypes}
                         onObjectTypeChange={toggleObjectType}
-                        showOrgFilter={isAdmin(userInfo)}
+                        showOrgFilter={isAdmin(userInfo) && !currentOrganization}
                         userInfo={userInfo}
                     />
                 </div>

@@ -16,6 +16,9 @@ import {
     FaPlayCircle,
     FaCheckCircle,
     FaExclamationTriangle,
+    FaClipboardList,
+    FaFileContract,
+    FaUsers,
 } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../theme"
 import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
@@ -1554,19 +1557,101 @@ export function OrganizationPageOverride(): Override {
                                             letterSpacing: "-0.025em",
                                         }}
                                     >
-                                        {isAdmin(userInfo) ? "Organization Management" : "My Organizations"}
+                                        {isAdmin(userInfo) ? "Organisatie Beheer" : "Mijn Organisaties"}
                                     </h1>
                                 </div>
+                                
+                                {/* Navigation buttons */}
                                 <div
                                     style={{
-                                        fontSize: "14px",
-                                        color: colors.gray500,
-                                        backgroundColor: colors.gray100,
-                                        padding: "6px 12px",
-                                        borderRadius: "6px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "12px",
                                     }}
                                 >
-                                    {filteredOrgs.length} organizations
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/changelog'
+                                        }}
+                                        style={{
+                                            ...styles.primaryButton,
+                                            padding: "10px 16px",
+                                            backgroundColor: "#8b5cf6",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontWeight: "500",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#7c3aed"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#8b5cf6"
+                                        }}
+                                        title="Bekijk Changelog"
+                                    >
+                                        <FaClipboardList size={14} />
+                                        Changelog
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/policies'
+                                        }}
+                                        style={{
+                                            ...styles.primaryButton,
+                                            padding: "10px 16px",
+                                            backgroundColor: "#2563eb",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontWeight: "500",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#1d4ed8"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#2563eb"
+                                        }}
+                                        title="Bekijk Polissen"
+                                    >
+                                        <FaFileContract size={14} />
+                                        Polissen
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/users'
+                                        }}
+                                        style={{
+                                            ...styles.primaryButton,
+                                            padding: "10px 16px",
+                                            backgroundColor: "#10b981",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontWeight: "500",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#059669"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#10b981"
+                                        }}
+                                        title="Beheer Gebruikers"
+                                    >
+                                        <FaUsers size={14} />
+                                        Gebruikers
+                                    </button>
+                                    
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: colors.gray500,
+                                            backgroundColor: colors.gray100,
+                                            padding: "6px 12px",
+                                            borderRadius: "6px",
+                                        }}
+                                    >
+                                        {filteredOrgs.length} organisaties
+                                    </div>
                                 </div>
                             </div>
                             <div style={{ display: "flex", gap: 12 }}>

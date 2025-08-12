@@ -2,15 +2,15 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
-import { 
-    API_BASE_URL, 
-    API_PATHS, 
-    getIdToken, 
+import {
+    API_BASE_URL,
+    API_PATHS,
+    getIdToken,
     getUserId,
-    formatErrorMessage, 
-    formatSuccessMessage
+    formatErrorMessage,
+    formatSuccessMessage,
 } from "../Utils.tsx"
 
 // ——— User Role Detection ———
@@ -30,11 +30,14 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
@@ -181,7 +184,7 @@ const COLUMNS: {
     // Essential columns - most important user info
     {
         key: "username",
-        label: "Username",
+        label: "Gebruikersnaam",
         priority: 1,
         group: "essential",
         width: "150px",
@@ -195,7 +198,7 @@ const COLUMNS: {
     },
     {
         key: "role",
-        label: "Role",
+        label: "Rol",
         priority: 1,
         group: "essential",
         width: "100px",
@@ -204,7 +207,7 @@ const COLUMNS: {
     // Additional columns
     {
         key: "organizations",
-        label: "Organizations",
+        label: "Organisaties",
         priority: 2,
         group: "additional",
         width: "150px",
@@ -250,39 +253,127 @@ function getRoleStyle(role: string) {
     }
 }
 
+// ——— Button Variants ———
+const buttonVariants = {
+    base: {
+        fontFamily: FONT_STACK,
+        fontSize: "14px",
+        fontWeight: "500",
+        borderRadius: "6px",
+        padding: "10px 16px",
+        border: "1px solid",
+        cursor: "pointer",
+        transition: "all 0.15s ease",
+        outline: "none",
+    } as React.CSSProperties,
+    
+    primary: {
+        backgroundColor: "#3b82f6",
+        color: "#ffffff",
+        borderColor: "#3b82f6",
+    } as React.CSSProperties,
+    
+    secondary: {
+        backgroundColor: "#f3f4f6",
+        color: "#374151",
+        borderColor: "#d1d5db",
+    } as React.CSSProperties,
+    
+    danger: {
+        backgroundColor: "#dc2626",
+        color: "#ffffff",
+        borderColor: "#dc2626",
+    } as React.CSSProperties,
+}
+
 // ——— Enhanced Confirm Delete Dialog ———
 function ConfirmDeleteDialog({
     onConfirm,
     onCancel,
+    username,
 }: {
     onConfirm(): void
     onCancel(): void
+    username?: string
 }) {
+    const [hoveredButton, setHoveredButton] = useState<string | null>(null)
+    
+    const getButtonStyle = (variant: "primary" | "secondary" | "danger", isHovered: boolean) => {
+        const baseStyle = { ...buttonVariants.base, ...buttonVariants[variant] }
+        
+        if (isHovered) {
+            if (variant === "danger") {
+                return { ...baseStyle, backgroundColor: "#b91c1c", borderColor: "#b91c1c" }
+            } else if (variant === "primary") {
+                return { ...baseStyle, backgroundColor: "#2563eb", borderColor: "#2563eb" }
+            } else {
+                return { ...baseStyle, backgroundColor: "#e5e7eb" }
+            }
+        }
+        
+        return baseStyle
+    }
+
     return (
-        <div style={styles.modal}>
-            <div style={styles.title}>
-                Delete User
+        <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            aria-describedby="delete-description"
+            style={{
+                ...styles.modal,
+                padding: "28px",
+                maxWidth: "420px",
+            }}
+        >
+            <div 
+                id="delete-title"
+                style={{
+                    ...styles.title,
+                    color: "#dc2626",
+                    marginBottom: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                }}
+            >
+                ⚠️ Delete User
             </div>
-            <div style={styles.description}>
-                Are you sure you want to delete this user? This action cannot be
-                undone.
+            <div 
+                id="delete-description"
+                style={{
+                    ...styles.description,
+                    backgroundColor: "#fef2f2",
+                    color: "#991b1b",
+                    padding: "16px",
+                    borderRadius: "8px",
+                    border: "1px solid #fecaca",
+                    marginBottom: "24px",
+                    lineHeight: "1.5",
+                }}
+            >
+                Are you sure you want to delete {username ? `user "${username}"` : "this user"}? This action cannot be undone and will permanently remove all associated data.
             </div>
-            <div style={styles.buttonGroup}>
+            <div style={{
+                ...styles.buttonGroup,
+                gap: "12px",
+                justifyContent: "flex-end",
+            }}>
                 <button
                     onClick={onCancel}
-                    style={styles.secondaryButton}
-                    onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
+                    style={getButtonStyle("secondary", hoveredButton === "cancel")}
+                    onMouseEnter={() => setHoveredButton("cancel")}
+                    onMouseLeave={() => setHoveredButton(null)}
                 >
                     Cancel
                 </button>
                 <button
                     onClick={onConfirm}
-                    style={styles.dangerButton}
-                    onMouseOver={(e) => hover.dangerButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetDangerButton(e.target as HTMLElement)}
+                    style={getButtonStyle("danger", hoveredButton === "delete")}
+                    onMouseEnter={() => setHoveredButton("delete")}
+                    onMouseLeave={() => setHoveredButton(null)}
                 >
-                    Delete
+                    Delete User
                 </button>
             </div>
         </div>
@@ -440,9 +531,7 @@ function EditUserForm({
                 overflow: "auto",
             }}
         >
-            <div style={styles.title}>
-                Edit User
-            </div>
+            <div style={styles.title}>Edit User</div>
 
             {/* Display username as read-only information */}
             <div
@@ -485,22 +574,12 @@ function EditUserForm({
                 </div>
             </div>
 
-            {error && (
-                <div style={styles.errorAlert}>
-                    {error}
-                </div>
-            )}
+            {error && <div style={styles.errorAlert}>{error}</div>}
 
-            {success && (
-                <div style={styles.successAlert}>
-                    {success}
-                </div>
-            )}
+            {success && <div style={styles.successAlert}>{success}</div>}
 
             {organizationsError && (
-                <div style={styles.errorAlert}>
-                    {organizationsError}
-                </div>
+                <div style={styles.errorAlert}>{organizationsError}</div>
             )}
 
             <form
@@ -536,7 +615,10 @@ function EditUserForm({
                         name="role"
                         value={form.role}
                         onChange={handleChange}
-                        style={{ ...styles.input, backgroundColor: colors.white }}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: colors.white,
+                        }}
                         onFocus={(e) => hover.input(e.target)}
                         onBlur={(e) => hover.resetInput(e.target)}
                     >
@@ -547,9 +629,7 @@ function EditUserForm({
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label style={styles.label}>
-                        Organizations
-                    </label>
+                    <label style={styles.label}>Organizations</label>
                     <div
                         style={{
                             border: "1px solid #d1d5db",
@@ -696,9 +776,16 @@ function EditUserForm({
                     <button
                         type="button"
                         onClick={onClose}
-                        style={styles.secondaryButton}
-                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
-                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
+                        style={{
+                            ...buttonVariants.base,
+                            ...buttonVariants.secondary,
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#e5e7eb"
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f3f4f6"
+                        }}
                     >
                         Cancel
                     </button>
@@ -706,18 +793,27 @@ function EditUserForm({
                         type="submit"
                         disabled={organizationsError !== null}
                         style={{
-                            ...styles.primaryButton,
-                            backgroundColor: organizationsError ? colors.disabled : colors.primary,
-                            cursor: organizationsError ? "not-allowed" : "pointer",
+                            ...buttonVariants.base,
+                            ...(organizationsError 
+                                ? {
+                                    backgroundColor: "#9ca3af",
+                                    color: "#ffffff",
+                                    borderColor: "#9ca3af",
+                                    cursor: "not-allowed",
+                                  }
+                                : buttonVariants.primary
+                            ),
                         }}
-                        onMouseOver={(e) => {
+                        onMouseEnter={(e) => {
                             if (!organizationsError) {
-                                hover.primaryButton(e.target as HTMLElement)
+                                e.currentTarget.style.backgroundColor = "#2563eb"
+                                e.currentTarget.style.borderColor = "#2563eb"
                             }
                         }}
-                        onMouseOut={(e) => {
+                        onMouseLeave={(e) => {
                             if (!organizationsError) {
-                                hover.resetPrimaryButton(e.target as HTMLElement)
+                                e.currentTarget.style.backgroundColor = "#3b82f6"
+                                e.currentTarget.style.borderColor = "#3b82f6"
                             }
                         }}
                     >
@@ -739,18 +835,23 @@ function ErrorNotification({
 }) {
     return (
         <div style={styles.modal}>
-            <div style={{ ...styles.title, color: colors.error }}>
-                Error
-            </div>
-            <div style={styles.description}>
-                {message}
-            </div>
+            <div style={{ ...styles.title, color: colors.error }}>Error</div>
+            <div style={styles.description}>{message}</div>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <button
                     onClick={onClose}
-                    style={styles.primaryButton}
-                    onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
+                    style={{
+                        ...buttonVariants.base,
+                        ...buttonVariants.primary,
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#2563eb"
+                        e.currentTarget.style.borderColor = "#2563eb"
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#3b82f6"
+                        e.currentTarget.style.borderColor = "#3b82f6"
+                    }}
                 >
                     OK
                 </button>
@@ -834,7 +935,7 @@ function SearchAndFilterBar({
                     />
                     <input
                         type="text"
-                        placeholder="Search users..."
+                        placeholder="Zoek gebruikers..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         style={{
@@ -852,13 +953,18 @@ function SearchAndFilterBar({
                         ref={setButtonRef}
                         onClick={() => setShowColumnFilter(!showColumnFilter)}
                         style={{
-                            ...styles.secondaryButton,
+                            ...buttonVariants.base,
+                            ...buttonVariants.secondary,
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
                         }}
-                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
-                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = "#e5e7eb"
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = "#f3f4f6"
+                        }}
                     >
                         <FaFilter /> Columns ({visibleColumns.size})
                     </button>
@@ -1159,12 +1265,15 @@ export function UserPageOverride(): Override {
             if (!userToDelete) {
                 throw new Error("User not found")
             }
-            
+
             // Use username for the API call instead of user ID
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${userToDelete.username}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${getIdToken()}` },
-            })
+            const res = await fetch(
+                `${API_BASE_URL}${API_PATHS.USER}/${userToDelete.username}`,
+                {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${getIdToken()}` },
+                }
+            )
             if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
             refresh()
         } catch (err: any) {
@@ -1253,28 +1362,68 @@ export function UserPageOverride(): Override {
                                     style={{
                                         display: "flex",
                                         alignItems: "center",
-                                        gap: "8px",
+                                        gap: "16px",
                                     }}
                                 >
-                                    <FaUsers
-                                        size={24}
-                                        style={{
-                                            color: "#3b82f6",
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/organizations'
                                         }}
-                                    />
-                                    <h1
                                         style={{
-                                            fontSize: "32px",
-                                            fontWeight: "600",
-                                            color: "#1f2937",
-                                            margin: 0,
-                                            letterSpacing: "-0.025em",
+                                            padding: "10px 16px",
+                                            backgroundColor: "#f3f4f6",
+                                            color: "#374151",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontWeight: "500",
+                                            cursor: "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#e5e7eb"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#f3f4f6"
+                                        }}
+                                        title="Terug naar Organisaties"
+                                    >
+                                        <FaArrowLeft size={12} />
+                                        <FaBuilding size={12} />
+                                        Organisaties
+                                    </button>
+                                    
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
                                         }}
                                     >
-                                        {isAdmin(userInfo)
-                                            ? "User Management"
-                                            : "Team Members"}
-                                    </h1>
+                                        <FaUsers
+                                            size={24}
+                                            style={{
+                                                color: "#3b82f6",
+                                            }}
+                                        />
+                                        <h1
+                                            style={{
+                                                fontSize: "32px",
+                                                fontWeight: "600",
+                                                color: "#1f2937",
+                                                margin: 0,
+                                                letterSpacing: "-0.025em",
+                                            }}
+                                        >
+                                            {isAdmin(userInfo)
+                                                ? "Gebruiker Beheer"
+                                                : "Team Leden"}
+                                        </h1>
+                                    </div>
                                 </div>
                                 <div
                                     style={{
@@ -1285,7 +1434,7 @@ export function UserPageOverride(): Override {
                                         borderRadius: "6px",
                                     }}
                                 >
-                                    {filteredUsers.length} users
+                                    {filteredUsers.length} gebruikers
                                 </div>
                             </div>
 
@@ -1333,7 +1482,7 @@ export function UserPageOverride(): Override {
                                                 fontSize: "13px",
                                             }}
                                         >
-                                            Actions
+                                            Acties
                                         </th>
                                         {visibleColumnsList.map((col) => (
                                             <th
@@ -1398,15 +1547,24 @@ export function UserPageOverride(): Override {
                                                             handleEdit(user.id)
                                                         }
                                                         style={{
-                                                            ...styles.primaryButton,
+                                                            ...buttonVariants.base,
+                                                            ...buttonVariants.primary,
                                                             padding: "8px 12px",
                                                             fontSize: "12px",
                                                             display: "flex",
-                                                            alignItems: "center",
+                                                            alignItems:
+                                                                "center",
                                                             gap: "4px",
                                                         }}
-                                                        onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
-                                                        onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = "#2563eb"
+                                                            e.currentTarget.style.borderColor = "#2563eb"
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = "#3b82f6"
+                                                            e.currentTarget.style.borderColor = "#3b82f6"
+                                                        }}
+                                                        title={`Edit user ${user.username || user.email}`}
                                                     >
                                                         <FaEdit size={10} />{" "}
                                                         Edit
@@ -1418,15 +1576,24 @@ export function UserPageOverride(): Override {
                                                             )
                                                         }
                                                         style={{
-                                                            ...styles.dangerButton,
+                                                            ...buttonVariants.base,
+                                                            ...buttonVariants.danger,
                                                             padding: "8px 12px",
                                                             fontSize: "12px",
                                                             display: "flex",
-                                                            alignItems: "center",
+                                                            alignItems:
+                                                                "center",
                                                             gap: "4px",
                                                         }}
-                                                        onMouseOver={(e) => hover.dangerButton(e.target as HTMLElement)}
-                                                        onMouseOut={(e) => hover.resetDangerButton(e.target as HTMLElement)}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor = "#b91c1c"
+                                                            e.currentTarget.style.borderColor = "#b91c1c"
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor = "#dc2626"
+                                                            e.currentTarget.style.borderColor = "#dc2626"
+                                                        }}
+                                                        title={`Delete user ${user.username || user.email}`}
                                                     >
                                                         <FaTrashAlt size={10} />{" "}
                                                         Delete
@@ -1534,7 +1701,7 @@ export function UserPageOverride(): Override {
                         </div>
                     </div>
                 </div>
-                                
+
                 {/* Overlays */}
                 {editingUser &&
                     ReactDOM.createPortal(
@@ -1554,6 +1721,7 @@ export function UserPageOverride(): Override {
                             <ConfirmDeleteDialog
                                 onConfirm={handleDelete}
                                 onCancel={() => setDeletingUserId(null)}
+                                username={users?.find(u => u.id === deletingUserId)?.username || users?.find(u => u.id === deletingUserId)?.email}
                             />
                         </div>,
                         document.body

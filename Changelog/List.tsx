@@ -10,6 +10,8 @@ import {
     FaDatabase,
     FaClock,
     FaUser,
+    FaArrowLeft,
+    FaBuilding,
 } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
@@ -998,16 +1000,56 @@ export function ChangelogPageOverride(): Override {
                                 marginBottom: "20px",
                             }}
                         >
-                            <h1
+                            <div
                                 style={{
-                                    fontSize: "28px",
-                                    fontWeight: "700",
-                                    color: "#1f2937",
-                                    margin: 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "16px",
                                 }}
                             >
-                                Changelog
-                            </h1>
+                                <button
+                                    onClick={() => {
+                                        window.location.href = '/organizations'
+                                    }}
+                                    style={{
+                                        padding: "10px 16px",
+                                        backgroundColor: "#f3f4f6",
+                                        color: "#374151",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        fontSize: "13px",
+                                        fontWeight: "500",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        transition: "all 0.2s",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#e5e7eb"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "#f3f4f6"
+                                    }}
+                                    title="Terug naar Organisaties"
+                                >
+                                    <FaArrowLeft size={12} />
+                                    <FaBuilding size={12} />
+                                    Organisaties
+                                </button>
+                                
+                                <h1
+                                    style={{
+                                        fontSize: "28px",
+                                        fontWeight: "700",
+                                        color: "#1f2937",
+                                        margin: 0,
+                                    }}
+                                >
+                                    Changelog
+                                </h1>
+                            </div>
                             <div
                                 style={{
                                     fontSize: "14px",
@@ -1017,7 +1059,7 @@ export function ChangelogPageOverride(): Override {
                                     borderRadius: "6px",
                                 }}
                             >
-                                {filteredChangelog.length} changes
+                                {filteredChangelog.length} wijzigingen
                             </div>
                         </div>
 

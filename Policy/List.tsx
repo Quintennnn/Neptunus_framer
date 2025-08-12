@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
@@ -170,28 +170,28 @@ const COLUMNS: {
     // Essential columns - most important policy info
     {
         key: "policy_number",
-        label: "Policy #",
+        label: "Polis #",
         priority: 1,
         group: "essential",
         width: "120px",
     },
     {
         key: "client_name",
-        label: "Client Name",
+        label: "Klant Naam",
         priority: 1,
         group: "essential",
         width: "150px",
     },
     {
         key: "inventory_type",
-        label: "Inventory Type",
+        label: "Inventaris Type",
         priority: 1,
         group: "essential",
         width: "120px",
     },
     {
         key: "organization",
-        label: "Organization",
+        label: "Organisatie",
         priority: 1,
         group: "essential",
         width: "120px",
@@ -200,35 +200,35 @@ const COLUMNS: {
     // Additional columns
     {
         key: "pending_adjustments",
-        label: "Pending Adjustments",
+        label: "Lopende Aanpassingen",
         priority: 2,
         group: "additional",
         width: "150px",
     },
     {
         key: "broker_name",
-        label: "Broker Name",
+        label: "Makelaar Naam",
         priority: 2,
         group: "additional",
         width: "130px",
     },
     {
         key: "broker_contact",
-        label: "Broker Contact",
+        label: "Makelaar Contact",
         priority: 2,
         group: "additional",
         width: "130px",
     },
     {
         key: "createdAt",
-        label: "Created",
+        label: "Aangemaakt",
         priority: 2,
         group: "additional",
         width: "110px",
     },
     {
         key: "updatedAt",
-        label: "Updated",
+        label: "Bijgewerkt",
         priority: 2,
         group: "additional",
         width: "110px",
@@ -267,7 +267,7 @@ function ConfirmDeleteDialog({
                     color: "#1f2937",
                 }}
             >
-                Delete Policy
+                Verwijder Polis
             </div>
             <div
                 style={{
@@ -277,8 +277,7 @@ function ConfirmDeleteDialog({
                     lineHeight: "1.5",
                 }}
             >
-                Are you sure you want to delete this policy? This action cannot
-                be undone.
+                Weet je zeker dat je deze polis wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
             </div>
             <div
                 style={{
@@ -308,7 +307,7 @@ function ConfirmDeleteDialog({
                         (e.target.style.backgroundColor = "#f3f4f6")
                     }
                 >
-                    Cancel
+                    Annuleer
                 </button>
                 <button
                     onClick={onConfirm}
@@ -331,7 +330,7 @@ function ConfirmDeleteDialog({
                         (e.target.style.backgroundColor = "#ef4444")
                     }
                 >
-                    Delete
+                    Verwijder
                 </button>
             </div>
         </div>
@@ -436,7 +435,7 @@ function EditPolicyForm({
                     color: "#1f2937",
                 }}
             >
-                Edit Policy
+                Bewerk Polis
             </div>
 
             {error && (
@@ -562,7 +561,7 @@ function EditPolicyForm({
                             (e.target.style.backgroundColor = "#f3f4f6")
                         }
                     >
-                        Cancel
+                        Annuleer
                     </button>
                     <button
                         type="submit"
@@ -585,7 +584,7 @@ function EditPolicyForm({
                             (e.target.style.backgroundColor = "#3b82f6")
                         }
                     >
-                        Save Changes
+                        Opslaan
                     </button>
                 </div>
             </form>
@@ -741,7 +740,7 @@ function SearchAndFilterBar({
                     />
                     <input
                         type="text"
-                        placeholder="Search policies..."
+                        placeholder="Zoek polissen..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         style={{
@@ -1163,26 +1162,66 @@ export function PolicyPageOverride(): Override {
                                     style={{
                                         display: "flex",
                                         alignItems: "center",
-                                        gap: "8px",
+                                        gap: "16px",
                                     }}
                                 >
-                                    <FaFileContract
-                                        size={24}
-                                        style={{
-                                            color: "#3b82f6",
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = '/organizations'
                                         }}
-                                    />
-                                    <h1
                                         style={{
-                                            fontSize: "32px",
-                                            fontWeight: "600",
-                                            color: "#1f2937",
-                                            margin: 0,
-                                            letterSpacing: "-0.025em",
+                                            padding: "10px 16px",
+                                            backgroundColor: "#f3f4f6",
+                                            color: "#374151",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontWeight: "500",
+                                            cursor: "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#e5e7eb"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#f3f4f6"
+                                        }}
+                                        title="Terug naar Organisaties"
+                                    >
+                                        <FaArrowLeft size={12} />
+                                        <FaBuilding size={12} />
+                                        Organisaties
+                                    </button>
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
                                         }}
                                     >
-                                        {isAdmin(userInfo) ? "Policy Management" : "My Policies"}
-                                    </h1>
+                                        <FaFileContract
+                                            size={24}
+                                            style={{
+                                                color: "#3b82f6",
+                                            }}
+                                        />
+                                        <h1
+                                            style={{
+                                                fontSize: "32px",
+                                                fontWeight: "600",
+                                                color: "#1f2937",
+                                                margin: 0,
+                                                letterSpacing: "-0.025em",
+                                            }}
+                                        >
+                                            {isAdmin(userInfo) ? "Polis Beheer" : "Mijn Polissen"}
+                                        </h1>
+                                    </div>
                                 </div>
                                 <div
                                     style={{
@@ -1193,7 +1232,7 @@ export function PolicyPageOverride(): Override {
                                         borderRadius: "6px",
                                     }}
                                 >
-                                    {filteredPolicies.length} policies
+                                    {filteredPolicies.length} polissen
                                 </div>
                             </div>
 
@@ -1241,7 +1280,7 @@ export function PolicyPageOverride(): Override {
                                                 fontSize: "13px",
                                             }}
                                         >
-                                            Actions
+                                            Acties
                                         </th>
                                         {visibleColumnsList.map((col) => (
                                             <th
@@ -1336,7 +1375,7 @@ export function PolicyPageOverride(): Override {
                                                                 "#3b82f6")
                                                         }
                                                     >
-                                                        View Fleet
+                                                        Bekijk Vloot
                                                     </button>
                                                     <button
                                                         onClick={(e) => {
@@ -1372,7 +1411,7 @@ export function PolicyPageOverride(): Override {
                                                         }
                                                     >
                                                         <FaEdit size={10} />{" "}
-                                                        Edit
+                                                        Bewerk
                                                     </button>
                                                     <button
                                                         onClick={(e) => {
@@ -1410,7 +1449,7 @@ export function PolicyPageOverride(): Override {
                                                         }
                                                     >
                                                         <FaTrashAlt size={10} />{" "}
-                                                        Delete
+                                                        Verwijder
                                                     </button>
                                                 </div>
                                             </td>

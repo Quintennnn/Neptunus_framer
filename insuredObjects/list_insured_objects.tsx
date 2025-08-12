@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { UserInfoBanner } from "../components/UserInfoBanner"
+import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
 import {
     FaEdit,
     FaTrashAlt,
@@ -22,9 +22,9 @@ import {
     FaChevronDown,
     FaArrowLeft,
 } from "react-icons/fa"
-import { colors, styles, hover, FONT_STACK } from "../theme"
-import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
-import { ObjectType, OBJECT_TYPE_CONFIG } from "./create_insured_object"
+import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
+import { API_BASE_URL, API_PATHS, getIdToken } from "../Utils.tsx"
+import { ObjectType, OBJECT_TYPE_CONFIG } from "./Create.tsx"
 
 // ——— Constants & Helpers ———
 // Status color mapping
@@ -56,11 +56,14 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
@@ -100,7 +103,6 @@ function getUserInfo(): UserInfo | null {
     }
 }
 
-
 // ——— Insured Object Interface ———
 interface InsuredObject {
     id: string
@@ -116,7 +118,7 @@ interface InsuredObject {
     createdAt: string
     updatedAt: string
     lastUpdatedBy?: string
-    
+
     // Boat-specific fields (Dutch names)
     ligplaats?: string // mooringLocation
     merkBoot?: string // boatBrand
@@ -127,7 +129,7 @@ interface InsuredObject {
     bootnummer?: string // boatNumber
     motornummer?: string // engineNumber
     cinNummer?: string // cinNumber
-    
+
     // Trailer-specific fields
     trailerBrand?: string
     trailerType?: string
@@ -136,7 +138,7 @@ interface InsuredObject {
     trailerAxles?: number
     trailerLicensePlate?: string
     trailerRegistrationNumber?: string
-    
+
     // Motor-specific fields
     motorBrand?: string
     motorModel?: string
@@ -144,7 +146,7 @@ interface InsuredObject {
     motorSerialNumber?: string
     motorFuelType?: string
     motorYear?: number
-    
+
     // Other object fields
     objectDescription?: string
     objectBrand?: string
@@ -164,59 +166,284 @@ const COLUMN_GROUPS = {
 
 const COLUMNS = [
     // Essential columns
-    { key: "objectType", label: "Type", group: "essential", sortable: true, width: "120px" },
-    { key: "status", label: "Status", group: "essential", sortable: true, width: "100px" },
-    { key: "organization", label: "Organization", group: "essential", sortable: true, width: "150px" },
-    { key: "waarde", label: "Waarde", group: "essential", sortable: true, width: "120px" }, // value
-    
+    {
+        key: "objectType",
+        label: "Type",
+        group: "essential",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "status",
+        label: "Status",
+        group: "essential",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "organization",
+        label: "Organization",
+        group: "essential",
+        sortable: true,
+        width: "150px",
+    },
+    {
+        key: "waarde",
+        label: "Waarde",
+        group: "essential",
+        sortable: true,
+        width: "120px",
+    }, // value
+
     // Financial columns
-    { key: "premiepromillage", label: "Premie ‰", group: "financial", sortable: true, width: "100px" }, // premiumPerMille
-    { key: "eigenRisico", label: "Eigen Risico", group: "financial", sortable: true, width: "100px" }, // deductible
-    
+    {
+        key: "premiepromillage",
+        label: "Premie ‰",
+        group: "financial",
+        sortable: true,
+        width: "100px",
+    }, // premiumPerMille
+    {
+        key: "eigenRisico",
+        label: "Eigen Risico",
+        group: "financial",
+        sortable: true,
+        width: "100px",
+    }, // deductible
+
     // Date columns
-    { key: "ingangsdatum", label: "Ingangsdatum", group: "dates", sortable: true, width: "120px" }, // insuranceStartDate
-    { key: "uitgangsdatum", label: "Uitgangsdatum", group: "dates", sortable: true, width: "120px" }, // insuranceEndDate
-    
+    {
+        key: "ingangsdatum",
+        label: "Ingangsdatum",
+        group: "dates",
+        sortable: true,
+        width: "120px",
+    }, // insuranceStartDate
+    {
+        key: "uitgangsdatum",
+        label: "Uitgangsdatum",
+        group: "dates",
+        sortable: true,
+        width: "120px",
+    }, // insuranceEndDate
+
     // Identity columns (type-specific) - Dutch boat fields
-    { key: "merkBoot", label: "Merk Boot", group: "identity", sortable: true, width: "120px" }, // boatBrand
-    { key: "typeBoot", label: "Type Boot", group: "identity", sortable: true, width: "120px" }, // boatType
-    { key: "ligplaats", label: "Ligplaats", group: "identity", sortable: true, width: "150px" }, // mooringLocation
-    { key: "bootnummer", label: "Bootnummer", group: "identity", sortable: true, width: "120px" }, // boatNumber
-    { key: "trailerBrand", label: "Trailer Brand", group: "identity", sortable: true, width: "120px" },
-    { key: "trailerType", label: "Trailer Type", group: "identity", sortable: true, width: "120px" },
-    { key: "trailerLicensePlate", label: "License Plate", group: "identity", sortable: true, width: "120px" },
-    { key: "motorBrand", label: "Motor Brand", group: "identity", sortable: true, width: "120px" },
-    { key: "motorModel", label: "Motor Model", group: "identity", sortable: true, width: "120px" },
-    { key: "objectDescription", label: "Description", group: "identity", sortable: true, width: "150px" },
-    { key: "objectBrand", label: "Brand", group: "identity", sortable: true, width: "120px" },
-    { key: "objectModel", label: "Model", group: "identity", sortable: true, width: "120px" },
-    
+    {
+        key: "merkBoot",
+        label: "Merk Boot",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    }, // boatBrand
+    {
+        key: "typeBoot",
+        label: "Type Boot",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    }, // boatType
+    {
+        key: "ligplaats",
+        label: "Ligplaats",
+        group: "identity",
+        sortable: true,
+        width: "150px",
+    }, // mooringLocation
+    {
+        key: "bootnummer",
+        label: "Bootnummer",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    }, // boatNumber
+    {
+        key: "trailerBrand",
+        label: "Trailer Brand",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "trailerType",
+        label: "Trailer Type",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "trailerLicensePlate",
+        label: "License Plate",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "motorBrand",
+        label: "Motor Brand",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "motorModel",
+        label: "Motor Model",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "objectDescription",
+        label: "Description",
+        group: "identity",
+        sortable: true,
+        width: "150px",
+    },
+    {
+        key: "objectBrand",
+        label: "Brand",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "objectModel",
+        label: "Model",
+        group: "identity",
+        sortable: true,
+        width: "120px",
+    },
+
     // Technical columns - Dutch boat fields
-    { key: "aantalMotoren", label: "Aantal Motoren", group: "technical", sortable: true, width: "80px" }, // numberOfEngines
-    { key: "typeMerkMotor", label: "Type/Merk Motor", group: "technical", sortable: true, width: "120px" }, // engineType
-    { key: "bouwjaar", label: "Bouwjaar", group: "technical", sortable: true, width: "100px" }, // yearOfConstruction
-    { key: "motornummer", label: "Motornummer", group: "technical", sortable: true, width: "130px" }, // engineNumber
-    { key: "cinNummer", label: "CIN Nummer", group: "technical", sortable: true, width: "120px" }, // cinNumber
-    { key: "trailerWeight", label: "Weight", group: "technical", sortable: true, width: "100px" },
-    { key: "trailerCapacity", label: "Capacity", group: "technical", sortable: true, width: "100px" },
-    { key: "trailerAxles", label: "Axles", group: "technical", sortable: true, width: "80px" },
-    { key: "trailerRegistrationNumber", label: "Registration", group: "technical", sortable: true, width: "130px" },
-    { key: "motorPower", label: "Power (HP)", group: "technical", sortable: true, width: "100px" },
-    { key: "motorSerialNumber", label: "Serial Number", group: "technical", sortable: true, width: "130px" },
-    { key: "motorFuelType", label: "Fuel Type", group: "technical", sortable: true, width: "100px" },
-    { key: "motorYear", label: "Motor Year", group: "technical", sortable: true, width: "100px" },
-    { key: "objectSerialNumber", label: "Serial Number", group: "technical", sortable: true, width: "130px" },
-    
+    {
+        key: "aantalMotoren",
+        label: "Aantal Motoren",
+        group: "technical",
+        sortable: true,
+        width: "80px",
+    }, // numberOfEngines
+    {
+        key: "typeMerkMotor",
+        label: "Type/Merk Motor",
+        group: "technical",
+        sortable: true,
+        width: "120px",
+    }, // engineType
+    {
+        key: "bouwjaar",
+        label: "Bouwjaar",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    }, // yearOfConstruction
+    {
+        key: "motornummer",
+        label: "Motornummer",
+        group: "technical",
+        sortable: true,
+        width: "130px",
+    }, // engineNumber
+    {
+        key: "cinNummer",
+        label: "CIN Nummer",
+        group: "technical",
+        sortable: true,
+        width: "120px",
+    }, // cinNumber
+    {
+        key: "trailerWeight",
+        label: "Weight",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "trailerCapacity",
+        label: "Capacity",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "trailerAxles",
+        label: "Axles",
+        group: "technical",
+        sortable: true,
+        width: "80px",
+    },
+    {
+        key: "trailerRegistrationNumber",
+        label: "Registration",
+        group: "technical",
+        sortable: true,
+        width: "130px",
+    },
+    {
+        key: "motorPower",
+        label: "Power (HP)",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "motorSerialNumber",
+        label: "Serial Number",
+        group: "technical",
+        sortable: true,
+        width: "130px",
+    },
+    {
+        key: "motorFuelType",
+        label: "Fuel Type",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "motorYear",
+        label: "Motor Year",
+        group: "technical",
+        sortable: true,
+        width: "100px",
+    },
+    {
+        key: "objectSerialNumber",
+        label: "Serial Number",
+        group: "technical",
+        sortable: true,
+        width: "130px",
+    },
+
     // Metadata columns
-    { key: "notitie", label: "Notitie", group: "metadata", sortable: false, width: "200px" }, // notes
-    { key: "createdAt", label: "Created", group: "metadata", sortable: true, width: "120px" },
-    { key: "lastUpdatedBy", label: "Updated By", group: "metadata", sortable: true, width: "120px" },
+    {
+        key: "notitie",
+        label: "Notitie",
+        group: "metadata",
+        sortable: false,
+        width: "200px",
+    }, // notes
+    {
+        key: "createdAt",
+        label: "Created",
+        group: "metadata",
+        sortable: true,
+        width: "120px",
+    },
+    {
+        key: "lastUpdatedBy",
+        label: "Updated By",
+        group: "metadata",
+        sortable: true,
+        width: "120px",
+    },
 ]
 
 // Helper function to render cell values
-function renderObjectCellValue(column: { key: string; label: string }, value: any): string {
+function renderObjectCellValue(
+    column: { key: string; label: string },
+    value: any
+): string {
     if (value === null || value === undefined) return "-"
-    
+
     switch (column.key) {
         case "waarde": // value
         case "eigenRisico": // deductible
@@ -328,13 +555,25 @@ function SearchAndFilterBar({
 }) {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [showOrgFilterDropdown, setShowOrgFilterDropdown] = useState(false)
-    const [showObjectTypeFilterDropdown, setShowObjectTypeFilterDropdown] = useState(false)
-    const [columnButtonRef, setColumnButtonRef] = useState<HTMLButtonElement | null>(null)
-    const [orgButtonRef, setOrgButtonRef] = useState<HTMLButtonElement | null>(null)
-    const [objectTypeButtonRef, setObjectTypeButtonRef] = useState<HTMLButtonElement | null>(null)
-    const [columnDropdownPosition, setColumnDropdownPosition] = useState({ top: 0, right: 0 })
-    const [orgDropdownPosition, setOrgDropdownPosition] = useState({ top: 0, right: 0 })
-    const [objectTypeDropdownPosition, setObjectTypeDropdownPosition] = useState({ top: 0, right: 0 })
+    const [showObjectTypeFilterDropdown, setShowObjectTypeFilterDropdown] =
+        useState(false)
+    const [columnButtonRef, setColumnButtonRef] =
+        useState<HTMLButtonElement | null>(null)
+    const [orgButtonRef, setOrgButtonRef] = useState<HTMLButtonElement | null>(
+        null
+    )
+    const [objectTypeButtonRef, setObjectTypeButtonRef] =
+        useState<HTMLButtonElement | null>(null)
+    const [columnDropdownPosition, setColumnDropdownPosition] = useState({
+        top: 0,
+        right: 0,
+    })
+    const [orgDropdownPosition, setOrgDropdownPosition] = useState({
+        top: 0,
+        right: 0,
+    })
+    const [objectTypeDropdownPosition, setObjectTypeDropdownPosition] =
+        useState({ top: 0, right: 0 })
 
     // Calculate dropdown positions
     useEffect(() => {
@@ -369,7 +608,9 @@ function SearchAndFilterBar({
 
     const toggleGroup = (groupKey: keyof typeof COLUMN_GROUPS) => {
         const groupColumns = COLUMNS.filter((col) => col.group === groupKey)
-        const allVisible = groupColumns.every((col) => visibleColumns.has(col.key))
+        const allVisible = groupColumns.every((col) =>
+            visibleColumns.has(col.key)
+        )
 
         groupColumns.forEach((col) => {
             if (allVisible) {
@@ -391,7 +632,13 @@ function SearchAndFilterBar({
                     flexWrap: "wrap",
                 }}
             >
-                <div style={{ position: "relative", flex: "1", minWidth: "200px" }}>
+                <div
+                    style={{
+                        position: "relative",
+                        flex: "1",
+                        minWidth: "200px",
+                    }}
+                >
                     <FaSearch
                         size={16}
                         color={colors.gray400}
@@ -412,7 +659,9 @@ function SearchAndFilterBar({
                             paddingLeft: "40px",
                         }}
                         onFocus={(e) => hover.input(e.target as HTMLElement)}
-                        onBlur={(e) => hover.resetInput(e.target as HTMLElement)}
+                        onBlur={(e) =>
+                            hover.resetInput(e.target as HTMLElement)
+                        }
                     />
                 </div>
 
@@ -420,7 +669,9 @@ function SearchAndFilterBar({
                     <div style={{ position: "relative" }}>
                         <button
                             ref={setOrgButtonRef}
-                            onClick={() => setShowOrgFilterDropdown(!showOrgFilterDropdown)}
+                            onClick={() =>
+                                setShowOrgFilterDropdown(!showOrgFilterDropdown)
+                            }
                             style={{
                                 padding: "12px 16px",
                                 backgroundColor: "#f3f4f6",
@@ -435,8 +686,12 @@ function SearchAndFilterBar({
                                 alignItems: "center",
                                 gap: "8px",
                             }}
-                            onMouseOver={(e) => (e.target.style.backgroundColor = "#e5e7eb")}
-                            onMouseOut={(e) => (e.target.style.backgroundColor = "#f3f4f6")}
+                            onMouseOver={(e) =>
+                                (e.target.style.backgroundColor = "#e5e7eb")
+                            }
+                            onMouseOut={(e) =>
+                                (e.target.style.backgroundColor = "#f3f4f6")
+                            }
                         >
                             <FaBuilding size={14} />
                             Organizations ({selectedOrganizations.size})
@@ -447,7 +702,11 @@ function SearchAndFilterBar({
                 <div style={{ position: "relative" }}>
                     <button
                         ref={setObjectTypeButtonRef}
-                        onClick={() => setShowObjectTypeFilterDropdown(!showObjectTypeFilterDropdown)}
+                        onClick={() =>
+                            setShowObjectTypeFilterDropdown(
+                                !showObjectTypeFilterDropdown
+                            )
+                        }
                         style={{
                             padding: "12px 16px",
                             backgroundColor: "#f3f4f6",
@@ -462,8 +721,12 @@ function SearchAndFilterBar({
                             alignItems: "center",
                             gap: "8px",
                         }}
-                        onMouseOver={(e) => (e.target.style.backgroundColor = "#e5e7eb")}
-                        onMouseOut={(e) => (e.target.style.backgroundColor = "#f3f4f6")}
+                        onMouseOver={(e) =>
+                            (e.target.style.backgroundColor = "#e5e7eb")
+                        }
+                        onMouseOut={(e) =>
+                            (e.target.style.backgroundColor = "#f3f4f6")
+                        }
                     >
                         <FaBox size={14} />
                         Object Types ({selectedObjectTypes.size})
@@ -488,8 +751,12 @@ function SearchAndFilterBar({
                             alignItems: "center",
                             gap: "8px",
                         }}
-                        onMouseOver={(e) => (e.target.style.backgroundColor = colors.gray200)}
-                        onMouseOut={(e) => (e.target.style.backgroundColor = colors.gray100)}
+                        onMouseOver={(e) =>
+                            (e.target.style.backgroundColor = colors.gray200)
+                        }
+                        onMouseOut={(e) =>
+                            (e.target.style.backgroundColor = colors.gray100)
+                        }
                     >
                         <FaFilter /> Columns ({visibleColumns.size})
                     </button>
@@ -529,14 +796,29 @@ function SearchAndFilterBar({
                                 fontFamily: FONT_STACK,
                             }}
                         >
-                            <div style={{ padding: "8px 0", borderBottom: "1px solid #e5e7eb", marginBottom: "8px" }}>
+                            <div
+                                style={{
+                                    padding: "8px 0",
+                                    borderBottom: "1px solid #e5e7eb",
+                                    marginBottom: "8px",
+                                }}
+                            >
                                 <button
                                     onClick={() => {
-                                        if (selectedOrganizations.size === organizations.length) {
-                                            organizations.forEach(onOrganizationChange)
+                                        if (
+                                            selectedOrganizations.size ===
+                                            organizations.length
+                                        ) {
+                                            organizations.forEach(
+                                                onOrganizationChange
+                                            )
                                         } else {
                                             organizations.forEach((org) => {
-                                                if (!selectedOrganizations.has(org)) {
+                                                if (
+                                                    !selectedOrganizations.has(
+                                                        org
+                                                    )
+                                                ) {
                                                     onOrganizationChange(org)
                                                 }
                                             })
@@ -553,7 +835,10 @@ function SearchAndFilterBar({
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    {selectedOrganizations.size === organizations.length ? "Deselect All" : "Select All"}
+                                    {selectedOrganizations.size ===
+                                    organizations.length
+                                        ? "Deselect All"
+                                        : "Select All"}
                                 </button>
                             </div>
                             {organizations.map((org) => (
@@ -567,13 +852,21 @@ function SearchAndFilterBar({
                                         borderRadius: "6px",
                                         fontSize: "14px",
                                     }}
-                                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#f3f4f6")}
-                                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                                    onMouseOver={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                            "#f3f4f6")
+                                    }
+                                    onMouseOut={(e) =>
+                                        (e.currentTarget.style.backgroundColor =
+                                            "transparent")
+                                    }
                                 >
                                     <input
                                         type="checkbox"
                                         checked={selectedOrganizations.has(org)}
-                                        onChange={() => onOrganizationChange(org)}
+                                        onChange={() =>
+                                            onOrganizationChange(org)
+                                        }
                                         style={{ marginRight: "8px" }}
                                     />
                                     {org}
@@ -597,7 +890,9 @@ function SearchAndFilterBar({
                                 bottom: 0,
                                 zIndex: 999,
                             }}
-                            onClick={() => setShowObjectTypeFilterDropdown(false)}
+                            onClick={() =>
+                                setShowObjectTypeFilterDropdown(false)
+                            }
                         />
                         <div
                             style={{
@@ -616,15 +911,34 @@ function SearchAndFilterBar({
                                 fontFamily: FONT_STACK,
                             }}
                         >
-                            <div style={{ padding: "8px 0", borderBottom: "1px solid #e5e7eb", marginBottom: "8px" }}>
+                            <div
+                                style={{
+                                    padding: "8px 0",
+                                    borderBottom: "1px solid #e5e7eb",
+                                    marginBottom: "8px",
+                                }}
+                            >
                                 <button
                                     onClick={() => {
-                                        const allObjectTypes: ObjectType[] = ["boat", "trailer", "motor"]
-                                        if (selectedObjectTypes.size === allObjectTypes.length) {
-                                            allObjectTypes.forEach(onObjectTypeChange)
+                                        const allObjectTypes: ObjectType[] = [
+                                            "boat",
+                                            "trailer",
+                                            "motor",
+                                        ]
+                                        if (
+                                            selectedObjectTypes.size ===
+                                            allObjectTypes.length
+                                        ) {
+                                            allObjectTypes.forEach(
+                                                onObjectTypeChange
+                                            )
                                         } else {
                                             allObjectTypes.forEach((type) => {
-                                                if (!selectedObjectTypes.has(type)) {
+                                                if (
+                                                    !selectedObjectTypes.has(
+                                                        type
+                                                    )
+                                                ) {
                                                     onObjectTypeChange(type)
                                                 }
                                             })
@@ -641,37 +955,58 @@ function SearchAndFilterBar({
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    {selectedObjectTypes.size === 3 ? "Deselect All" : "Select All"}
+                                    {selectedObjectTypes.size === 3
+                                        ? "Deselect All"
+                                        : "Select All"}
                                 </button>
                             </div>
-                            {(["boat", "trailer", "motor"] as ObjectType[]).map((objectType) => {
-                                const config = OBJECT_TYPE_CONFIG[objectType]
-                                const IconComponent = config.icon
-                                return (
-                                    <label
-                                        key={objectType}
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            padding: "6px 12px",
-                                            cursor: "pointer",
-                                            borderRadius: "6px",
-                                            fontSize: "14px",
-                                        }}
-                                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#f3f4f6")}
-                                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedObjectTypes.has(objectType)}
-                                            onChange={() => onObjectTypeChange(objectType)}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <IconComponent size={16} color={config.color} style={{ marginRight: "8px" }} />
-                                        {config.label}
-                                    </label>
-                                )
-                            })}
+                            {(["boat", "trailer", "motor"] as ObjectType[]).map(
+                                (objectType) => {
+                                    const config =
+                                        OBJECT_TYPE_CONFIG[objectType]
+                                    const IconComponent = config.icon
+                                    return (
+                                        <label
+                                            key={objectType}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                padding: "6px 12px",
+                                                cursor: "pointer",
+                                                borderRadius: "6px",
+                                                fontSize: "14px",
+                                            }}
+                                            onMouseOver={(e) =>
+                                                (e.currentTarget.style.backgroundColor =
+                                                    "#f3f4f6")
+                                            }
+                                            onMouseOut={(e) =>
+                                                (e.currentTarget.style.backgroundColor =
+                                                    "transparent")
+                                            }
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedObjectTypes.has(
+                                                    objectType
+                                                )}
+                                                onChange={() =>
+                                                    onObjectTypeChange(
+                                                        objectType
+                                                    )
+                                                }
+                                                style={{ marginRight: "8px" }}
+                                            />
+                                            <IconComponent
+                                                size={16}
+                                                color={config.color}
+                                                style={{ marginRight: "8px" }}
+                                            />
+                                            {config.label}
+                                        </label>
+                                    )
+                                }
+                            )}
                         </div>
                     </>,
                     document.body
@@ -712,12 +1047,16 @@ function SearchAndFilterBar({
                             <div style={{ marginBottom: "12px" }}>
                                 <button
                                     onClick={() => {
-                                        COLUMNS.filter((col) => col.group !== "essential").forEach((col) => {
+                                        COLUMNS.filter(
+                                            (col) => col.group !== "essential"
+                                        ).forEach((col) => {
                                             if (visibleColumns.has(col.key)) {
                                                 onToggleColumn(col.key)
                                             }
                                         })
-                                        COLUMNS.filter((col) => col.group === "essential").forEach((col) => {
+                                        COLUMNS.filter(
+                                            (col) => col.group === "essential"
+                                        ).forEach((col) => {
                                             if (!visibleColumns.has(col.key)) {
                                                 onToggleColumn(col.key)
                                             }
@@ -738,71 +1077,102 @@ function SearchAndFilterBar({
                                 </button>
                             </div>
 
-                            {Object.entries(COLUMN_GROUPS).map(([groupKey, group]) => {
-                                const groupColumns = COLUMNS.filter((col) => col.group === groupKey)
-                                if (groupColumns.length === 0) return null
+                            {Object.entries(COLUMN_GROUPS).map(
+                                ([groupKey, group]) => {
+                                    const groupColumns = COLUMNS.filter(
+                                        (col) => col.group === groupKey
+                                    )
+                                    if (groupColumns.length === 0) return null
 
-                                const visibleInGroup = groupColumns.filter((col) => visibleColumns.has(col.key)).length
+                                    const visibleInGroup = groupColumns.filter(
+                                        (col) => visibleColumns.has(col.key)
+                                    ).length
 
-                                return (
-                                    <div key={groupKey}>
-                                        <div
-                                            style={{
-                                                padding: "8px 12px",
-                                                backgroundColor: "#f8fafc",
-                                                fontSize: "12px",
-                                                fontWeight: "600",
-                                                color: group.color,
-                                                borderRadius: "6px",
-                                                marginBottom: "8px",
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                            }}
-                                        >
-                                            <span>{group.label}</span>
-                                            <button
-                                                onClick={() => toggleGroup(groupKey as keyof typeof COLUMN_GROUPS)}
+                                    return (
+                                        <div key={groupKey}>
+                                            <div
                                                 style={{
-                                                    fontSize: "10px",
-                                                    padding: "2px 6px",
-                                                    backgroundColor: group.color,
-                                                    color: "white",
-                                                    border: "none",
-                                                    borderRadius: "4px",
-                                                    cursor: "pointer",
+                                                    padding: "8px 12px",
+                                                    backgroundColor: "#f8fafc",
+                                                    fontSize: "12px",
+                                                    fontWeight: "600",
+                                                    color: group.color,
+                                                    borderRadius: "6px",
+                                                    marginBottom: "8px",
+                                                    display: "flex",
+                                                    justifyContent:
+                                                        "space-between",
+                                                    alignItems: "center",
                                                 }}
                                             >
-                                                {visibleInGroup}/{groupColumns.length}
-                                            </button>
-                                        </div>
-                                        <div style={{ marginBottom: "16px" }}>
-                                            {groupColumns.map((col) => (
-                                                <label
-                                                    key={col.key}
+                                                <span>{group.label}</span>
+                                                <button
+                                                    onClick={() =>
+                                                        toggleGroup(
+                                                            groupKey as keyof typeof COLUMN_GROUPS
+                                                        )
+                                                    }
                                                     style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        padding: "4px 12px",
+                                                        fontSize: "10px",
+                                                        padding: "2px 6px",
+                                                        backgroundColor:
+                                                            group.color,
+                                                        color: "white",
+                                                        border: "none",
+                                                        borderRadius: "4px",
                                                         cursor: "pointer",
-                                                        fontSize: "13px",
                                                     }}
-                                                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#f3f4f6")}
-                                                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                                                 >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={visibleColumns.has(col.key)}
-                                                        onChange={() => onToggleColumn(col.key)}
-                                                        style={{ marginRight: "8px" }}
-                                                    />
-                                                    {col.label}
-                                                </label>
-                                            ))}
+                                                    {visibleInGroup}/
+                                                    {groupColumns.length}
+                                                </button>
+                                            </div>
+                                            <div
+                                                style={{ marginBottom: "16px" }}
+                                            >
+                                                {groupColumns.map((col) => (
+                                                    <label
+                                                        key={col.key}
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            padding: "4px 12px",
+                                                            cursor: "pointer",
+                                                            fontSize: "13px",
+                                                        }}
+                                                        onMouseOver={(e) =>
+                                                            (e.currentTarget.style.backgroundColor =
+                                                                "#f3f4f6")
+                                                        }
+                                                        onMouseOut={(e) =>
+                                                            (e.currentTarget.style.backgroundColor =
+                                                                "transparent")
+                                                        }
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={visibleColumns.has(
+                                                                col.key
+                                                            )}
+                                                            onChange={() =>
+                                                                onToggleColumn(
+                                                                    col.key
+                                                                )
+                                                            }
+                                                            style={{
+                                                                marginRight:
+                                                                    "8px",
+                                                            }}
+                                                        />
+                                                        {col.label}
+                                                    </label>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )
-                            })}
+                                    )
+                                }
+                            )}
                         </div>
                     </>,
                     document.body
@@ -843,8 +1213,12 @@ function GeneralActionButtons({
                     alignItems: "center",
                     gap: "4px",
                 }}
-                onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
-                onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
+                onMouseOver={(e) =>
+                    hover.primaryButton(e.target as HTMLElement)
+                }
+                onMouseOut={(e) =>
+                    hover.resetPrimaryButton(e.target as HTMLElement)
+                }
             >
                 <FaEdit size={10} /> Edit
             </button>
@@ -942,8 +1316,9 @@ function ConfirmDeleteDialog({
     onConfirm: () => void
     onCancel: () => void
 }) {
-    const objectTypeName = OBJECT_TYPE_CONFIG[object.objectType].label.toLowerCase()
-    
+    const objectTypeName =
+        OBJECT_TYPE_CONFIG[object.objectType].label.toLowerCase()
+
     return (
         <div
             style={{
@@ -978,9 +1353,16 @@ function ConfirmDeleteDialog({
                     lineHeight: "1.5",
                 }}
             >
-                Are you sure you want to delete this {objectTypeName}? This action cannot be undone.
+                Are you sure you want to delete this {objectTypeName}? This
+                action cannot be undone.
             </div>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+            <div
+                style={{
+                    display: "flex",
+                    gap: "12px",
+                    justifyContent: "flex-end",
+                }}
+            >
                 <button
                     onClick={onCancel}
                     style={{
@@ -995,8 +1377,12 @@ function ConfirmDeleteDialog({
                         fontFamily: FONT_STACK,
                         transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) => (e.target.style.backgroundColor = colors.gray200)}
-                    onMouseOut={(e) => (e.target.style.backgroundColor = colors.gray100)}
+                    onMouseOver={(e) =>
+                        (e.target.style.backgroundColor = colors.gray200)
+                    }
+                    onMouseOut={(e) =>
+                        (e.target.style.backgroundColor = colors.gray100)
+                    }
                 >
                     Cancel
                 </button>
@@ -1014,8 +1400,12 @@ function ConfirmDeleteDialog({
                         fontFamily: FONT_STACK,
                         transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) => (e.target.style.backgroundColor = "#dc2626")}
-                    onMouseOut={(e) => (e.target.style.backgroundColor = colors.error)}
+                    onMouseOver={(e) =>
+                        (e.target.style.backgroundColor = "#dc2626")
+                    }
+                    onMouseOut={(e) =>
+                        (e.target.style.backgroundColor = colors.error)
+                    }
                 >
                     Delete
                 </button>
@@ -1058,7 +1448,11 @@ function EditInsuredObjectDialog({
                 const data = await response.json()
                 return data.organization.boat_fields_config
             } else {
-                console.warn("Failed to fetch organization config:", response.status, response.statusText)
+                console.warn(
+                    "Failed to fetch organization config:",
+                    response.status,
+                    response.statusText
+                )
             }
         } catch (err) {
             console.warn("Error fetching organization config:", err)
@@ -1077,7 +1471,9 @@ function EditInsuredObjectDialog({
             setIsLoadingConfig(true)
             try {
                 if (object.organization) {
-                    const orgConfig = await fetchOrganizationConfig(object.organization)
+                    const orgConfig = await fetchOrganizationConfig(
+                        object.organization
+                    )
                     if (orgConfig) {
                         setOrgConfig(orgConfig)
                     }
@@ -1093,40 +1489,70 @@ function EditInsuredObjectDialog({
         loadConfig()
     }, [config.useOrgConfig, object.organization])
 
-    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    function handleChange(
+        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    ) {
         const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
         setForm((prev) => ({
             ...prev,
-            [name]: type === "number" ? (value === "" ? "" : parseFloat(value)) : value,
+            [name]:
+                type === "number"
+                    ? value === ""
+                        ? ""
+                        : parseFloat(value)
+                    : value,
         }))
     }
 
     // Get fields to render based on object type
-    function getFieldsForObjectType(objectType: ObjectType): (keyof InsuredObject)[] {
+    function getFieldsForObjectType(
+        objectType: ObjectType
+    ): (keyof InsuredObject)[] {
         const commonFields: (keyof InsuredObject)[] = [
-            "waarde", "ingangsdatum", "premiepromillage", "eigenRisico", "uitgangsdatum", "notitie"
+            "waarde",
+            "ingangsdatum",
+            "premiepromillage",
+            "eigenRisico",
+            "uitgangsdatum",
+            "notitie",
         ]
 
         switch (objectType) {
             case "boat":
                 return [
-                    "merkBoot", "typeBoot", "ligplaats", "aantalMotoren", "typeMerkMotor",
-                    "bouwjaar", "bootnummer", "motornummer", "cinNummer",
-                    ...commonFields
+                    "merkBoot",
+                    "typeBoot",
+                    "ligplaats",
+                    "aantalMotoren",
+                    "typeMerkMotor",
+                    "bouwjaar",
+                    "bootnummer",
+                    "motornummer",
+                    "cinNummer",
+                    ...commonFields,
                 ]
             case "trailer":
                 return [
-                    "trailerBrand", "trailerType", "trailerWeight", "trailerCapacity",
-                    "trailerAxles", "trailerLicensePlate", "trailerRegistrationNumber",
-                    ...commonFields
+                    "trailerBrand",
+                    "trailerType",
+                    "trailerWeight",
+                    "trailerCapacity",
+                    "trailerAxles",
+                    "trailerLicensePlate",
+                    "trailerRegistrationNumber",
+                    ...commonFields,
                 ]
             case "motor":
                 return [
-                    "motorBrand", "motorModel", "motorPower", "motorSerialNumber",
-                    "motorFuelType", "motorYear",
-                    ...commonFields
+                    "motorBrand",
+                    "motorModel",
+                    "motorPower",
+                    "motorSerialNumber",
+                    "motorFuelType",
+                    "motorYear",
+                    ...commonFields,
                 ]
             default:
                 return commonFields
@@ -1136,9 +1562,9 @@ function EditInsuredObjectDialog({
     // Format field label
     function formatLabel(key: string): string {
         return key
-            .replace(/([A-Z])/g, ' $1')
-            .replace(/^./, str => str.toUpperCase())
-            .replace(/\b\w/g, l => l.toUpperCase())
+            .replace(/([A-Z])/g, " $1")
+            .replace(/^./, (str) => str.toUpperCase())
+            .replace(/\b\w/g, (l) => l.toUpperCase())
     }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -1159,22 +1585,28 @@ function EditInsuredObjectDialog({
         setIsSubmitting(true)
 
         try {
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${object.id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${getIdToken()}`,
-                },
-                body: JSON.stringify(form),
-            })
+            const res = await fetch(
+                `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${object.id}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getIdToken()}`,
+                    },
+                    body: JSON.stringify(form),
+                }
+            )
 
             if (!res.ok) {
                 const data = await res.json()
-                throw new Error(data.message || `Failed to update: ${res.status} ${res.statusText}`)
+                throw new Error(
+                    data.message ||
+                        `Failed to update: ${res.status} ${res.statusText}`
+                )
             }
 
             setSuccess(`${config.label} updated successfully!`)
-            
+
             // Auto-close after success
             setTimeout(() => {
                 onSuccess()
@@ -1189,19 +1621,31 @@ function EditInsuredObjectDialog({
 
     const renderInput = (key: keyof InsuredObject) => {
         const val = form[key]
-        
+
         // Check if field should be visible based on org config (only for boats)
         if (config.useOrgConfig && orgConfig && !orgConfig[key]?.visible) {
             return null
         }
 
         // Skip certain fields
-        if (key === "objectType" || key === "organization" || key === "id" || key === "status" || 
-            key === "createdAt" || key === "updatedAt" || key === "lastUpdatedBy") return null
+        if (
+            key === "objectType" ||
+            key === "organization" ||
+            key === "id" ||
+            key === "status" ||
+            key === "createdAt" ||
+            key === "updatedAt" ||
+            key === "lastUpdatedBy"
+        )
+            return null
 
         const isNumber = typeof val === "number"
         const isTextArea = key === "notitie" || key === "objectDescription"
-        const inputType = isNumber ? "number" : /Date$/.test(key) ? "date" : "text"
+        const inputType = isNumber
+            ? "number"
+            : /Date$/.test(key)
+              ? "date"
+              : "text"
 
         // Determine if field is required
         let isRequired = false
@@ -1209,13 +1653,20 @@ function EditInsuredObjectDialog({
             isRequired = orgConfig[key]?.required || false
         } else {
             // Simple required field logic for non-boat objects
-            const commonRequired = ["waarde", "ingangsdatum", "premiepromillage", "eigenRisico"]
+            const commonRequired = [
+                "waarde",
+                "ingangsdatum",
+                "premiepromillage",
+                "eigenRisico",
+            ]
             const typeSpecificRequired = {
                 trailer: ["trailerBrand", "trailerType"],
                 motor: ["motorBrand", "motorModel"],
                 boat: [],
             }
-            isRequired = commonRequired.includes(key) || (typeSpecificRequired[object.objectType] || []).includes(key)
+            isRequired =
+                commonRequired.includes(key) ||
+                (typeSpecificRequired[object.objectType] || []).includes(key)
         }
 
         const label = formatLabel(key)
@@ -1225,7 +1676,9 @@ function EditInsuredObjectDialog({
             <div key={key} style={{ marginBottom: "16px", width: "100%" }}>
                 <label htmlFor={key} style={styles.label}>
                     {label}
-                    {isRequired && <span style={{ color: colors.error }}> *</span>}
+                    {isRequired && (
+                        <span style={{ color: colors.error }}> *</span>
+                    )}
                 </label>
                 <Component
                     id={key}
@@ -1234,11 +1687,15 @@ function EditInsuredObjectDialog({
                     onChange={handleChange}
                     disabled={isSubmitting}
                     required={isRequired}
-                    {...(Component === "input" ? { type: inputType } : { rows: 3 })}
+                    {...(Component === "input"
+                        ? { type: inputType }
+                        : { rows: 3 })}
                     placeholder={`Enter ${label.toLowerCase()}`}
                     style={{
                         ...styles.input,
-                        backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                        backgroundColor: isSubmitting
+                            ? colors.gray50
+                            : colors.white,
                         cursor: isSubmitting ? "not-allowed" : "text",
                     }}
                     onFocus={(e) => {
@@ -1273,7 +1730,13 @@ function EditInsuredObjectDialog({
                     textAlign: "center",
                 }}
             >
-                <div style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "500" }}>
+                <div
+                    style={{
+                        marginBottom: "16px",
+                        fontSize: "18px",
+                        fontWeight: "500",
+                    }}
+                >
                     Loading form configuration...
                 </div>
                 <div style={styles.spinner} />
@@ -1303,18 +1766,36 @@ function EditInsuredObjectDialog({
             }}
         >
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "24px",
+                }}
+            >
                 <div style={{ display: "flex", alignItems: "center" }}>
                     <IconComponent size={24} color={config.color} />
-                    <div style={{ marginLeft: "12px", fontSize: "20px", fontWeight: "600", color: colors.gray900 }}>
+                    <div
+                        style={{
+                            marginLeft: "12px",
+                            fontSize: "20px",
+                            fontWeight: "600",
+                            color: colors.gray900,
+                        }}
+                    >
                         Edit {config.label}
                     </div>
                 </div>
                 <button
                     onClick={onClose}
                     style={styles.iconButton}
-                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
+                    onMouseOver={(e) =>
+                        hover.iconButton(e.target as HTMLElement)
+                    }
+                    onMouseOut={(e) =>
+                        hover.resetIconButton(e.target as HTMLElement)
+                    }
                 >
                     <FaTimes size={16} />
                 </button>
@@ -1322,29 +1803,33 @@ function EditInsuredObjectDialog({
 
             {/* Error Display */}
             {error && (
-                <div style={{
-                    padding: "12px 16px",
-                    backgroundColor: "#fee2e2",
-                    color: "#dc2626",
-                    borderRadius: "8px",
-                    marginBottom: "16px",
-                    fontSize: "14px",
-                    whiteSpace: "pre-line",
-                }}>
+                <div
+                    style={{
+                        padding: "12px 16px",
+                        backgroundColor: "#fee2e2",
+                        color: "#dc2626",
+                        borderRadius: "8px",
+                        marginBottom: "16px",
+                        fontSize: "14px",
+                        whiteSpace: "pre-line",
+                    }}
+                >
                     {error}
                 </div>
             )}
 
             {/* Success Display */}
             {success && (
-                <div style={{
-                    padding: "12px 16px",
-                    backgroundColor: "#dcfce7",
-                    color: "#166534",
-                    borderRadius: "8px",
-                    marginBottom: "16px",
-                    fontSize: "14px",
-                }}>
+                <div
+                    style={{
+                        padding: "12px 16px",
+                        backgroundColor: "#dcfce7",
+                        color: "#166534",
+                        borderRadius: "8px",
+                        marginBottom: "16px",
+                        fontSize: "14px",
+                    }}
+                >
                     {success}
                 </div>
             )}
@@ -1363,7 +1848,14 @@ function EditInsuredObjectDialog({
                 </div>
 
                 {/* Submit Buttons */}
-                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "24px" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "12px",
+                        justifyContent: "flex-end",
+                        marginTop: "24px",
+                    }}
+                >
                     <button
                         type="button"
                         onClick={onClose}
@@ -1398,7 +1890,9 @@ function EditInsuredObjectDialog({
                         disabled={isSubmitting}
                         style={{
                             padding: "10px 20px",
-                            backgroundColor: isSubmitting ? colors.disabled : config.color,
+                            backgroundColor: isSubmitting
+                                ? colors.disabled
+                                : config.color,
                             color: "white",
                             border: "none",
                             borderRadius: "8px",
@@ -1495,8 +1989,12 @@ function SuccessNotification({
                         fontFamily: FONT_STACK,
                         transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) => (e.target.style.backgroundColor = "#047857")}
-                    onMouseOut={(e) => (e.target.style.backgroundColor = "#059669")}
+                    onMouseOver={(e) =>
+                        (e.target.style.backgroundColor = "#047857")
+                    }
+                    onMouseOut={(e) =>
+                        (e.target.style.backgroundColor = "#059669")
+                    }
                 >
                     OK
                 </button>
@@ -1563,8 +2061,12 @@ function ErrorNotification({
                         fontFamily: FONT_STACK,
                         transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) => (e.target.style.backgroundColor = "#2563eb")}
-                    onMouseOut={(e) => (e.target.style.backgroundColor = "#3b82f6")}
+                    onMouseOver={(e) =>
+                        (e.target.style.backgroundColor = "#2563eb")
+                    }
+                    onMouseOut={(e) =>
+                        (e.target.style.backgroundColor = "#3b82f6")
+                    }
                 >
                     OK
                 </button>
@@ -1639,7 +2141,13 @@ function DeclineReasonDialog({
                         marginBottom: "24px",
                     }}
                 />
-                <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "12px",
+                        justifyContent: "flex-end",
+                    }}
+                >
                     <button
                         type="button"
                         onClick={onCancel}
@@ -1655,8 +2163,12 @@ function DeclineReasonDialog({
                             fontFamily: FONT_STACK,
                             transition: "all 0.2s",
                         }}
-                        onMouseOver={(e) => (e.target.style.backgroundColor = colors.gray200)}
-                        onMouseOut={(e) => (e.target.style.backgroundColor = colors.gray100)}
+                        onMouseOver={(e) =>
+                            (e.target.style.backgroundColor = colors.gray200)
+                        }
+                        onMouseOut={(e) =>
+                            (e.target.style.backgroundColor = colors.gray100)
+                        }
                     >
                         Cancel
                     </button>
@@ -1674,8 +2186,12 @@ function DeclineReasonDialog({
                             fontFamily: FONT_STACK,
                             transition: "all 0.2s",
                         }}
-                        onMouseOver={(e) => (e.target.style.backgroundColor = "#dc2626")}
-                        onMouseOut={(e) => (e.target.style.backgroundColor = "#ef4444")}
+                        onMouseOver={(e) =>
+                            (e.target.style.backgroundColor = "#dc2626")
+                        }
+                        onMouseOut={(e) =>
+                            (e.target.style.backgroundColor = "#ef4444")
+                        }
                     >
                         Decline
                     </button>
@@ -1721,21 +2237,35 @@ function InsuredObjectList() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
-    const [currentOrganization, setCurrentOrganization] = useState<string | null>(null)
+    const [currentOrganization, setCurrentOrganization] = useState<
+        string | null
+    >(null)
     const [searchTerm, setSearchTerm] = useState("")
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-        new Set(COLUMNS.filter((col) => col.group === "essential").map((col) => col.key))
+        new Set(
+            COLUMNS.filter((col) => col.group === "essential").map(
+                (col) => col.key
+            )
+        )
     )
     const [organizations, setOrganizations] = useState<string[]>([])
-    const [selectedOrganizations, setSelectedOrganizations] = useState<Set<string>>(new Set())
-    const [selectedObjectTypes, setSelectedObjectTypes] = useState<Set<ObjectType>>(
-        new Set(["boat", "trailer", "motor"])
-    )
+    const [selectedOrganizations, setSelectedOrganizations] = useState<
+        Set<string>
+    >(new Set())
+    const [selectedObjectTypes, setSelectedObjectTypes] = useState<
+        Set<ObjectType>
+    >(new Set(["boat", "trailer", "motor"]))
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
-    const [decliningObjectId, setDecliningObjectId] = useState<string | null>(null)
-    const [editingObject, setEditingObject] = useState<InsuredObject | null>(null)
-    const [deletingObject, setDeletingObject] = useState<InsuredObject | null>(null)
+    const [decliningObjectId, setDecliningObjectId] = useState<string | null>(
+        null
+    )
+    const [editingObject, setEditingObject] = useState<InsuredObject | null>(
+        null
+    )
+    const [deletingObject, setDeletingObject] = useState<InsuredObject | null>(
+        null
+    )
 
     // Toggle functions
     const toggleColumn = (column: string) => {
@@ -1772,7 +2302,7 @@ function InsuredObjectList() {
     useEffect(() => {
         // Parse URL parameters for organization context
         const urlParams = new URLSearchParams(window.location.search)
-        const orgParam = urlParams.get('org')
+        const orgParam = urlParams.get("org")
         if (orgParam) {
             setCurrentOrganization(decodeURIComponent(orgParam))
         }
@@ -1798,7 +2328,7 @@ function InsuredObjectList() {
 
                 // Load organizations
                 await loadOrganizations()
-                
+
                 // Don't fetch objects here if we have an org param - let the other useEffect handle it
                 if (!orgParam) {
                     await fetchObjects()
@@ -1828,7 +2358,7 @@ function InsuredObjectList() {
         if (userInfo && currentOrganization !== null) {
             setIsLoading(true)
             fetchObjects()
-                .catch(err => {
+                .catch((err) => {
                     console.error("Failed to refetch objects:", err)
                     setError(err.message || "Failed to fetch objects")
                 })
@@ -1841,7 +2371,9 @@ function InsuredObjectList() {
     async function fetchObjects() {
         try {
             const token = getIdToken()
-            const headers: Record<string, string> = { "Content-Type": "application/json" }
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
             if (token) headers.Authorization = `Bearer ${token}`
 
             // Build URL with organization parameter if needed
@@ -1860,7 +2392,9 @@ function InsuredObjectList() {
             })
 
             if (!res.ok) {
-                throw new Error(`Failed to fetch objects: ${res.status} ${res.statusText}`)
+                throw new Error(
+                    `Failed to fetch objects: ${res.status} ${res.statusText}`
+                )
             }
 
             const data = await res.json()
@@ -1907,21 +2441,28 @@ function InsuredObjectList() {
 
         try {
             const token = getIdToken()
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${deletingObject.id}`, {
-                method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-            })
+            const res = await fetch(
+                `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${deletingObject.id}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                }
+            )
 
             if (!res.ok) {
-                throw new Error(`Failed to delete: ${res.status} ${res.statusText}`)
+                throw new Error(
+                    `Failed to delete: ${res.status} ${res.statusText}`
+                )
             }
 
             // Show success message
-            setSuccessMessage(`${OBJECT_TYPE_CONFIG[deletingObject.objectType].label} deleted successfully!`)
-            
+            setSuccessMessage(
+                `${OBJECT_TYPE_CONFIG[deletingObject.objectType].label} deleted successfully!`
+            )
+
             // Refresh the list
             await fetchObjects()
         } catch (err: any) {
@@ -1934,22 +2475,27 @@ function InsuredObjectList() {
     const handleApprove = useCallback(async (object: InsuredObject) => {
         try {
             const token = getIdToken()
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${object.id}/approve`, {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({}),
-            })
+            const res = await fetch(
+                `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${object.id}/approve`,
+                {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({}),
+                }
+            )
 
             if (!res.ok) {
-                throw new Error(`Failed to approve: ${res.status} ${res.statusText}`)
+                throw new Error(
+                    `Failed to approve: ${res.status} ${res.statusText}`
+                )
             }
 
             // Show success message
             setSuccessMessage("Object approved successfully!")
-            
+
             // Refresh the list
             await fetchObjects()
         } catch (err: any) {
@@ -1961,35 +2507,43 @@ function InsuredObjectList() {
         setDecliningObjectId(object.id)
     }, [])
 
-    const handleDeclineWithReason = useCallback(async (reason: string) => {
-        if (!decliningObjectId) return
+    const handleDeclineWithReason = useCallback(
+        async (reason: string) => {
+            if (!decliningObjectId) return
 
-        try {
-            const token = getIdToken()
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${decliningObjectId}/decline`, {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ reason }),
-            })
+            try {
+                const token = getIdToken()
+                const res = await fetch(
+                    `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${decliningObjectId}/decline`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ reason }),
+                    }
+                )
 
-            if (!res.ok) {
-                throw new Error(`Failed to decline: ${res.status} ${res.statusText}`)
+                if (!res.ok) {
+                    throw new Error(
+                        `Failed to decline: ${res.status} ${res.statusText}`
+                    )
+                }
+
+                // Show success message
+                setSuccessMessage("Object declined successfully!")
+
+                // Refresh the list
+                await fetchObjects()
+            } catch (err: any) {
+                setErrorMessage(err.message || "Failed to decline object")
+            } finally {
+                setDecliningObjectId(null)
             }
-
-            // Show success message
-            setSuccessMessage("Object declined successfully!")
-            
-            // Refresh the list
-            await fetchObjects()
-        } catch (err: any) {
-            setErrorMessage(err.message || "Failed to decline object")
-        } finally {
-            setDecliningObjectId(null)
-        }
-    }, [decliningObjectId])
+        },
+        [decliningObjectId]
+    )
 
     if (isLoading) {
         return (
@@ -2005,7 +2559,9 @@ function InsuredObjectList() {
     if (error) {
         return (
             <div style={{ padding: "40px", textAlign: "center" }}>
-                <div style={{ color: colors.error, marginBottom: "16px" }}>{error}</div>
+                <div style={{ color: colors.error, marginBottom: "16px" }}>
+                    {error}
+                </div>
                 <button
                     onClick={() => window.location.reload()}
                     style={styles.primaryButton}
@@ -2019,7 +2575,7 @@ function InsuredObjectList() {
     const userRole = userInfo?.role || "user"
 
     return (
-        <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div style={{ padding: "24px", backgroundColor: "#f8fafc", minHeight: "100vh", fontFamily: FONT_STACK }}>
             {/* Back Navigation (when viewing specific organization) */}
             {currentOrganization && (
                 <div style={{ marginBottom: "16px" }}>
@@ -2032,95 +2588,99 @@ function InsuredObjectList() {
                             alignItems: "center",
                             gap: "8px",
                             padding: "10px 16px",
-                            backgroundColor: "transparent",
-                            color: colors.primary,
-                            border: `1px solid ${colors.primary}`,
+                            backgroundColor: "#f3f4f6",
+                            color: "#374151",
+                            border: "none",
                             borderRadius: "8px",
-                            fontSize: "14px",
+                            fontSize: "13px",
                             fontWeight: "500",
                             cursor: "pointer",
                             fontFamily: FONT_STACK,
-                            transition: "all 0.2s ease",
+                            transition: "all 0.2s",
                         }}
                         onMouseOver={(e) => {
-                            e.target.style.backgroundColor = colors.primary
-                            e.target.style.color = "white"
+                            e.target.style.backgroundColor = "#e5e7eb"
                         }}
                         onMouseOut={(e) => {
-                            e.target.style.backgroundColor = "transparent"
-                            e.target.style.color = colors.primary
+                            e.target.style.backgroundColor = "#f3f4f6"
                         }}
                     >
-                        <FaArrowLeft size={14} />
-                        Back to Organizations
+                        <FaArrowLeft size={12} />
+                        <FaBuilding size={12} />
+                        Organisaties
                     </button>
                 </div>
             )}
 
             {/* User Info Banner */}
             <div style={{ marginBottom: "20px" }}>
-                <UserInfoBanner 
+                <UserInfoBanner
                     currentOrganization={currentOrganization}
                     showCurrentOrg={!!currentOrganization}
                 />
             </div>
 
-            {/* Header */}
-            <div style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
-                    {userRole === "admin" && <FaUserShield size={20} color={colors.primary} />}
-                    {userRole === "editor" && <FaUserEdit size={20} color={colors.secondary} />}
-                    {userRole === "user" && <FaUser size={20} color={colors.gray500} />}
-                    <h1
-                        style={{
-                            marginLeft: "12px",
-                            fontSize: "28px",
-                            fontWeight: "700",
-                            color: colors.gray900,
-                            margin: 0,
-                        }}
-                    >
-                        {currentOrganization ? `${currentOrganization} Fleet` : "Insured Objects"}
-                    </h1>
-                </div>
-                <div style={{ color: colors.gray600 }}>
-                    {currentOrganization 
-                        ? `Managing boats, trailers, and motors for ${currentOrganization}`
-                        : "Manage boats, trailers, and motors"
-                    }
-                </div>
-            </div>
-
-            <div style={styles.card}>
-                <div style={{ marginBottom: "16px" }}>
+            <div
+                style={{
+                    backgroundColor: "#fff",
+                    borderRadius: "12px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                    overflow: "hidden",
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        padding: "24px",
+                        borderBottom: "1px solid #e5e7eb",
+                    }}
+                >
                     <div
                         style={{
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
-                            marginBottom: "16px",
+                            marginBottom: "20px",
                         }}
                     >
                         <div
                             style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            {userRole === "admin" && (
+                                <FaUserShield size={20} color={colors.primary} />
+                            )}
+                            {userRole === "editor" && (
+                                <FaUserEdit size={20} color={colors.secondary} />
+                            )}
+                            {userRole === "user" && (
+                                <FaUser size={20} color={colors.gray500} />
+                            )}
+                            <h1
+                                style={{
+                                    fontSize: "32px",
+                                    fontWeight: "600",
+                                    color: "#1f2937",
+                                    margin: 0,
+                                    letterSpacing: "-0.025em",
+                                }}
+                            >
+                                Vloot Beheer
+                            </h1>
+                        </div>
+                        <div
+                            style={{
+                                fontSize: "14px",
+                                color: "#6b7280",
                                 backgroundColor: "#f3f4f6",
                                 padding: "6px 12px",
                                 borderRadius: "6px",
                             }}
                         >
-                            {filteredObjects.length} objects
-                            {isAdmin(userInfo) &&
-                                organizations.length > 0 && (
-                                    <span
-                                        style={{
-                                            marginLeft: "8px",
-                                            fontSize: "12px",
-                                        }}
-                                    >
-                                        • {selectedOrganizations.size}/
-                                        {organizations.length} orgs
-                                    </span>
-                                )}
+                            {filteredObjects.length} objecten
                         </div>
                     </div>
 
@@ -2134,7 +2694,9 @@ function InsuredObjectList() {
                         onOrganizationChange={toggleOrganization}
                         selectedObjectTypes={selectedObjectTypes}
                         onObjectTypeChange={toggleObjectType}
-                        showOrgFilter={isAdmin(userInfo) && !currentOrganization}
+                        showOrgFilter={
+                            isAdmin(userInfo) && !currentOrganization
+                        }
                         userInfo={userInfo}
                     />
                 </div>
@@ -2177,7 +2739,7 @@ function InsuredObjectList() {
                                 >
                                     Actions
                                 </th>
-                                
+
                                 {/* Status Actions Column (Admin only) */}
                                 {isAdmin(userInfo) && (
                                     <th
@@ -2194,7 +2756,7 @@ function InsuredObjectList() {
                                         Status
                                     </th>
                                 )}
-                                
+
                                 {/* Dynamic columns */}
                                 {visibleColumnsList.map((col) => (
                                     <th
@@ -2206,10 +2768,15 @@ function InsuredObjectList() {
                                             fontWeight: "600",
                                             color: "#475569",
                                             fontSize: "13px",
-                                            cursor: col.sortable ? "pointer" : "default",
+                                            cursor: col.sortable
+                                                ? "pointer"
+                                                : "default",
                                             width: col.width,
                                         }}
-                                        onClick={() => col.sortable && console.log('Sort by', col.key)}
+                                        onClick={() =>
+                                            col.sortable &&
+                                            console.log("Sort by", col.key)
+                                        }
                                     >
                                         {col.label}
                                     </th>
@@ -2228,11 +2795,14 @@ function InsuredObjectList() {
                                         transition: "background-color 0.2s",
                                     }}
                                     onMouseOver={(e) =>
-                                        (e.currentTarget.style.backgroundColor = "#f1f5f9")
+                                        (e.currentTarget.style.backgroundColor =
+                                            "#f1f5f9")
                                     }
                                     onMouseOut={(e) =>
                                         (e.currentTarget.style.backgroundColor =
-                                            index % 2 === 0 ? "#ffffff" : "#f8fafc")
+                                            index % 2 === 0
+                                                ? "#ffffff"
+                                                : "#f8fafc")
                                     }
                                 >
                                     {/* Actions cell */}
@@ -2249,13 +2819,14 @@ function InsuredObjectList() {
                                             onDelete={handleDelete}
                                         />
                                     </td>
-                                    
+
                                     {/* Status Actions cell (Admin only) */}
                                     {isAdmin(userInfo) && (
                                         <td
                                             style={{
                                                 padding: "12px 8px",
-                                                borderBottom: "1px solid #f1f5f9",
+                                                borderBottom:
+                                                    "1px solid #f1f5f9",
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
@@ -2266,41 +2837,60 @@ function InsuredObjectList() {
                                             />
                                         </td>
                                     )}
-                                    
+
                                     {/* Dynamic data cells */}
                                     {visibleColumnsList.map((col) => {
                                         // Special handling for objectType column to show icon + label
                                         if (col.key === "objectType") {
-                                            const config = OBJECT_TYPE_CONFIG[object.objectType]
+                                            const config =
+                                                OBJECT_TYPE_CONFIG[
+                                                    object.objectType
+                                                ]
                                             const IconComponent = config.icon
                                             return (
                                                 <td
                                                     key={col.key}
                                                     style={{
                                                         padding: "12px 8px",
-                                                        borderBottom: "1px solid #f1f5f9",
+                                                        borderBottom:
+                                                            "1px solid #f1f5f9",
                                                         color: "#374151",
                                                         fontSize: "13px",
                                                         lineHeight: "1.3",
                                                     }}
                                                 >
-                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                                        <IconComponent size={16} color={config.color} />
-                                                        <span>{config.label}</span>
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems:
+                                                                "center",
+                                                            gap: "8px",
+                                                        }}
+                                                    >
+                                                        <IconComponent
+                                                            size={16}
+                                                            color={config.color}
+                                                        />
+                                                        <span>
+                                                            {config.label}
+                                                        </span>
                                                     </div>
                                                 </td>
                                             )
                                         }
-                                        
+
                                         // Special handling for status column to show colored badge
                                         if (col.key === "status") {
-                                            const statusColor = STATUS_COLORS[object.status] || STATUS_COLORS["Not Insured"]
+                                            const statusColor =
+                                                STATUS_COLORS[object.status] ||
+                                                STATUS_COLORS["Not Insured"]
                                             return (
                                                 <td
                                                     key={col.key}
                                                     style={{
                                                         padding: "12px 8px",
-                                                        borderBottom: "1px solid #f1f5f9",
+                                                        borderBottom:
+                                                            "1px solid #f1f5f9",
                                                         color: "#374151",
                                                         fontSize: "13px",
                                                         lineHeight: "1.3",
@@ -2309,12 +2899,15 @@ function InsuredObjectList() {
                                                     <div
                                                         style={{
                                                             padding: "4px 8px",
-                                                            borderRadius: "12px",
+                                                            borderRadius:
+                                                                "12px",
                                                             fontSize: "12px",
                                                             fontWeight: "500",
-                                                            backgroundColor: statusColor.bg,
+                                                            backgroundColor:
+                                                                statusColor.bg,
                                                             color: statusColor.text,
-                                                            display: "inline-block",
+                                                            display:
+                                                                "inline-block",
                                                         }}
                                                     >
                                                         {object.status}
@@ -2322,17 +2915,25 @@ function InsuredObjectList() {
                                                 </td>
                                             )
                                         }
-                                        
+
                                         // Regular cell rendering
-                                        const cellValue = object[col.key as keyof InsuredObject]
-                                        const displayValue = renderObjectCellValue(col, cellValue)
+                                        const cellValue =
+                                            object[
+                                                col.key as keyof InsuredObject
+                                            ]
+                                        const displayValue =
+                                            renderObjectCellValue(
+                                                col,
+                                                cellValue
+                                            )
 
                                         return (
                                             <td
                                                 key={col.key}
                                                 style={{
                                                     padding: "12px 8px",
-                                                    borderBottom: "1px solid #f1f5f9",
+                                                    borderBottom:
+                                                        "1px solid #f1f5f9",
                                                     color: "#374151",
                                                     fontSize: "13px",
                                                     lineHeight: "1.3",
@@ -2356,7 +2957,17 @@ function InsuredObjectList() {
             {successMessage &&
                 ReactDOM.createPortal(
                     <>
-                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1000 }} />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                zIndex: 1000,
+                            }}
+                        />
                         <SuccessNotification
                             message={successMessage}
                             onClose={() => setSuccessMessage(null)}
@@ -2368,7 +2979,17 @@ function InsuredObjectList() {
             {errorMessage &&
                 ReactDOM.createPortal(
                     <>
-                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1000 }} />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                zIndex: 1000,
+                            }}
+                        />
                         <ErrorNotification
                             message={errorMessage}
                             onClose={() => setErrorMessage(null)}
@@ -2380,7 +3001,17 @@ function InsuredObjectList() {
             {decliningObjectId &&
                 ReactDOM.createPortal(
                     <>
-                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1000 }} />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                zIndex: 1000,
+                            }}
+                        />
                         <DeclineReasonDialog
                             onSubmit={handleDeclineWithReason}
                             onCancel={() => setDecliningObjectId(null)}
@@ -2392,13 +3023,25 @@ function InsuredObjectList() {
             {editingObject &&
                 ReactDOM.createPortal(
                     <>
-                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1000 }} />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                zIndex: 1000,
+                            }}
+                        />
                         <EditInsuredObjectDialog
                             object={editingObject}
                             onClose={() => setEditingObject(null)}
                             onSuccess={async () => {
                                 await fetchObjects()
-                                setSuccessMessage(`${OBJECT_TYPE_CONFIG[editingObject.objectType].label} updated successfully!`)
+                                setSuccessMessage(
+                                    `${OBJECT_TYPE_CONFIG[editingObject.objectType].label} updated successfully!`
+                                )
                             }}
                         />
                     </>,
@@ -2408,7 +3051,17 @@ function InsuredObjectList() {
             {deletingObject &&
                 ReactDOM.createPortal(
                     <>
-                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1000 }} />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                zIndex: 1000,
+                            }}
+                        />
                         <ConfirmDeleteDialog
                             object={deletingObject}
                             onConfirm={handleConfirmDelete}
@@ -2417,7 +3070,7 @@ function InsuredObjectList() {
                     </>,
                     document.body
                 )}
-        </div>
+            </div>
     )
 }
 

@@ -130,22 +130,22 @@ interface InsuredObject {
     motornummer?: string // engineNumber
     cinNummer?: string // cinNumber
 
-    // Trailer-specific fields
-    trailerBrand?: string
+    // Trailer-specific fields (Dutch names)
+    trailerMerk?: string
     trailerType?: string
-    trailerWeight?: number
-    trailerCapacity?: number
-    trailerAxles?: number
-    trailerLicensePlate?: string
-    trailerRegistrationNumber?: string
+    trailerGewicht?: number
+    trailerCapaciteit?: number
+    trailerAssen?: number
+    trailerKenteken?: string
+    trailerRegistratienummer?: string
 
-    // Motor-specific fields
-    motorBrand?: string
+    // Motor-specific fields (Dutch names)
+    motorMerk?: string
     motorModel?: string
-    motorPower?: number
-    motorSerialNumber?: string
-    motorFuelType?: string
-    motorYear?: number
+    motorVermogen?: number
+    motorSerienummer?: string
+    motorBrandstoftype?: string
+    motorJaar?: number
 
     // Other object fields
     objectDescription?: string
@@ -156,11 +156,11 @@ interface InsuredObject {
 
 // ——— Column Groups and Definitions ———
 const COLUMN_GROUPS = {
-    essential: { label: "Essential", color: "#059669" },
-    identity: { label: "Identity", color: "#3b82f6" },
-    technical: { label: "Technical", color: "#8b5cf6" },
-    financial: { label: "Financial", color: "#f59e0b" },
-    dates: { label: "Dates", color: "#ef4444" },
+    essential: { label: "Essentieel", color: "#059669" },
+    identity: { label: "Identiteit", color: "#3b82f6" },
+    technical: { label: "Technisch", color: "#8b5cf6" },
+    financial: { label: "Financieel", color: "#f59e0b" },
+    dates: { label: "Data", color: "#ef4444" },
     metadata: { label: "Metadata", color: "#6b7280" },
 }
 
@@ -257,8 +257,8 @@ const COLUMNS = [
         width: "120px",
     }, // boatNumber
     {
-        key: "trailerBrand",
-        label: "Trailer Brand",
+        key: "trailerMerk",
+        label: "Trailer Merk",
         group: "identity",
         sortable: true,
         width: "120px",
@@ -271,15 +271,15 @@ const COLUMNS = [
         width: "120px",
     },
     {
-        key: "trailerLicensePlate",
-        label: "License Plate",
+        key: "trailerKenteken",
+        label: "Kenteken",
         group: "identity",
         sortable: true,
         width: "120px",
     },
     {
-        key: "motorBrand",
-        label: "Motor Brand",
+        key: "motorMerk",
+        label: "Motor Merk",
         group: "identity",
         sortable: true,
         width: "120px",
@@ -351,49 +351,49 @@ const COLUMNS = [
     }, // cinNumber
     {
         key: "trailerWeight",
-        label: "Weight",
+        label: "Gewicht",
         group: "technical",
         sortable: true,
         width: "100px",
     },
     {
         key: "trailerCapacity",
-        label: "Capacity",
+        label: "Capaciteit",
         group: "technical",
         sortable: true,
         width: "100px",
     },
     {
         key: "trailerAxles",
-        label: "Axles",
+        label: "Assen",
         group: "technical",
         sortable: true,
         width: "80px",
     },
     {
         key: "trailerRegistrationNumber",
-        label: "Registration",
+        label: "Registratie",
         group: "technical",
         sortable: true,
         width: "130px",
     },
     {
         key: "motorPower",
-        label: "Power (HP)",
+        label: "Vermogen (PK)",
         group: "technical",
         sortable: true,
         width: "100px",
     },
     {
         key: "motorSerialNumber",
-        label: "Serial Number",
+        label: "Serienummer",
         group: "technical",
         sortable: true,
         width: "130px",
     },
     {
         key: "motorFuelType",
-        label: "Fuel Type",
+        label: "Brandstoftype",
         group: "technical",
         sortable: true,
         width: "100px",
@@ -407,7 +407,7 @@ const COLUMNS = [
     },
     {
         key: "objectSerialNumber",
-        label: "Serial Number",
+        label: "Serienummer",
         group: "technical",
         sortable: true,
         width: "130px",
@@ -651,7 +651,7 @@ function SearchAndFilterBar({
                     />
                     <input
                         type="text"
-                        placeholder="Search objects..."
+                        placeholder="Objecten zoeken..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         style={{
@@ -694,7 +694,7 @@ function SearchAndFilterBar({
                             }
                         >
                             <FaBuilding size={14} />
-                            Organizations ({selectedOrganizations.size})
+                            Organisaties ({selectedOrganizations.size})
                         </button>
                     </div>
                 )}
@@ -729,7 +729,7 @@ function SearchAndFilterBar({
                         }
                     >
                         <FaBox size={14} />
-                        Object Types ({selectedObjectTypes.size})
+                        Object Typen ({selectedObjectTypes.size})
                     </button>
                 </div>
 
@@ -758,7 +758,7 @@ function SearchAndFilterBar({
                             (e.target.style.backgroundColor = colors.gray100)
                         }
                     >
-                        <FaFilter /> Columns ({visibleColumns.size})
+                        <FaFilter /> Kolommen ({visibleColumns.size})
                     </button>
                 </div>
             </div>
@@ -837,8 +837,8 @@ function SearchAndFilterBar({
                                 >
                                     {selectedOrganizations.size ===
                                     organizations.length
-                                        ? "Deselect All"
-                                        : "Select All"}
+                                        ? "Alles Deselecteren"
+                                        : "Alles Selecteren"}
                                 </button>
                             </div>
                             {organizations.map((org) => (
@@ -956,8 +956,8 @@ function SearchAndFilterBar({
                                     }}
                                 >
                                     {selectedObjectTypes.size === 3
-                                        ? "Deselect All"
-                                        : "Select All"}
+                                        ? "Alles Deselecteren"
+                                        : "Alles Selecteren"}
                                 </button>
                             </div>
                             {(["boat", "trailer", "motor"] as ObjectType[]).map(
@@ -1073,7 +1073,7 @@ function SearchAndFilterBar({
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    Reset to Essential
+                                    Reset naar Essentieel
                                 </button>
                             </div>
 
@@ -1220,7 +1220,7 @@ function GeneralActionButtons({
                     hover.resetPrimaryButton(e.target as HTMLElement)
                 }
             >
-                <FaEdit size={10} /> Edit
+                <FaEdit size={10} /> Bewerken
             </button>
             <button
                 onClick={() => onDelete(object)}
@@ -1241,7 +1241,7 @@ function GeneralActionButtons({
                     e.target.style.backgroundColor = colors.error
                 }}
             >
-                <FaTrashAlt size={10} /> Delete
+                <FaTrashAlt size={10} /> Verwijderen
             </button>
         </div>
     )
@@ -1343,7 +1343,7 @@ function ConfirmDeleteDialog({
                     color: colors.gray800,
                 }}
             >
-                Delete {OBJECT_TYPE_CONFIG[object.objectType].label}
+                {OBJECT_TYPE_CONFIG[object.objectType].label} Verwijderen
             </div>
             <div
                 style={{
@@ -1353,7 +1353,7 @@ function ConfirmDeleteDialog({
                     lineHeight: "1.5",
                 }}
             >
-                Are you sure you want to delete this {objectTypeName}? This
+                Weet je zeker dat je dit {objectTypeName} wilt verwijderen? Dit
                 action cannot be undone.
             </div>
             <div
@@ -1384,7 +1384,7 @@ function ConfirmDeleteDialog({
                         (e.target.style.backgroundColor = colors.gray100)
                     }
                 >
-                    Cancel
+                    Annuleren
                 </button>
                 <button
                     onClick={onConfirm}
@@ -1407,7 +1407,7 @@ function ConfirmDeleteDialog({
                         (e.target.style.backgroundColor = colors.error)
                     }
                 >
-                    Delete
+                    Verwijderen
                 </button>
             </div>
         </div>
@@ -1479,7 +1479,7 @@ function EditInsuredObjectDialog({
                     }
                 }
             } catch (err) {
-                setError("Failed to load organization configuration")
+                setError("Kon organisatieconfiguratie niet laden")
                 console.error("Error loading org config:", err)
             } finally {
                 setIsLoadingConfig(false)
@@ -1572,11 +1572,11 @@ function EditInsuredObjectDialog({
 
         // Basic validation
         if (!form.waarde || form.waarde <= 0) {
-            setError("Waarde must be greater than 0")
+            setError("Waarde moet groter dan 0 zijn")
             return
         }
         if (!form.ingangsdatum) {
-            setError("Ingangsdatum is required")
+            setError("Ingangsdatum is verplicht")
             return
         }
 
@@ -1605,7 +1605,7 @@ function EditInsuredObjectDialog({
                 )
             }
 
-            setSuccess(`${config.label} updated successfully!`)
+            setSuccess(`${config.label} succesvol bijgewerkt!`)
 
             // Auto-close after success
             setTimeout(() => {
@@ -1613,7 +1613,7 @@ function EditInsuredObjectDialog({
                 onClose()
             }, 1500)
         } catch (err: any) {
-            setError(err.message || "Failed to update object")
+            setError(err.message || "Kon object niet bijwerken")
         } finally {
             setIsSubmitting(false)
         }
@@ -1737,7 +1737,7 @@ function EditInsuredObjectDialog({
                         fontWeight: "500",
                     }}
                 >
-                    Loading form configuration...
+                    Formulierconfiguratie laden...
                 </div>
                 <div style={styles.spinner} />
             </div>
@@ -1784,7 +1784,7 @@ function EditInsuredObjectDialog({
                             color: colors.gray900,
                         }}
                     >
-                        Edit {config.label}
+                        {config.label} Bewerken
                     </div>
                 </div>
                 <button
@@ -1883,7 +1883,7 @@ function EditInsuredObjectDialog({
                             }
                         }}
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -1921,7 +1921,7 @@ function EditInsuredObjectDialog({
                                 Updating...
                             </>
                         ) : (
-                            <>Save Changes</>
+                            <>Wijzigingen Opslaan</>
                         )}
                     </button>
                 </div>
@@ -1962,7 +1962,7 @@ function SuccessNotification({
                     marginBottom: "16px",
                 }}
             >
-                Success
+                Gelukt
             </div>
             <div
                 style={{
@@ -2034,7 +2034,7 @@ function ErrorNotification({
                     marginBottom: "16px",
                 }}
             >
-                Error
+                Fout
             </div>
             <div
                 style={{
@@ -2170,7 +2170,7 @@ function DeclineReasonDialog({
                             (e.target.style.backgroundColor = colors.gray100)
                         }
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -2315,7 +2315,7 @@ function InsuredObjectList() {
                 // Get user info first
                 const basicUserInfo = getUserInfo()
                 if (!basicUserInfo) {
-                    throw new Error("Please log in to view insured objects")
+                    throw new Error("Log in om verzekerde objecten te bekijken")
                 }
 
                 // Fetch detailed user info from backend
@@ -2334,7 +2334,7 @@ function InsuredObjectList() {
                     await fetchObjects()
                 }
             } catch (err: any) {
-                setError(err.message || "Failed to load data")
+                setError(err.message || "Kon gegevens niet laden")
             } finally {
                 setIsLoading(false)
             }
@@ -2360,7 +2360,7 @@ function InsuredObjectList() {
             fetchObjects()
                 .catch((err) => {
                     console.error("Failed to refetch objects:", err)
-                    setError(err.message || "Failed to fetch objects")
+                    setError(err.message || "Kon objecten niet ophalen")
                 })
                 .finally(() => {
                     setIsLoading(false)

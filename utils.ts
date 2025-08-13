@@ -104,14 +104,14 @@ export function formatSuccessMessage(data: any, entityType?: string): string {
     
     if (data.id) {
       const entity = entityType || "Item"
-      return `${entity} created successfully!`
+      return `${entity} succesvol aangemaakt!`
     }
     
     const entity = entityType || "Item"
-    return `${entity} has been created successfully!`
+    return `${entity} is succesvol aangemaakt!`
   }
   
-  return "Operation completed successfully!"
+  return "Bewerking succesvol voltooid!"
 }
 
 // ——— Validation Helpers ———
@@ -132,17 +132,17 @@ export function isValidContactInfo(contact: string): boolean {
 // ——— Form Validation Helpers ———
 export function validateRequired(value: string | number, fieldName: string): string | null {
   if (typeof value === "string" && !value.trim()) {
-    return `${fieldName} is required`
+    return `${fieldName} is verplicht`
   }
   if (typeof value === "number" && (isNaN(value) || value === 0)) {
-    return `${fieldName} is required`
+    return `${fieldName} is verplicht`
   }
   return null
 }
 
 export function validateEmail(email: string): string | null {
-  if (!email.trim()) return "Email address is required"
-  if (!isValidEmail(email)) return "Please enter a valid email address"
+  if (!email.trim()) return "E-mailadres is verplicht"
+  if (!isValidEmail(email)) return "Voer een geldig e-mailadres in"
   return null
 }
 
@@ -154,10 +154,10 @@ export function validateStringLength(
 ): string | null {
   const trimmed = value.trim()
   if (trimmed.length < minLength) {
-    return `${fieldName} must be at least ${minLength} characters`
+    return `${fieldName} moet minimaal ${minLength} karakters bevatten`
   }
   if (maxLength && trimmed.length > maxLength) {
-    return `${fieldName} must be less than ${maxLength} characters`
+    return `${fieldName} moet minder dan ${maxLength} karakters bevatten`
   }
   return null
 }
@@ -169,13 +169,13 @@ export function validateNumberRange(
   max?: number
 ): string | null {
   if (isNaN(value)) {
-    return `${fieldName} must be a valid number`
+    return `${fieldName} moet een geldig nummer zijn`
   }
   if (min !== undefined && value < min) {
-    return `${fieldName} must be at least ${min}`
+    return `${fieldName} moet minimaal ${min} zijn`
   }
   if (max !== undefined && value > max) {
-    return `${fieldName} must be at most ${max}`
+    return `${fieldName} mag maximaal ${max} zijn`
   }
   return null
 }
@@ -183,7 +183,7 @@ export function validateNumberRange(
 export function validateYear(year: number, fieldName: string = "Year"): string | null {
   const currentYear = new Date().getFullYear()
   if (year <= 1900 || year > currentYear) {
-    return `${fieldName} must be between 1900 and ${currentYear}`
+    return `${fieldName} moet tussen 1900 en ${currentYear} liggen`
   }
   return null
 }
@@ -237,7 +237,7 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const token = getIdToken()
   if (!token) {
-    throw new Error("No authentication token found. Please log in again.")
+    throw new Error("Geen authenticatietoken gevonden. Log opnieuw in.")
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -251,7 +251,7 @@ export async function apiRequest<T = any>(
 
   if (!response.ok) {
     if (response.status === 403) {
-      throw new Error("Authentication failed. Your session may have expired. Please log in again.")
+      throw new Error("Authenticatie mislukt. Je sessie is mogelijk verlopen. Log opnieuw in.")
     }
     throw new Error(`${response.status} ${response.statusText}`)
   }

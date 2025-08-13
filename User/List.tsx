@@ -2,7 +2,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding, FaFileContract, FaClipboardList, FaPlus } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
 import {
     API_BASE_URL,
@@ -1344,6 +1344,66 @@ export function UserPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
+                        {/* Navigation Tabs at Top */}
+                        <div
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: "#f8fafc",
+                                borderBottom: "1px solid #e5e7eb",
+                                display: "flex",
+                                gap: "4px",
+                                overflowX: "auto",
+                            }}
+                        >
+                            {[
+                                { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
+                                { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
+                                { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
+                                { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
+                            ].map((tab) => {
+                                const isActive = tab.key === "users"
+                                const Icon = tab.icon
+                                
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => {
+                                            window.location.href = tab.href
+                                        }}
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor: isActive ? "#3b82f6" : "transparent",
+                                            color: isActive ? "white" : "#6b7280",
+                                            border: isActive ? "none" : "1px solid #d1d5db",
+                                            borderRadius: "6px",
+                                            fontSize: "13px",
+                                            fontWeight: isActive ? "600" : "500",
+                                            cursor: isActive ? "default" : "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!isActive) {
+                                                e.target.style.backgroundColor = "#f3f4f6"
+                                                e.target.style.color = "#374151"
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!isActive) {
+                                                e.target.style.backgroundColor = "transparent"
+                                                e.target.style.color = "#6b7280"
+                                            }
+                                        }}
+                                    >
+                                        <Icon size={12} />
+                                        {tab.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
                         <div
                             style={{
                                 padding: "24px",
@@ -1365,38 +1425,6 @@ export function UserPageOverride(): Override {
                                         gap: "16px",
                                     }}
                                 >
-                                    <button
-                                        onClick={() => {
-                                            window.location.href = '/organizations'
-                                        }}
-                                        style={{
-                                            padding: "10px 16px",
-                                            backgroundColor: "#f3f4f6",
-                                            color: "#374151",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            fontSize: "13px",
-                                            fontWeight: "500",
-                                            cursor: "pointer",
-                                            fontFamily: FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#e5e7eb"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#f3f4f6"
-                                        }}
-                                        title="Terug naar Organisaties"
-                                    >
-                                        <FaArrowLeft size={12} />
-                                        <FaBuilding size={12} />
-                                        Organisaties
-                                    </button>
-                                    
                                     <div
                                         style={{
                                             display: "flex",
@@ -1425,16 +1453,53 @@ export function UserPageOverride(): Override {
                                         </h1>
                                     </div>
                                 </div>
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        color: "#6b7280",
-                                        backgroundColor: "#f3f4f6",
-                                        padding: "6px 12px",
-                                        borderRadius: "6px",
-                                    }}
-                                >
-                                    {filteredUsers.length} gebruikers
+                                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#6b7280",
+                                            backgroundColor: "#f3f4f6",
+                                            padding: "6px 12px",
+                                            borderRadius: "6px",
+                                        }}
+                                    >
+                                        {filteredUsers.length} gebruikers
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            // TODO: Add create user functionality
+                                            console.log('Create new user')
+                                        }}
+                                        style={{
+                                            padding: "10px 16px",
+                                            backgroundColor: "#10b981",
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            cursor: "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            transition: "all 0.2s",
+                                            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#059669"
+                                            e.target.style.transform = "translateY(-1px)"
+                                            e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#10b981"
+                                            e.target.style.transform = "translateY(0)"
+                                            e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
+                                        }}
+                                    >
+                                        <FaPlus size={14} />
+                                        Nieuwe Gebruiker
+                                    </button>
                                 </div>
                             </div>
 
@@ -1445,6 +1510,7 @@ export function UserPageOverride(): Override {
                                 onToggleColumn={toggleColumn}
                             />
                         </div>
+
 
                         <div
                             style={{
@@ -1741,3 +1807,10 @@ export function UserPageOverride(): Override {
         ),
     }
 }
+
+// Additional exports for Framer compatibility
+export function UserApp(): Override {
+    return UserPageOverride()
+}
+
+export default UserPageOverride

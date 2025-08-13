@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
@@ -109,8 +109,8 @@ function navigateToBoats(policy: any) {
         JSON.stringify({
             id: policy.id,
             organization: policy.organization,
-            policy_number: policy.policy_number,
-            client_name: policy.client_name,
+            polisnummer: policy.polisnummer,
+            klantnaam: policy.klantnaam,
         })
     )
 
@@ -145,12 +145,12 @@ async function fetchPolicies(userInfo: UserInfo | null): Promise<any[]> {
 
 // ——— Column Groups and Definitions ———
 type ColumnKey =
-    | "policy_number"
-    | "client_name"
-    | "inventory_type"
-    | "pending_adjustments"
-    | "broker_name"
-    | "broker_contact"
+    | "polisnummer"
+    | "klantnaam"
+    | "inventaristype"
+    | "openstaandeAanpassingen"
+    | "makelaarsnaam"
+    | "makelaarscontact"
     | "organization"
     | "createdAt"
     | "updatedAt"
@@ -169,21 +169,21 @@ const COLUMNS: {
 }[] = [
     // Essential columns - most important policy info
     {
-        key: "policy_number",
+        key: "polisnummer",
         label: "Polis #",
         priority: 1,
         group: "essential",
         width: "120px",
     },
     {
-        key: "client_name",
+        key: "klantnaam",
         label: "Klant Naam",
         priority: 1,
         group: "essential",
         width: "150px",
     },
     {
-        key: "inventory_type",
+        key: "inventaristype",
         label: "Inventaris Type",
         priority: 1,
         group: "essential",
@@ -199,21 +199,21 @@ const COLUMNS: {
 
     // Additional columns
     {
-        key: "pending_adjustments",
+        key: "openstaandeAanpassingen",
         label: "Lopende Aanpassingen",
         priority: 2,
         group: "additional",
         width: "150px",
     },
     {
-        key: "broker_name",
+        key: "makelaarsnaam",
         label: "Makelaar Naam",
         priority: 2,
         group: "additional",
         width: "130px",
     },
     {
-        key: "broker_contact",
+        key: "makelaarscontact",
         label: "Makelaar Contact",
         priority: 2,
         group: "additional",
@@ -339,12 +339,12 @@ function ConfirmDeleteDialog({
 
 // ——— Enhanced Edit Form ———
 type PolicyFormState = {
-    policy_number: string
-    client_name: string
-    inventory_type: string
-    pending_adjustments: string
-    broker_name: string
-    broker_contact: string
+    polisnummer: string
+    klantnaam: string
+    inventaristype: string
+    openstaandeAanpassingen: string
+    makelaarsnaam: string
+    makelaarscontact: string
     organization: string
 }
 
@@ -358,12 +358,12 @@ function EditPolicyForm({
     refresh(): void
 }) {
     const [form, setForm] = useState<PolicyFormState>({
-        policy_number: policy.policy_number || "",
-        client_name: policy.client_name || "",
-        inventory_type: policy.inventory_type || "",
-        pending_adjustments: policy.pending_adjustments || "",
-        broker_name: policy.broker_name || "",
-        broker_contact: policy.broker_contact || "",
+        polisnummer: policy.polisnummer || "",
+        klantnaam: policy.klantnaam || "",
+        inventaristype: policy.inventaristype || "",
+        openstaandeAanpassingen: policy.openstaandeAanpassingen || "",
+        makelaarsnaam: policy.makelaarsnaam || "",
+        makelaarscontact: policy.makelaarscontact || "",
         organization: policy.organization || "",
     })
     const [error, setError] = useState<string | null>(null)
@@ -1144,6 +1144,67 @@ export function PolicyPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
+                        {/* Inline Navigation Tabs */}
+                        <div
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: "#f8fafc",
+                                borderBottom: "1px solid #e5e7eb",
+                                display: "flex",
+                                gap: "4px",
+                                overflowX: "auto",
+                            }}
+                        >
+                            {[
+                                { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
+                                { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
+                                { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
+                                { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
+                            ].map((tab) => {
+                                const isActive = tab.key === "policies"
+                                const Icon = tab.icon
+                                
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => {
+                                            window.location.href = tab.href
+                                        }}
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor: isActive ? "#3b82f6" : "transparent",
+                                            color: isActive ? "white" : "#6b7280",
+                                            border: isActive ? "none" : "1px solid #d1d5db",
+                                            borderRadius: "6px",
+                                            fontSize: "13px",
+                                            fontWeight: isActive ? "600" : "500",
+                                            cursor: isActive ? "default" : "pointer",
+                                            fontFamily: "inherit",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            transition: "all 0.2s",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!isActive) {
+                                                e.target.style.backgroundColor = "#f3f4f6"
+                                                e.target.style.color = "#374151"
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!isActive) {
+                                                e.target.style.backgroundColor = "transparent"
+                                                e.target.style.color = "#6b7280"
+                                            }
+                                        }}
+                                    >
+                                        <Icon size={12} />
+                                        {tab.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        
                         <div
                             style={{
                                 padding: "24px",
@@ -1165,39 +1226,7 @@ export function PolicyPageOverride(): Override {
                                         gap: "16px",
                                     }}
                                 >
-                                    <button
-                                        onClick={() => {
-                                            window.location.href = '/organizations'
-                                        }}
-                                        style={{
-                                            padding: "10px 16px",
-                                            backgroundColor: "#f3f4f6",
-                                            color: "#374151",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            fontSize: "13px",
-                                            fontWeight: "500",
-                                            cursor: "pointer",
-                                            fontFamily: FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#e5e7eb"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#f3f4f6"
-                                        }}
-                                        title="Terug naar Organisaties"
-                                    >
-                                        <FaArrowLeft size={12} />
-                                        <FaBuilding size={12} />
-                                        Organisaties
-                                    </button>
-
-                                    <div
+<div
                                         style={{
                                             display: "flex",
                                             alignItems: "center",
@@ -1223,16 +1252,53 @@ export function PolicyPageOverride(): Override {
                                         </h1>
                                     </div>
                                 </div>
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        color: "#6b7280",
-                                        backgroundColor: "#f3f4f6",
-                                        padding: "6px 12px",
-                                        borderRadius: "6px",
-                                    }}
-                                >
-                                    {filteredPolicies.length} polissen
+                                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            color: "#6b7280",
+                                            backgroundColor: "#f3f4f6",
+                                            padding: "6px 12px",
+                                            borderRadius: "6px",
+                                        }}
+                                    >
+                                        {filteredPolicies.length} polissen
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            // TODO: Add create policy functionality
+                                            console.log('Create new policy')
+                                        }}
+                                        style={{
+                                            padding: "10px 16px",
+                                            backgroundColor: "#10b981",
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            cursor: "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            transition: "all 0.2s",
+                                            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            e.target.style.backgroundColor = "#059669"
+                                            e.target.style.transform = "translateY(-1px)"
+                                            e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
+                                        }}
+                                        onMouseOut={(e) => {
+                                            e.target.style.backgroundColor = "#10b981"
+                                            e.target.style.transform = "translateY(0)"
+                                            e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
+                                        }}
+                                    >
+                                        <FaPlus size={14} />
+                                        Nieuwe Polis
+                                    </button>
                                 </div>
                             </div>
 
@@ -1595,3 +1661,10 @@ export function PolicyPageOverride(): Override {
         ),
     }
 }
+
+// Additional exports for Framer compatibility
+export function PolicyApp(): Override {
+    return PolicyPageOverride()
+}
+
+export default PolicyPageOverride

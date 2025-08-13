@@ -19,6 +19,10 @@ import {
     FaClipboardList,
     FaFileContract,
     FaUsers,
+    FaPlus,
+    FaSort,
+    FaSortUp,
+    FaSortDown,
 } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../theme"
 import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
@@ -1360,6 +1364,8 @@ export function OrganizationPageOverride(): Override {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
+    const [sortField, setSortField] = useState<string | null>(null)
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
     const refresh = useCallback(() => {
         fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
@@ -1411,10 +1417,50 @@ export function OrganizationPageOverride(): Override {
         }
     }, [refresh, isLoadingUserInfo])
 
-    const filteredOrgs =
-        orgs?.filter((org) =>
+    // Filter and sort organizations
+    const filteredAndSortedOrgs = React.useMemo(() => {
+        let filtered = orgs?.filter((org) =>
             org.name?.toLowerCase().includes(searchTerm.toLowerCase())
         ) ?? []
+        
+        // Apply sorting
+        if (sortField) {
+            filtered = [...filtered].sort((a, b) => {
+                const aValue = a[sortField]
+                const bValue = b[sortField]
+                
+                // Handle null/undefined values
+                if (aValue == null && bValue == null) return 0
+                if (aValue == null) return 1
+                if (bValue == null) return -1
+                
+                let comparison = 0
+                if (typeof aValue === 'string' && typeof bValue === 'string') {
+                    comparison = aValue.localeCompare(bValue)
+                } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+                    comparison = aValue === bValue ? 0 : aValue ? 1 : -1
+                } else {
+                    // For dates and other types
+                    comparison = aValue > bValue ? 1 : aValue < bValue ? -1 : 0
+                }
+                
+                return sortDirection === 'desc' ? -comparison : comparison
+            })
+        }
+        
+        return filtered
+    }, [orgs, searchTerm, sortField, sortDirection])
+
+    const handleSort = (field: string) => {
+        if (sortField === field) {
+            // Toggle direction if same field
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+        } else {
+            // New field, start with ascending
+            setSortField(field)
+            setSortDirection('asc')
+        }
+    }
 
     const toggleColumn = (key: string) => {
         setVisibleColumns((prev) => {
@@ -1521,6 +1567,132 @@ export function OrganizationPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
+                        {/* Navigation Tabs Section */}
+                        <div
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: "#f8fafc",
+                                borderBottom: "1px solid #e5e7eb",
+                                display: "flex",
+                                gap: "4px",
+                                overflowX: "auto",
+                            }}
+                        >
+                            <button
+                                style={{
+                                    padding: "8px 16px",
+                                    backgroundColor: "#3b82f6",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontWeight: "600",
+                                    cursor: "default",
+                                    fontFamily: FONT_STACK,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                }}
+                            >
+                                <FaBuilding size={12} />
+                                Organisaties
+                            </button>
+                            <button
+                                onClick={() => {
+                                    window.location.href = '/policies'
+                                }}
+                                style={{
+                                    padding: "8px 16px",
+                                    backgroundColor: "transparent",
+                                    color: "#6b7280",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    transition: "all 0.2s",
+                                }}
+                                onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = "#f3f4f6"
+                                    e.target.style.color = "#374151"
+                                }}
+                                onMouseOut={(e) => {
+                                    e.target.style.backgroundColor = "transparent"
+                                    e.target.style.color = "#6b7280"
+                                }}
+                            >
+                                <FaFileContract size={12} />
+                                Polissen
+                            </button>
+                            <button
+                                onClick={() => {
+                                    window.location.href = '/users'
+                                }}
+                                style={{
+                                    padding: "8px 16px",
+                                    backgroundColor: "transparent",
+                                    color: "#6b7280",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    transition: "all 0.2s",
+                                }}
+                                onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = "#f3f4f6"
+                                    e.target.style.color = "#374151"
+                                }}
+                                onMouseOut={(e) => {
+                                    e.target.style.backgroundColor = "transparent"
+                                    e.target.style.color = "#6b7280"
+                                }}
+                            >
+                                <FaUsers size={12} />
+                                Gebruikers
+                            </button>
+                            <button
+                                onClick={() => {
+                                    window.location.href = '/changelog'
+                                }}
+                                style={{
+                                    padding: "8px 16px",
+                                    backgroundColor: "transparent",
+                                    color: "#6b7280",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    transition: "all 0.2s",
+                                }}
+                                onMouseOver={(e) => {
+                                    e.target.style.backgroundColor = "#f3f4f6"
+                                    e.target.style.color = "#374151"
+                                }}
+                                onMouseOut={(e) => {
+                                    e.target.style.backgroundColor = "transparent"
+                                    e.target.style.color = "#6b7280"
+                                }}
+                            >
+                                <FaClipboardList size={12} />
+                                Changelog
+                            </button>
+                        </div>
+
+                        {/* Main Header Section */}
                         <div
                             style={{
                                 padding: 24,
@@ -1531,129 +1703,95 @@ export function OrganizationPageOverride(): Override {
                                 style={{
                                     display: "flex",
                                     justifyContent: "space-between",
-                                    alignItems: "center",
+                                    alignItems: "flex-start",
                                     marginBottom: 20,
                                 }}
                             >
-                                <div
+                                <div>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px",
+                                            marginBottom: 8,
+                                        }}
+                                    >
+                                        <h1
+                                            style={{
+                                                margin: 0,
+                                                fontSize: "28px",
+                                                fontWeight: 600,
+                                                color: "#1f2937",
+                                                letterSpacing: "-0.025em",
+                                            }}
+                                        >
+                                            {isAdmin(userInfo) ? "Organisatie Beheer" : "Mijn Organisaties"}
+                                        </h1>
+                                        <div
+                                            style={{
+                                                fontSize: "14px",
+                                                color: colors.gray500,
+                                                backgroundColor: colors.gray100,
+                                                padding: "4px 12px",
+                                                borderRadius: "12px",
+                                                fontWeight: "500",
+                                            }}
+                                        >
+                                            {filteredAndSortedOrgs.length} organisaties
+                                        </div>
+                                    </div>
+                                    <p
+                                        style={{
+                                            margin: 0,
+                                            fontSize: "16px",
+                                            color: colors.gray600,
+                                        }}
+                                    >
+                                        Beheer organisaties en configureer instellingen
+                                    </p>
+                                </div>
+                                
+                                {/* Create Organization Button - moved to header */}
+                                <button
+                                    onClick={() => {
+                                        // This will trigger the create organization modal
+                                        // You'll need to add state management for this
+                                        const createBtn = document.querySelector('[data-organization-create-btn]') as HTMLButtonElement;
+                                        createBtn?.click();
+                                    }}
                                     style={{
+                                        padding: "12px 20px",
+                                        backgroundColor: "#10b981",
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
                                         display: "flex",
                                         alignItems: "center",
                                         gap: "8px",
+                                        transition: "all 0.2s",
+                                        boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#059669"
+                                        e.target.style.transform = "translateY(-1px)"
+                                        e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "#10b981"
+                                        e.target.style.transform = "translateY(0)"
+                                        e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
                                     }}
                                 >
-                                    <FaBuilding
-                                        size={24}
-                                        style={{
-                                            color: "#3b82f6",
-                                        }}
-                                    />
-                                    <h1
-                                        style={{
-                                            margin: 0,
-                                            fontSize: "32px",
-                                            fontWeight: 600,
-                                            color: "#1f2937",
-                                            letterSpacing: "-0.025em",
-                                        }}
-                                    >
-                                        {isAdmin(userInfo) ? "Organisatie Beheer" : "Mijn Organisaties"}
-                                    </h1>
-                                </div>
-                                
-                                {/* Navigation buttons */}
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "12px",
-                                    }}
-                                >
-                                    <button
-                                        onClick={() => {
-                                            window.location.href = '/changelog'
-                                        }}
-                                        style={{
-                                            ...styles.primaryButton,
-                                            padding: "10px 16px",
-                                            backgroundColor: "#8b5cf6",
-                                            borderRadius: "8px",
-                                            fontSize: "13px",
-                                            fontWeight: "500",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#7c3aed"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#8b5cf6"
-                                        }}
-                                        title="Bekijk Changelog"
-                                    >
-                                        <FaClipboardList size={14} />
-                                        Changelog
-                                    </button>
-                                    
-                                    <button
-                                        onClick={() => {
-                                            window.location.href = '/policies'
-                                        }}
-                                        style={{
-                                            ...styles.primaryButton,
-                                            padding: "10px 16px",
-                                            backgroundColor: "#2563eb",
-                                            borderRadius: "8px",
-                                            fontSize: "13px",
-                                            fontWeight: "500",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#1d4ed8"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#2563eb"
-                                        }}
-                                        title="Bekijk Polissen"
-                                    >
-                                        <FaFileContract size={14} />
-                                        Polissen
-                                    </button>
-                                    
-                                    <button
-                                        onClick={() => {
-                                            window.location.href = '/users'
-                                        }}
-                                        style={{
-                                            ...styles.primaryButton,
-                                            padding: "10px 16px",
-                                            backgroundColor: "#10b981",
-                                            borderRadius: "8px",
-                                            fontSize: "13px",
-                                            fontWeight: "500",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#059669"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#10b981"
-                                        }}
-                                        title="Beheer Gebruikers"
-                                    >
-                                        <FaUsers size={14} />
-                                        Gebruikers
-                                    </button>
-                                    
-                                    <div
-                                        style={{
-                                            fontSize: "14px",
-                                            color: colors.gray500,
-                                            backgroundColor: colors.gray100,
-                                            padding: "6px 12px",
-                                            borderRadius: "6px",
-                                        }}
-                                    >
-                                        {filteredOrgs.length} organisaties
-                                    </div>
-                                </div>
+                                    <FaPlus size={14} />
+                                    Nieuwe Organisatie
+                                </button>
                             </div>
+                            
+                            {/* Search and Filter Controls */}
                             <div style={{ display: "flex", gap: 12 }}>
                                 <div style={{ position: "relative", flex: 1 }}>
                                     <FaSearch
@@ -1666,7 +1804,7 @@ export function OrganizationPageOverride(): Override {
                                         }}
                                     />
                                     <input
-                                        placeholder="Search organizations..."
+                                        placeholder="Zoek organisaties..."
                                         value={searchTerm}
                                         onChange={(e) =>
                                             setSearchTerm(e.target.value)
@@ -1706,7 +1844,7 @@ export function OrganizationPageOverride(): Override {
                                             gap: "8px",
                                         }}
                                     >
-                                        <FaFilter /> Columns ({visible.length})
+                                        <FaFilter /> Kolommen ({visible.length})
                                     </button>
                                     {showColumnFilter && (
                                         <ColumnFilterDropdown
@@ -1751,30 +1889,136 @@ export function OrganizationPageOverride(): Override {
                                                     fontWeight: 600,
                                                     color: colors.gray700,
                                                     width: col.width,
+                                                    cursor: "pointer",
+                                                    userSelect: "none",
+                                                    position: "relative",
+                                                }}
+                                                onClick={() => handleSort(col.key)}
+                                                onMouseOver={(e) => {
+                                                    e.target.style.backgroundColor = "#f3f4f6"
+                                                }}
+                                                onMouseOut={(e) => {
+                                                    e.target.style.backgroundColor = "transparent"
                                                 }}
                                             >
-                                                {col.label}
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                        gap: "8px",
+                                                    }}
+                                                >
+                                                    {col.label}
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            flexDirection: "column",
+                                                            alignItems: "center",
+                                                            opacity: sortField === col.key ? 1 : 0.3,
+                                                        }}
+                                                    >
+                                                        {sortField === col.key ? (
+                                                            sortDirection === 'asc' ? (
+                                                                <FaSortUp size={12} style={{ color: "#3b82f6" }} />
+                                                            ) : (
+                                                                <FaSortDown size={12} style={{ color: "#3b82f6" }} />
+                                                            )
+                                                        ) : (
+                                                            <FaSort size={12} />
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredOrgs.length === 0 ? (
+                                    {filteredAndSortedOrgs.length === 0 ? (
                                         <tr>
                                             <td
                                                 colSpan={visible.length + 1}
                                                 style={{
-                                                    padding: 24,
+                                                    padding: 48,
                                                     textAlign: "center",
-                                                    color: colors.gray400,
+                                                    color: colors.gray500,
                                                 }}
                                             >
-                                                No organizations to display with
-                                                your authorization role
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        alignItems: "center",
+                                                        gap: "16px",
+                                                    }}
+                                                >
+                                                    <FaBuilding
+                                                        size={48}
+                                                        style={{
+                                                            color: colors.gray300,
+                                                        }}
+                                                    />
+                                                    <div>
+                                                        <h3
+                                                            style={{
+                                                                margin: "0 0 8px 0",
+                                                                fontSize: "18px",
+                                                                fontWeight: "600",
+                                                                color: colors.gray700,
+                                                            }}
+                                                        >
+                                                            Geen organisaties gevonden
+                                                        </h3>
+                                                        <p
+                                                            style={{
+                                                                margin: 0,
+                                                                fontSize: "14px",
+                                                                color: colors.gray500,
+                                                            }}
+                                                        >
+                                                            {searchTerm
+                                                                ? `Geen organisaties gevonden voor "${searchTerm}"`
+                                                                : "Je hebt geen toegang tot organisaties of er zijn nog geen organisaties aangemaakt."}
+                                                        </p>
+                                                        {!searchTerm && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const createBtn = document.querySelector('[data-organization-create-btn]') as HTMLButtonElement;
+                                                                    createBtn?.click();
+                                                                }}
+                                                                style={{
+                                                                    marginTop: "16px",
+                                                                    padding: "10px 16px",
+                                                                    backgroundColor: "#10b981",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: "6px",
+                                                                    fontSize: "14px",
+                                                                    fontWeight: "500",
+                                                                    cursor: "pointer",
+                                                                    fontFamily: FONT_STACK,
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: "8px",
+                                                                    transition: "all 0.2s",
+                                                                }}
+                                                                onMouseOver={(e) => {
+                                                                    e.target.style.backgroundColor = "#059669"
+                                                                }}
+                                                                onMouseOut={(e) => {
+                                                                    e.target.style.backgroundColor = "#10b981"
+                                                                }}
+                                                            >
+                                                                <FaPlus size={12} />
+                                                                Maak je eerste organisatie aan
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredOrgs.map((org, i) => (
+                                        filteredAndSortedOrgs.map((org, i) => (
                                             <tr
                                                 key={org.id}
                                                 style={{
@@ -1788,27 +2032,10 @@ export function OrganizationPageOverride(): Override {
                                                     <div
                                                         style={{
                                                             display: "flex",
-                                                            gap: "8px",
+                                                            gap: "6px",
                                                         }}
                                                     >
-                                                        <button
-                                                            onClick={() =>
-                                                                setEditingOrg(
-                                                                    org
-                                                                )
-                                                            }
-                                                            style={{
-                                                                ...styles.primaryButton,
-                                                                padding: "8px 12px",
-                                                                backgroundColor: "#3b82f6",
-                                                                fontSize: 12,
-                                                                borderRadius: 6,
-                                                                gap: "4px",
-                                                            }}
-                                                        >
-                                                            <FaEdit size={10} />{" "}
-                                                            Edit
-                                                        </button>
+                                                        {/* Primary Action - Bekijk Vloot */}
                                                         <button
                                                             onClick={() => {
                                                                 const orgParam = encodeURIComponent(org.name)
@@ -1821,30 +2048,133 @@ export function OrganizationPageOverride(): Override {
                                                                 fontSize: 12,
                                                                 borderRadius: 6,
                                                                 gap: "4px",
+                                                                fontWeight: "500",
+                                                            }}
+                                                            onMouseOver={(e) => {
+                                                                e.target.style.backgroundColor = "#059669"
+                                                            }}
+                                                            onMouseOut={(e) => {
+                                                                e.target.style.backgroundColor = "#10b981"
                                                             }}
                                                         >
-                                                            Go to fleet
+                                                            📋 Bekijk Vloot
                                                         </button>
-                                                        <button
-                                                            onClick={() =>
-                                                                setDeletingOrgId(
-                                                                    org.id
-                                                                )
-                                                            }
-                                                            style={{
-                                                                ...styles.primaryButton,
-                                                                padding: "8px 12px",
-                                                                backgroundColor: colors.error,
-                                                                fontSize: 12,
-                                                                borderRadius: 6,
-                                                                gap: "4px",
-                                                            }}
-                                                        >
-                                                            <FaTrashAlt
-                                                                size={10}
-                                                            />{" "}
-                                                            Delete
-                                                        </button>
+                                                        
+                                                        {/* Secondary Actions in Dropdown Menu */}
+                                                        <div style={{ position: "relative", display: "inline-block" }}>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault()
+                                                                    // Toggle dropdown
+                                                                    const dropdown = e.currentTarget.nextElementSibling as HTMLElement
+                                                                    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block'
+                                                                }}
+                                                                style={{
+                                                                    padding: "8px 10px",
+                                                                    backgroundColor: "#f3f4f6",
+                                                                    color: "#374151",
+                                                                    border: "1px solid #d1d5db",
+                                                                    borderRadius: 6,
+                                                                    fontSize: 12,
+                                                                    cursor: "pointer",
+                                                                    fontFamily: FONT_STACK,
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: "4px",
+                                                                    transition: "all 0.2s",
+                                                                }}
+                                                                onMouseOver={(e) => {
+                                                                    e.target.style.backgroundColor = "#e5e7eb"
+                                                                }}
+                                                                onMouseOut={(e) => {
+                                                                    e.target.style.backgroundColor = "#f3f4f6"
+                                                                }}
+                                                            >
+                                                                ⋮
+                                                            </button>
+                                                            <div
+                                                                style={{
+                                                                    display: "none",
+                                                                    position: "absolute",
+                                                                    left: 0,
+                                                                    top: "100%",
+                                                                    marginTop: 4,
+                                                                    backgroundColor: "white",
+                                                                    border: "1px solid #d1d5db",
+                                                                    borderRadius: 6,
+                                                                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                                                                    zIndex: 1000,
+                                                                    minWidth: 160,
+                                                                    overflow: "hidden",
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.display = 'none'
+                                                                }}
+                                                            >
+                                                                <button
+                                                                    onClick={() =>
+                                                                        setEditingOrg(
+                                                                            org
+                                                                        )
+                                                                    }
+                                                                    style={{
+                                                                        width: "100%",
+                                                                        padding: "10px 12px",
+                                                                        backgroundColor: "transparent",
+                                                                        color: "#374151",
+                                                                        border: "none",
+                                                                        fontSize: 13,
+                                                                        fontWeight: "500",
+                                                                        cursor: "pointer",
+                                                                        fontFamily: FONT_STACK,
+                                                                        textAlign: "left",
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "8px",
+                                                                        transition: "all 0.2s",
+                                                                    }}
+                                                                    onMouseOver={(e) => {
+                                                                        e.target.style.backgroundColor = "#f3f4f6"
+                                                                    }}
+                                                                    onMouseOut={(e) => {
+                                                                        e.target.style.backgroundColor = "transparent"
+                                                                    }}
+                                                                >
+                                                                    <FaEdit size={10} /> Bewerken
+                                                                </button>
+                                                                <button
+                                                                    onClick={() =>
+                                                                        setDeletingOrgId(
+                                                                            org.id
+                                                                        )
+                                                                    }
+                                                                    style={{
+                                                                        width: "100%",
+                                                                        padding: "10px 12px",
+                                                                        backgroundColor: "transparent",
+                                                                        color: "#dc2626",
+                                                                        border: "none",
+                                                                        fontSize: 13,
+                                                                        fontWeight: "500",
+                                                                        cursor: "pointer",
+                                                                        fontFamily: FONT_STACK,
+                                                                        textAlign: "left",
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "8px",
+                                                                        transition: "all 0.2s",
+                                                                    }}
+                                                                    onMouseOver={(e) => {
+                                                                        e.target.style.backgroundColor = "#fef2f2"
+                                                                    }}
+                                                                    onMouseOut={(e) => {
+                                                                        e.target.style.backgroundColor = "transparent"
+                                                                    }}
+                                                                >
+                                                                    <FaTrashAlt size={10} /> Verwijderen
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 {visible.map((col) => (
@@ -1855,20 +2185,53 @@ export function OrganizationPageOverride(): Override {
                                                             color: colors.gray700,
                                                         }}
                                                     >
-                                                        {col.key ===
-                                                        "is_superorg"
-                                                            ? org[col.key]
-                                                                ? "Yes"
-                                                                : "No"
-                                                            : col.key ===
-                                                                    "createdAt" ||
-                                                                col.key ===
-                                                                    "updatedAt"
-                                                              ? formatDate(
-                                                                    org[col.key]
-                                                                )
-                                                              : (org[col.key] ??
-                                                                "-")}
+                                                        {/* Make organization name clickable */}
+                                                        {col.key === "name" ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const orgParam = encodeURIComponent(org.name)
+                                                                    window.location.href = `/insuredobjects?org=${orgParam}`
+                                                                }}
+                                                                style={{
+                                                                    background: "none",
+                                                                    border: "none",
+                                                                    color: "#3b82f6",
+                                                                    fontSize: "14px",
+                                                                    fontWeight: "500",
+                                                                    cursor: "pointer",
+                                                                    textDecoration: "underline",
+                                                                    fontFamily: FONT_STACK,
+                                                                    padding: 0,
+                                                                    textAlign: "left",
+                                                                }}
+                                                                onMouseOver={(e) => {
+                                                                    e.target.style.color = "#1d4ed8"
+                                                                }}
+                                                                onMouseOut={(e) => {
+                                                                    e.target.style.color = "#3b82f6"
+                                                                }}
+                                                                title={`Ga naar vloot van ${org.name}`}
+                                                            >
+                                                                {org[col.key] ?? "-"}
+                                                            </button>
+                                                        ) : col.key === "is_superorg" ? (
+                                                            <span
+                                                                style={{
+                                                                    padding: "4px 8px",
+                                                                    borderRadius: "12px",
+                                                                    fontSize: "12px",
+                                                                    fontWeight: "500",
+                                                                    backgroundColor: org[col.key] ? "#dcfce7" : "#f3f4f6",
+                                                                    color: org[col.key] ? "#166534" : "#6b7280",
+                                                                }}
+                                                            >
+                                                                {org[col.key] ? "Ja" : "Nee"}
+                                                            </span>
+                                                        ) : col.key === "createdAt" || col.key === "updatedAt" ? (
+                                                            formatDate(org[col.key])
+                                                        ) : (
+                                                            org[col.key] ?? "-"
+                                                        )}
                                                     </td>
                                                 ))}
                                             </tr>

@@ -17,12 +17,12 @@ import {
 
 // Define our form state shape for a Policy
 type PolicyFormState = {
-    client_name: string
-    inventory_type: string
-    pending_adjustments: string
-    policy_number: string
-    broker_name: string
-    broker_contact: string
+    klantnaam: string
+    inventaristype: string
+    openstaandeAanpassingen: string
+    polisnummer: string
+    makelaarsnaam: string
+    makelaarscontact: string
     organization: string
 }
 
@@ -30,17 +30,17 @@ type PolicyFormState = {
 function validateForm(form: PolicyFormState): string[] {
     const errors: string[] = []
 
-    const clientNameError = validateRequired(form.client_name, "Client name")
+    const clientNameError = validateRequired(form.klantnaam, "Klant naam")
     if (clientNameError) errors.push(clientNameError)
     
-    const policyNumberError = validateRequired(form.policy_number, "Policy number")
+    const policyNumberError = validateRequired(form.polisnummer, "Polis nummer")
     if (policyNumberError) errors.push(policyNumberError)
     
     const organizationError = validateRequired(form.organization, "Organization")
     if (organizationError) errors.push(organizationError)
     
-    if (form.broker_contact && !isValidContactInfo(form.broker_contact)) {
-        errors.push("Broker contact should be a valid email or phone number")
+    if (form.makelaarscontact && !isValidContactInfo(form.makelaarscontact)) {
+        errors.push("Makelaar contact moet een geldig e-mailadres of telefoonnummer zijn")
     }
 
     return errors
@@ -67,12 +67,12 @@ function PolicyForm({
     onSuccess?: () => void
 }) {
     const [form, setForm] = React.useState<PolicyFormState>({
-        client_name: "",
-        inventory_type: "",
-        pending_adjustments: "",
-        policy_number: "",
-        broker_name: "",
-        broker_contact: "",
+        klantnaam: "",
+        inventaristype: "",
+        openstaandeAanpassingen: "",
+        polisnummer: "",
+        makelaarsnaam: "",
+        makelaarscontact: "",
         organization: "",
     })
     const [error, setError] = React.useState<string | null>(null)
@@ -156,14 +156,14 @@ function PolicyForm({
 
     // Form field configurations for better UX
     const fieldConfigs: Record<keyof PolicyFormState, FieldConfig> = {
-        client_name: {
+        klantnaam: {
             type: "text",
-            placeholder: "Enter client name",
+            placeholder: "Voer klantnaam in",
             required: true,
         },
-        policy_number: {
+        polisnummer: {
             type: "text",
-            placeholder: "e.g., POL-2025-001",
+            placeholder: "bijv., POL-2025-001",
             required: true,
         },
         organization: {
@@ -172,16 +172,16 @@ function PolicyForm({
             required: true,
             loading: isLoadingOrganizations,
         },
-        inventory_type: {
+        inventaristype: {
             type: "select",
             options: ["Boat", "Car", "Property", "Equipment", "Other"],
-            placeholder: "Select inventory type",
+            placeholder: "Selecteer inventaristype",
         },
-        broker_name: { type: "text", placeholder: "Enter broker name" },
-        broker_contact: { type: "text", placeholder: "Email or phone number" },
-        pending_adjustments: {
+        makelaarsnaam: { type: "text", placeholder: "Voer makelaarsnaam in" },
+        makelaarscontact: { type: "text", placeholder: "E-mail of telefoonnummer" },
+        openstaandeAanpassingen: {
             type: "textarea",
-            placeholder: "Describe any pending adjustments",
+            placeholder: "Beschrijf eventuele lopende aanpassingen",
         },
     }
 
@@ -197,7 +197,7 @@ function PolicyForm({
             {/* Header */}
             <div style={styles.header}>
                 <div style={styles.title}>
-                    Create New Policy
+                    Nieuwe Polis Aanmaken
                 </div>
                 <button
                     onClick={onClose}
@@ -314,8 +314,8 @@ function PolicyForm({
                                 >
                                     <option value="">
                                         {key === 'organization' && isLoadingOrganizations 
-                                            ? "Loading organizations..." 
-                                            : config.placeholder || `Select ${label.toLowerCase()}`}
+                                            ? "Organisaties laden..." 
+                                            : config.placeholder || `Selecteer ${label.toLowerCase()}`}
                                     </option>
                                     {config.options?.map((option) => (
                                         <option key={option} value={option}>
@@ -378,7 +378,7 @@ function PolicyForm({
                             hover.resetSecondaryButton(e.target as HTMLElement)
                         }
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -402,12 +402,12 @@ function PolicyForm({
                         {isSubmitting ? (
                             <>
                                 <div style={styles.spinner} />
-                                Creating...
+                                Aanmaken...
                             </>
                         ) : (
                             <>
                                 <FaPlus size={12} />
-                                Create Policy
+                                Polis Aanmaken
                             </>
                         )}
                     </button>

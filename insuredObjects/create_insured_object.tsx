@@ -71,22 +71,22 @@ type InsuredObjectFormState = {
     motornummer?: string // engineNumber
     cinNummer?: string // cinNumber
     
-    // Trailer-specific fields (conditional)
-    trailerBrand?: string
+    // Trailer-specific fields (conditional) - Dutch names
+    trailerMerk?: string
     trailerType?: string
-    trailerWeight?: number
-    trailerCapacity?: number
-    trailerAxles?: number
-    trailerLicensePlate?: string
-    trailerRegistrationNumber?: string
+    trailerGewicht?: number
+    trailerCapaciteit?: number
+    trailerAssen?: number
+    trailerKenteken?: string
+    trailerRegistratienummer?: string
     
-    // Motor-specific fields (conditional)
-    motorBrand?: string
+    // Motor-specific fields (conditional) - Dutch names
+    motorMerk?: string
     motorModel?: string
-    motorPower?: number
-    motorSerialNumber?: string
-    motorFuelType?: string
-    motorYear?: number
+    motorVermogen?: number
+    motorSerienummer?: string
+    motorBrandstoftype?: string
+    motorJaar?: number
 }
 
 // Object type configurations
@@ -94,21 +94,21 @@ export const OBJECT_TYPE_CONFIG = {
     boat: {
         label: "Boat",
         icon: FaShip,
-        description: "Sailing boats, motorboats, yachts, and other watercraft",
+        description: "Zeilboten, motorboten, jachten en andere watervoertuigen",
         color: colors.blue || "#3b82f6",
         useOrgConfig: true, // Only boats use organization configuration
     },
     trailer: {
         label: "Trailer",
         icon: FaTruck,
-        description: "Boat trailers, utility trailers, and transport trailers",
+        description: "Boottrailers, aanhangers en transporttrailers",
         color: colors.green || "#10b981",
         useOrgConfig: false,
     },
     motor: {
         label: "Motor",
         icon: FaCog,
-        description: "Outboard motors, inboard engines, and marine motors",
+        description: "Buitenboordmotoren, binnenboordmotoren en scheepsmotoren",
         color: colors.orange || "#f59e0b",
         useOrgConfig: false,
     },
@@ -227,23 +227,23 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
         case "trailer":
             return {
                 ...baseState,
-                trailerBrand: "",
+                trailerMerk: "",
                 trailerType: "",
-                trailerWeight: 0,
-                trailerCapacity: 0,
-                trailerAxles: 1,
-                trailerLicensePlate: "",
-                trailerRegistrationNumber: "",
+                trailerGewicht: 0,
+                trailerCapaciteit: 0,
+                trailerAssen: 1,
+                trailerKenteken: "",
+                trailerRegistratienummer: "",
             }
         case "motor":
             return {
                 ...baseState,
-                motorBrand: "",
+                motorMerk: "",
                 motorModel: "",
-                motorPower: 0,
-                motorSerialNumber: "",
-                motorFuelType: "",
-                motorYear: new Date().getFullYear(),
+                motorVermogen: 0,
+                motorSerienummer: "",
+                motorBrandstoftype: "",
+                motorJaar: new Date().getFullYear(),
             }
         default:
             return baseState
@@ -266,14 +266,14 @@ function getFieldsForObjectType(objectType: ObjectType): (keyof InsuredObjectFor
             ]
         case "trailer":
             return [
-                "trailerBrand", "trailerType", "trailerWeight", "trailerCapacity",
-                "trailerAxles", "trailerLicensePlate", "trailerRegistrationNumber",
+                "trailerMerk", "trailerType", "trailerGewicht", "trailerCapaciteit",
+                "trailerAssen", "trailerKenteken", "trailerRegistratienummer",
                 ...commonFields
             ]
         case "motor":
             return [
-                "motorBrand", "motorModel", "motorPower", "motorSerialNumber",
-                "motorFuelType", "motorYear",
+                "motorMerk", "motorModel", "motorVermogen", "motorSerienummer",
+                "motorBrandstoftype", "motorJaar",
                 ...commonFields
             ]
         default:
@@ -331,7 +331,7 @@ function ObjectTypeSelector({
             </div>
 
             <div style={{ marginBottom: "24px", color: colors.gray600 }}>
-                Select the type of object you want to insure:
+                Selecteer het type object dat je wilt verzekeren:
             </div>
 
             {/* Object Type Grid */}
@@ -453,8 +453,8 @@ function OrganizationSelector({
 
             <div style={{ marginBottom: "24px", color: colors.gray600 }}>
                 {userInfo.role === "admin" 
-                    ? "Select the organization for which you want to create the insured object:"
-                    : "Select one of your organizations:"}
+                    ? "Selecteer de organisatie waarvoor je het verzekerde object wilt aanmaken:"
+                    : "Selecteer een van je organisaties:"}
             </div>
 
             {availableOrganizations.length === 0 ? (
@@ -466,7 +466,7 @@ function OrganizationSelector({
                     borderRadius: "8px",
                     border: `1px solid ${colors.gray200}`,
                 }}>
-                    No organizations available. Please contact your administrator.
+                    Geen organisaties beschikbaar. Neem contact op met je beheerder.
                 </div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -550,10 +550,10 @@ function InsuredObjectForm({
     async function fetchUserOrganization() {
         try {
             const token = getIdToken()
-            if (!token) throw new Error("No id token found")
+            if (!token) throw new Error("Geen ID-token gevonden")
 
             const user_id = getUserId()
-            if (!user_id) throw new Error("No user ID found")
+            if (!user_id) throw new Error("Geen gebruikers-ID gevonden")
 
             const response = await fetch(
                 `${API_BASE_URL}${API_PATHS.USER}/${user_id}`,
@@ -625,7 +625,7 @@ function InsuredObjectForm({
                     setOrgConfig(orgConfig)
                 }
             } catch (err) {
-                setError("Failed to load organization configuration")
+                setError("Kon organisatieconfiguratie niet laden")
                 console.error("Error loading org config:", err)
             } finally {
                 setIsLoadingConfig(false)
@@ -677,7 +677,7 @@ function InsuredObjectForm({
         } catch (err: any) {
             setError(
                 err.message ||
-                    "Failed to submit form. Please check your connection and try again."
+                    "Kon formulier niet verzenden. Controleer je verbinding en probeer opnieuw."
             )
         } finally {
             setIsSubmitting(false)
@@ -716,7 +716,7 @@ function InsuredObjectForm({
                     onChange={handleChange}
                     disabled={isSubmitting}
                     {...(Component === "input" ? { type: inputType } : { rows: 3 })}
-                    placeholder={`Enter ${label.toLowerCase()}`}
+                    placeholder={`Voer ${label.toLowerCase()} in`}
                     style={{
                         ...styles.input,
                         backgroundColor: isSubmitting ? colors.gray50 : colors.white,
@@ -747,7 +747,7 @@ function InsuredObjectForm({
                 }}
             >
                 <div style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "500" }}>
-                    Loading form configuration...
+                    Formulierconfiguratie laden...
                 </div>
                 <div
                     style={{
@@ -792,7 +792,7 @@ function InsuredObjectForm({
                     </button>
                     <IconComponent size={24} color={config.color} />
                     <div style={{ ...styles.title, marginLeft: "12px" }}>
-                        Add New {config.label}
+                        Nieuwe {config.label} Toevoegen
                     </div>
                 </div>
                 <button
@@ -846,7 +846,7 @@ function InsuredObjectForm({
                             }
                         }}
                     >
-                        Back
+                        Terug
                     </button>
                     <button
                         type="submit"
@@ -870,12 +870,12 @@ function InsuredObjectForm({
                         {isSubmitting ? (
                             <>
                                 <div style={styles.spinner} />
-                                Submitting...
+                                Verzenden...
                             </>
                         ) : (
                             <>
                                 <FaPlus size={12} />
-                                Add {config.label}
+                                {config.label} Toevoegen
                             </>
                         )}
                     </button>
@@ -972,7 +972,7 @@ function InsuredObjectFormManager() {
                           textAlign: "center",
                       }}>
                           <div style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "500" }}>
-                              Loading...
+                              Laden...
                           </div>
                           <div style={{
                               ...styles.spinner,

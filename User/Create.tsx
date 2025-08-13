@@ -66,7 +66,7 @@ function UserForm({
         const token = getIdToken()
         if (!token) {
             setError(
-                "You must be logged in to create a user. Please login first."
+                "Je moet ingelogd zijn om een gebruiker aan te maken. Log eerst in."
             )
             return
         }
@@ -119,7 +119,7 @@ function UserForm({
             {/* Header */}
             <div style={styles.header}>
                 <div style={styles.title}>
-                    Create New User
+                    Nieuwe Gebruiker Aanmaken
                 </div>
                 <button
                     onClick={onClose}
@@ -149,7 +149,7 @@ function UserForm({
             <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: "24px" }}>
                     <label htmlFor="email" style={styles.label}>
-                        Email Address
+                        E-mailadres
                         <span style={{ color: colors.error }}>*</span>
                     </label>
                     <input
@@ -159,7 +159,7 @@ function UserForm({
                         value={form.email}
                         onChange={handleChange}
                         disabled={isSubmitting}
-                        placeholder="Enter user email address"
+                        placeholder="Voer e-mailadres gebruiker in"
                         style={{
                             ...styles.input,
                             backgroundColor: isSubmitting ? colors.gray50 : colors.white,
@@ -184,7 +184,7 @@ function UserForm({
                         onMouseOver={(e) => !isSubmitting && hover.secondaryButton(e.currentTarget)}
                         onMouseOut={(e) => hover.resetSecondaryButton(e.currentTarget)}
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -200,12 +200,12 @@ function UserForm({
                         {isSubmitting ? (
                             <>
                                 <div style={styles.spinner} />
-                                Creating...
+                                Aanmaken...
                             </>
                         ) : (
                             <>
                                 <FaPlus size={12} />
-                                Create User
+                                Gebruiker Aanmaken
                             </>
                         )}
                     </button>

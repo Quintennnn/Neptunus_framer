@@ -129,7 +129,7 @@ function OrganizationForm({
                         color: "#1f2937",
                     }}
                 >
-                    Create New Organization
+                    Nieuwe Organisatie Aanmaken
                 </div>
                 <button
                     onClick={onClose}
@@ -204,7 +204,7 @@ function OrganizationForm({
                             color: "#374151",
                         }}
                     >
-                        Organization Name
+                        Organisatienaam
                         <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <input
@@ -214,7 +214,7 @@ function OrganizationForm({
                         value={form.name}
                         onChange={handleChange}
                         disabled={isSubmitting}
-                        placeholder="Enter organization name"
+                        placeholder="Voer organisatienaam in"
                         style={{
                             width: "100%",
                             padding: "12px",
@@ -270,7 +270,7 @@ function OrganizationForm({
                             (e.target.style.backgroundColor = "#f3f4f6")
                         }
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -313,12 +313,12 @@ function OrganizationForm({
                                         animation: "spin 1s linear infinite",
                                     }}
                                 />
-                                Creating...
+                                Aanmaken...
                             </>
                         ) : (
                             <>
                                 <FaPlus size={12} />
-                                Create Organization
+                                Organisatie Aanmaken
                             </>
                         )}
                     </button>
@@ -376,42 +376,15 @@ function OrganizationFormManager() {
 
     return (
         <Frame width="100%" height="100%" background="transparent">
+            {/* Hidden trigger button that can be activated by the main page */}
             <button
+                data-organization-create-btn
                 onClick={() => setShowForm(true)}
                 style={{
-                    position: "absolute",
-                    top: 20,
-                    left: 20,
-                    padding: "12px 20px",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    fontFamily: FONT_STACK,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    transition: "all 0.2s",
-                    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
-                }}
-                onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#059669"
-                    e.target.style.transform = "translateY(-1px)"
-                    e.target.style.boxShadow =
-                        "0 6px 16px rgba(16, 185, 129, 0.4)"
-                }}
-                onMouseOut={(e) => {
-                    e.target.style.backgroundColor = "#10b981"
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow =
-                        "0 4px 12px rgba(16, 185, 129, 0.3)"
+                    display: "none",
                 }}
             >
-                <FaPlus size={14} />
-                Create New Organization
+                Hidden Create Button
             </button>
             {overlay}
         </Frame>

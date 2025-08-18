@@ -15,6 +15,7 @@ import {
     validateNumberRange,
     formatLabel
 } from "../utils"
+import { useDynamicSchema, type FieldSchema } from "../hooks/useDynamicSchema"
 
 
 // Object type definitions
@@ -28,20 +29,7 @@ interface UserInfo {
     organizations?: string[]
 }
 
-// Type for organization field configuration (only applies to boats for now)
-type FieldConfig = {
-    required: boolean
-    visible: boolean
-}
-
-type OrganizationConfig = {
-    organization: {
-        id: string
-        name: string
-        boat_fields_config: Record<string, FieldConfig>
-        [key: string]: any
-    }
-}
+// Legacy types removed - now using dynamic schema
 
 // Comprehensive form state for all insured object types (Dutch field names)
 type InsuredObjectFormState = {
@@ -72,21 +60,11 @@ type InsuredObjectFormState = {
     cinNummer?: string // cinNumber
     
     // Trailer-specific fields (conditional) - Dutch names
-    trailerMerk?: string
-    trailerType?: string
-    trailerGewicht?: number
-    trailerCapaciteit?: number
-    trailerAssen?: number
-    trailerKenteken?: string
     trailerRegistratienummer?: string
     
     // Motor-specific fields (conditional) - Dutch names
     motorMerk?: string
-    motorModel?: string
-    motorVermogen?: number
     motorSerienummer?: string
-    motorBrandstoftype?: string
-    motorJaar?: number
 }
 
 // Object type configurations
@@ -96,21 +74,21 @@ export const OBJECT_TYPE_CONFIG = {
         icon: FaShip,
         description: "Zeilboten, motorboten, jachten en andere watervoertuigen",
         color: colors.blue || "#3b82f6",
-        useOrgConfig: true, // Only boats use organization configuration
+        useOrgConfig: true, // All object types now use organization configuration
     },
     trailer: {
         label: "Trailer",
         icon: FaTruck,
         description: "Boottrailers, aanhangers en transporttrailers",
         color: colors.green || "#10b981",
-        useOrgConfig: false,
+        useOrgConfig: true, // Now uses dynamic schema configuration
     },
     motor: {
         label: "Motor",
         icon: FaCog,
         description: "Buitenboordmotoren, binnenboordmotoren en scheepsmotoren",
         color: colors.orange || "#f59e0b",
-        useOrgConfig: false,
+        useOrgConfig: true, // Now uses dynamic schema configuration
     },
 } as const
 
@@ -227,58 +205,61 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
         case "trailer":
             return {
                 ...baseState,
-                trailerMerk: "",
-                trailerType: "",
-                trailerGewicht: 0,
-                trailerCapaciteit: 0,
-                trailerAssen: 1,
-                trailerKenteken: "",
                 trailerRegistratienummer: "",
             }
         case "motor":
             return {
                 ...baseState,
                 motorMerk: "",
-                motorModel: "",
-                motorVermogen: 0,
                 motorSerienummer: "",
-                motorBrandstoftype: "",
-                motorJaar: new Date().getFullYear(),
             }
         default:
             return baseState
     }
 }
 
-// Get fields to render based on object type (Dutch field names)
-function getFieldsForObjectType(objectType: ObjectType): (keyof InsuredObjectFormState)[] {
-    const commonFields: (keyof InsuredObjectFormState)[] = [
-        "waarde", "ingangsdatum", "premiepromillage", "eigenRisico", "uitgangsdatum", "notitie"
-    ]
+// Get fields to render based on dynamic schema
+function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+    if (!schema) {
+        // Fallback to minimal required fields
+        const commonFields = [
+            { key: "waarde", label: "Waarde", type: "currency" as const, required: true, visible: true },
+            { key: "ingangsdatum", label: "Ingangsdatum", type: "date" as const, required: false, visible: true },
+            { key: "notitie", label: "Notitie", type: "textarea" as const, required: false, visible: true },
+        ]
 
-    switch (objectType) {
-        case "boat":
-            return [
-                "merkBoot", "typeBoot", "ligplaats", "aantalMotoren", "typeMerkMotor",
-                "bouwjaar", "bootnummer", "motornummer", "cinNummer",
-                "aantalVerzekerdeDagen", "totalePremieOverHetJaar", "totalePremieOverDeVerzekerdePeriode",
-                ...commonFields
-            ]
-        case "trailer":
-            return [
-                "trailerMerk", "trailerType", "trailerGewicht", "trailerCapaciteit",
-                "trailerAssen", "trailerKenteken", "trailerRegistratienummer",
-                ...commonFields
-            ]
-        case "motor":
-            return [
-                "motorMerk", "motorModel", "motorVermogen", "motorSerienummer",
-                "motorBrandstoftype", "motorJaar",
-                ...commonFields
-            ]
-        default:
-            return commonFields
+        switch (objectType) {
+            case "boat":
+                return [
+                    { key: "merkBoot", label: "Merk Boot", type: "text" as const, required: true, visible: true },
+                    { key: "typeBoot", label: "Type Boot", type: "text" as const, required: true, visible: true },
+                    ...commonFields
+                ]
+            case "trailer":
+                return [
+                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text" as const, required: true, visible: true },
+                    ...commonFields
+                ]
+            case "motor":
+                return [
+                    { key: "motorMerk", label: "Motor Merk", type: "text" as const, required: true, visible: true },
+                    { key: "motorSerienummer", label: "Motor Nummer", type: "text" as const, required: true, visible: true },
+                    ...commonFields
+                ]
+            default:
+                return commonFields
+        }
     }
+
+    // Filter fields for the specific object type and only show visible ones
+    return schema.filter(field => {
+        // Always show common fields (no objectTypes specified)
+        if (!field.objectTypes || field.objectTypes.length === 0) {
+            return field.visible
+        }
+        // Show fields specific to this object type
+        return field.objectTypes.includes(objectType) && field.visible
+    })
 }
 
 
@@ -543,97 +524,20 @@ function InsuredObjectForm({
     const [success, setSuccess] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isLoadingConfig, setIsLoadingConfig] = React.useState(config.useOrgConfig)
-    const [orgConfig, setOrgConfig] = React.useState<Record<string, FieldConfig> | null>(null)
-    const [userOrganizationName, setUserOrganizationName] = React.useState<string | null>(null)
+    // Legacy state removed - now using useDynamicSchema hook
+    
+    // Use dynamic schema hook
+    const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(selectedOrganization)
 
-    // Function to fetch user's organization name (only for boats)
-    async function fetchUserOrganization() {
-        try {
-            const token = getIdToken()
-            if (!token) throw new Error("Geen ID-token gevonden")
+    // Legacy functions removed - now using useDynamicSchema hook
 
-            const user_id = getUserId()
-            if (!user_id) throw new Error("Geen gebruikers-ID gevonden")
-
-            const response = await fetch(
-                `${API_BASE_URL}${API_PATHS.USER}/${user_id}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            )
-
-            if (response.ok) {
-                const json = await response.json()
-                const userData = json.user
-
-                const orgName =
-                    userData.organizations && userData.organizations.length > 0
-                        ? userData.organizations[0]
-                        : null
-
-                return orgName
-            } else {
-                console.warn("Failed to fetch user data:", response.status, response.statusText)
-            }
-        } catch (err) {
-            console.warn("Could not fetch user organization:", err)
-        }
-        return null
-    }
-
-    // Function to fetch organization configuration (only for boats)
-    async function fetchOrganizationConfig(organizationName: string) {
-        try {
-            const response = await fetch(
-                `${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${organizationName}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${getIdToken()}`,
-                        "Content-Type": "application/json",
-                    },
-                }
-            )
-
-            if (response.ok) {
-                const data: OrganizationConfig = await response.json()
-                return data.organization.boat_fields_config
-            } else {
-                console.warn("Failed to fetch organization config:", response.status, response.statusText)
-            }
-        } catch (err) {
-            console.warn("Error fetching organization config:", err)
-        }
-        return null
-    }
-
-    // Load organization configuration on component mount (only for boats)
+    // Set loading state based on schema loading
     React.useEffect(() => {
-        async function loadConfig() {
-            if (!config.useOrgConfig) {
-                setIsLoadingConfig(false)
-                return
-            }
-
-            setIsLoadingConfig(true)
-            try {
-                setUserOrganizationName(selectedOrganization)
-                const orgConfig = await fetchOrganizationConfig(selectedOrganization)
-                if (orgConfig) {
-                    setOrgConfig(orgConfig)
-                }
-            } catch (err) {
-                setError("Kon organisatieconfiguratie niet laden")
-                console.error("Error loading org config:", err)
-            } finally {
-                setIsLoadingConfig(false)
-            }
+        setIsLoadingConfig(schemaLoading)
+        if (schemaError) {
+            setError("Kon schema niet laden: " + schemaError)
         }
-
-        loadConfig()
-    }, [config.useOrgConfig, selectedOrganization])
+    }, [schemaLoading, schemaError])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
         const { name, value, type } = e.target
@@ -684,43 +588,50 @@ function InsuredObjectForm({
         }
     }
 
-    const renderInput = (key: keyof InsuredObjectFormState) => {
-        const val = form[key]
-        
-        // Check if field should be visible based on org config (only for boats)
-        if (config.useOrgConfig && orgConfig && !orgConfig[key]?.visible) {
-            return null
-        }
+    const renderInput = (field: FieldSchema) => {
+        const val = form[field.key as keyof InsuredObjectFormState]
 
         // Skip objectType and organization fields (handled separately)
-        if (key === "objectType" || key === "organization") return null
+        if (field.key === "objectType" || field.key === "organization") return null
 
-        const isNumber = typeof val === "number"
-        const isTextArea = key === "notitie"
-        const isDateField = key === "ingangsdatum" || key === "uitgangsdatum"
-        const inputType = isNumber ? "number" : isDateField ? "date" : "text"
+        const isNumber = field.type === "number" || field.type === "currency"
+        const isTextArea = field.type === "textarea"
+        const isDateField = field.type === "date"
+        const inputType = field.type === "currency" ? "number" : 
+                         field.type === "number" ? "number" :
+                         isDateField ? "date" : "text"
 
-
-        const label = formatLabel(key)
+        const label = field.label
         const Component = isTextArea ? "textarea" : "input"
 
         return (
-            <div key={key} style={{ marginBottom: "16px", width: "100%" }}>
-                <label htmlFor={key} style={styles.label}>
+            <div key={field.key} style={{ marginBottom: "16px", width: "100%" }}>
+                <label htmlFor={field.key} style={{
+                    ...styles.label,
+                    fontWeight: field.required ? "600" : "400",
+                    color: field.required ? colors.gray900 : colors.gray700,
+                }}>
                     {label}
+                    {field.required && <span style={{ color: colors.red, marginLeft: "4px" }}>*</span>}
                 </label>
                 <Component
-                    id={key}
-                    name={key}
+                    id={field.key}
+                    name={field.key}
                     value={val === null || val === undefined ? "" : val}
                     onChange={handleChange}
                     disabled={isSubmitting}
-                    {...(Component === "input" ? { type: inputType } : { rows: 3 })}
-                    placeholder={`Voer ${label.toLowerCase()} in`}
+                    required={field.required}
+                    {...(Component === "input" ? { 
+                        type: inputType,
+                        ...(field.type === "currency" && { step: "0.01", min: "0" }),
+                        ...(field.type === "number" && { step: "1", min: "0" })
+                    } : { rows: 3 })}
+                    placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
                     style={{
                         ...styles.input,
                         backgroundColor: isSubmitting ? colors.gray50 : colors.white,
                         cursor: isSubmitting ? "not-allowed" : "text",
+                        borderColor: field.required ? colors.gray300 : colors.gray200,
                     }}
                     onFocus={(e) => {
                         if (!isSubmitting) {
@@ -765,7 +676,7 @@ function InsuredObjectForm({
     }
 
     const IconComponent = config.icon
-    const fieldsToRender = getFieldsForObjectType(objectType)
+    const fieldsToRender = getFieldsFromSchema(schema, objectType)
 
     return (
         <div

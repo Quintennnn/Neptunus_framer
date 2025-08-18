@@ -4,6 +4,7 @@ import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { UserInfoBanner } from "../components/UserInfoBanner"
+import { NewOrganizationButton, OrganizationActionButtons } from "../components/InsuranceButtons"
 import {
     FaEdit,
     FaTrashAlt,
@@ -25,7 +26,15 @@ import {
     FaSortDown,
 } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../theme"
-import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken,
+    formatErrorMessage, 
+    formatSuccessMessage,
+    validateRequired,
+    validateStringLength
+} from "../utils"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -1350,6 +1359,359 @@ function EditOrgForm({
     )
 }
 
+// Organization Form Types and Components
+type OrganizationFormState = {
+    name: string
+}
+
+// Validation helper for organization form
+function validateOrganizationForm(form: OrganizationFormState): string[] {
+    const errors: string[] = []
+
+    const nameError = validateRequired(form.name, "Organization name") || 
+                      validateStringLength(form.name, "Organization name", 2, 100)
+    if (nameError) errors.push(nameError)
+
+    return errors
+}
+
+// Organization Creation Modal Component
+function OrganizationCreationModal({
+    onClose,
+    onSuccess,
+}: {
+    onClose: () => void
+    onSuccess?: () => void
+}) {
+    const [form, setForm] = React.useState<OrganizationFormState>({
+        name: "",
+    })
+    const [error, setError] = React.useState<string | null>(null)
+    const [success, setSuccess] = React.useState<string | null>(null)
+    const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const { name, value } = e.target
+        setError(null)
+        setSuccess(null)
+        setForm((prev) => ({ ...prev, [name]: value }))
+    }
+
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+
+        // Client-side validation
+        const validationErrors = validateOrganizationForm(form)
+        if (validationErrors.length > 0) {
+            setError(validationErrors.join("\n"))
+            return
+        }
+
+        setError(null)
+        setSuccess(null)
+        setIsSubmitting(true)
+
+        try {
+            const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getIdToken()}`,
+                },
+                body: JSON.stringify(form),
+            })
+            const data = await res.json()
+
+            if (!res.ok) {
+                setError(formatErrorMessage(data))
+            } else {
+                setSuccess(formatSuccessMessage(data, "Organization"))
+                // Auto-close after success
+                setTimeout(() => {
+                    onSuccess?.()
+                    onClose()
+                }, 2000)
+            }
+        } catch (err: any) {
+            setError(err.message || "Failed to submit form. Please try again.")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    return (
+        <div
+            style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                backdropFilter: "blur(4px)",
+                zIndex: 1000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+            }}
+        >
+            <div
+                style={{
+                    position: "fixed",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: "min(90vw, 500px)",
+                    maxHeight: "90vh",
+                    padding: "32px",
+                    background: "#fff",
+                    borderRadius: "16px",
+                    boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
+                    fontFamily: FONT_STACK,
+                    zIndex: 1001,
+                    overflow: "auto",
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "24px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "24px",
+                            fontWeight: "600",
+                            color: "#1f2937",
+                        }}
+                    >
+                        Nieuwe Organisatie Aanmaken
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            padding: "8px",
+                            backgroundColor: "transparent",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            color: "#6b7280",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "all 0.2s",
+                        }}
+                        onMouseOver={(e) => {
+                            const target = e.target as HTMLElement;
+                            target.style.backgroundColor = "#f3f4f6";
+                        }}
+                        onMouseOut={(e) => {
+                            const target = e.target as HTMLElement;
+                            target.style.backgroundColor = "transparent";
+                        }}
+                    >
+                        <FaTimes size={16} />
+                    </button>
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                    <div
+                        style={{
+                            color: "#dc2626",
+                            backgroundColor: "#fef2f2",
+                            padding: "12px 16px",
+                            borderRadius: "8px",
+                            marginBottom: "24px",
+                            fontSize: "14px",
+                            border: "1px solid #fecaca",
+                            whiteSpace: "pre-wrap",
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                {/* Success Display */}
+                {success && (
+                    <div
+                        style={{
+                            color: "#059669",
+                            backgroundColor: "#ecfdf5",
+                            padding: "12px 16px",
+                            borderRadius: "8px",
+                            marginBottom: "24px",
+                            fontSize: "14px",
+                            border: "1px solid #a7f3d0",
+                        }}
+                    >
+                        {success}
+                    </div>
+                )}
+
+                {/* Form */}
+                <form onSubmit={handleSubmit}>
+                    <div style={{ marginBottom: "24px" }}>
+                        <label
+                            htmlFor="name"
+                            style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151",
+                            }}
+                        >
+                            Organisatienaam
+                            <span style={{ color: "#ef4444" }}>*</span>
+                        </label>
+                        <input
+                            id="name"
+                            name="name"
+                            type="text"
+                            value={form.name}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="Voer organisatienaam in"
+                            style={{
+                                width: "100%",
+                                padding: "12px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontFamily: FONT_STACK,
+                                transition: "border-color 0.2s",
+                                backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                                boxSizing: "border-box",
+                            }}
+                            onFocus={(e) => {
+                                if (!isSubmitting) {
+                                    const target = e.target as HTMLElement;
+                                    target.style.borderColor = "#10b981";
+                                }
+                            }}
+                            onBlur={(e) => {
+                                const target = e.target as HTMLElement;
+                                target.style.borderColor = "#d1d5db";
+                            }}
+                        />
+                    </div>
+
+                    {/* Submit Buttons */}
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            gap: "12px",
+                            paddingTop: "24px",
+                            borderTop: "1px solid #e5e7eb",
+                        }}
+                    >
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={isSubmitting}
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: "#f3f4f6",
+                                color: "#374151",
+                                border: "none",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                fontFamily: FONT_STACK,
+                                transition: "all 0.2s",
+                                opacity: isSubmitting ? 0.6 : 1,
+                            }}
+                            onMouseOver={(e) => {
+                                if (!isSubmitting) {
+                                    const target = e.target as HTMLElement;
+                                    target.style.backgroundColor = "#e5e7eb";
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                const target = e.target as HTMLElement;
+                                target.style.backgroundColor = "#f3f4f6";
+                            }}
+                        >
+                            Annuleren
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: isSubmitting
+                                    ? "#9ca3af"
+                                    : "#10b981",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                fontFamily: FONT_STACK,
+                                transition: "all 0.2s",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                            onMouseOver={(e) => {
+                                if (!isSubmitting) {
+                                    const target = e.target as HTMLElement;
+                                    target.style.backgroundColor = "#059669";
+                                }
+                            }}
+                            onMouseOut={(e) => {
+                                if (!isSubmitting) {
+                                    const target = e.target as HTMLElement;
+                                    target.style.backgroundColor = "#10b981";
+                                }
+                            }}
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div
+                                        style={{
+                                            width: "16px",
+                                            height: "16px",
+                                            border: "2px solid #ffffff",
+                                            borderTop: "2px solid transparent",
+                                            borderRadius: "50%",
+                                            animation: "spin 1s linear infinite",
+                                        }}
+                                    />
+                                    Aanmaken...
+                                </>
+                            ) : (
+                                <>
+                                    <FaPlus size={12} />
+                                    Organisatie Aanmaken
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+
+                {/* Add spinning animation for loading spinner */}
+                <style>
+                    {`
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `}
+                </style>
+            </div>
+        </div>
+    )
+}
+
 export function OrganizationPageOverride(): Override {
     const [orgs, setOrgs] = useState<any[] | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -1366,6 +1728,7 @@ export function OrganizationPageOverride(): Override {
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
     const [sortField, setSortField] = useState<string | null>(null)
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+    const [showCreateModal, setShowCreateModal] = useState(false)
 
     const refresh = useCallback(() => {
         fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
@@ -1751,44 +2114,16 @@ export function OrganizationPageOverride(): Override {
                                     </p>
                                 </div>
                                 
-                                {/* Create Organization Button - moved to header */}
-                                <button
+                                {/* Create Organization Button - RBAC-aware */}
+                                <NewOrganizationButton 
+                                    userInfo={userInfo} 
                                     onClick={() => {
-                                        // This will trigger the create organization modal
-                                        // You'll need to add state management for this
-                                        const createBtn = document.querySelector('[data-organization-create-btn]') as HTMLButtonElement;
-                                        createBtn?.click();
-                                    }}
-                                    style={{
-                                        padding: "12px 20px",
-                                        backgroundColor: "#10b981",
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: "8px",
-                                        fontSize: "14px",
-                                        fontWeight: "600",
-                                        cursor: "pointer",
-                                        fontFamily: FONT_STACK,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        transition: "all 0.2s",
-                                        boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.backgroundColor = "#059669"
-                                        e.target.style.transform = "translateY(-1px)"
-                                        e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.backgroundColor = "#10b981"
-                                        e.target.style.transform = "translateY(0)"
-                                        e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
-                                    }}
+                                        console.log('Create organization clicked')
+                                        setShowCreateModal(true)
+                                    }} 
                                 >
-                                    <FaPlus size={14} />
                                     Nieuwe Organisatie
-                                </button>
+                                </NewOrganizationButton>
                             </div>
                             
                             {/* Search and Filter Controls */}
@@ -1981,37 +2316,22 @@ export function OrganizationPageOverride(): Override {
                                                                 : "Je hebt geen toegang tot organisaties of er zijn nog geen organisaties aangemaakt."}
                                                         </p>
                                                         {!searchTerm && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    const createBtn = document.querySelector('[data-organization-create-btn]') as HTMLButtonElement;
-                                                                    createBtn?.click();
-                                                                }}
-                                                                style={{
-                                                                    marginTop: "16px",
-                                                                    padding: "10px 16px",
-                                                                    backgroundColor: "#10b981",
-                                                                    color: "white",
-                                                                    border: "none",
-                                                                    borderRadius: "6px",
-                                                                    fontSize: "14px",
-                                                                    fontWeight: "500",
-                                                                    cursor: "pointer",
-                                                                    fontFamily: FONT_STACK,
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    gap: "8px",
-                                                                    transition: "all 0.2s",
-                                                                }}
-                                                                onMouseOver={(e) => {
-                                                                    e.target.style.backgroundColor = "#059669"
-                                                                }}
-                                                                onMouseOut={(e) => {
-                                                                    e.target.style.backgroundColor = "#10b981"
-                                                                }}
-                                                            >
-                                                                <FaPlus size={12} />
-                                                                Maak je eerste organisatie aan
-                                                            </button>
+                                                            <div style={{ marginTop: "16px" }}>
+                                                                <NewOrganizationButton 
+                                                                    userInfo={userInfo} 
+                                                                    onClick={() => {
+                                                                        console.log('Create first organization clicked')
+                                                                        setShowCreateModal(true)
+                                                                    }} 
+                                                                    style={{
+                                                                        fontSize: "14px",
+                                                                        fontWeight: "500",
+                                                                        padding: "10px 16px"
+                                                                    }}
+                                                                >
+                                                                    Maak je eerste organisatie aan
+                                                                </NewOrganizationButton>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -2111,68 +2431,12 @@ export function OrganizationPageOverride(): Override {
                                                                     e.currentTarget.style.display = 'none'
                                                                 }}
                                                             >
-                                                                <button
-                                                                    onClick={() =>
-                                                                        setEditingOrg(
-                                                                            org
-                                                                        )
-                                                                    }
-                                                                    style={{
-                                                                        width: "100%",
-                                                                        padding: "10px 12px",
-                                                                        backgroundColor: "transparent",
-                                                                        color: "#374151",
-                                                                        border: "none",
-                                                                        fontSize: 13,
-                                                                        fontWeight: "500",
-                                                                        cursor: "pointer",
-                                                                        fontFamily: FONT_STACK,
-                                                                        textAlign: "left",
-                                                                        display: "flex",
-                                                                        alignItems: "center",
-                                                                        gap: "8px",
-                                                                        transition: "all 0.2s",
-                                                                    }}
-                                                                    onMouseOver={(e) => {
-                                                                        e.target.style.backgroundColor = "#f3f4f6"
-                                                                    }}
-                                                                    onMouseOut={(e) => {
-                                                                        e.target.style.backgroundColor = "transparent"
-                                                                    }}
-                                                                >
-                                                                    <FaEdit size={10} /> Bewerken
-                                                                </button>
-                                                                <button
-                                                                    onClick={() =>
-                                                                        setDeletingOrgId(
-                                                                            org.id
-                                                                        )
-                                                                    }
-                                                                    style={{
-                                                                        width: "100%",
-                                                                        padding: "10px 12px",
-                                                                        backgroundColor: "transparent",
-                                                                        color: "#dc2626",
-                                                                        border: "none",
-                                                                        fontSize: 13,
-                                                                        fontWeight: "500",
-                                                                        cursor: "pointer",
-                                                                        fontFamily: FONT_STACK,
-                                                                        textAlign: "left",
-                                                                        display: "flex",
-                                                                        alignItems: "center",
-                                                                        gap: "8px",
-                                                                        transition: "all 0.2s",
-                                                                    }}
-                                                                    onMouseOver={(e) => {
-                                                                        e.target.style.backgroundColor = "#fef2f2"
-                                                                    }}
-                                                                    onMouseOut={(e) => {
-                                                                        e.target.style.backgroundColor = "transparent"
-                                                                    }}
-                                                                >
-                                                                    <FaTrashAlt size={10} /> Verwijderen
-                                                                </button>
+                                                                <OrganizationActionButtons 
+                                                                    userInfo={userInfo}
+                                                                    onEdit={() => setEditingOrg(org)}
+                                                                    onDelete={() => setDeletingOrgId(org.id)}
+                                                                    resourceOrganization={org.name}
+                                                                />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2265,6 +2529,19 @@ export function OrganizationPageOverride(): Override {
                                 refresh={refresh}
                             />
                         </div>,
+                        document.body
+                    )}
+
+                {/* Create Organization Modal */}
+                {showCreateModal &&
+                    ReactDOM.createPortal(
+                        <OrganizationCreationModal
+                            onClose={() => setShowCreateModal(false)}
+                            onSuccess={() => {
+                                refresh() // Refresh the organization list
+                                console.log("Organization created successfully!")
+                            }}
+                        />,
                         document.body
                     )}
             </>

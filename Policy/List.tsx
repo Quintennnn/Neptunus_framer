@@ -4,6 +4,7 @@ import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus } from "react-icons/fa"
+import { NewPolicyButton, PolicyActionButtons } from "../components/InsuranceButtons"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
@@ -346,6 +347,203 @@ type PolicyFormState = {
     makelaarsnaam: string
     makelaarscontact: string
     organization: string
+}
+
+// Create Policy Form - for new policies
+function CreatePolicyForm({
+    onClose,
+    refresh,
+}: {
+    onClose(): void
+    refresh(): void
+}) {
+    const [form, setForm] = useState<PolicyFormState>({
+        polisnummer: "",
+        klantnaam: "",
+        inventaristype: "",
+        openstaandeAanpassingen: "",
+        makelaarsnaam: "",
+        makelaarscontact: "",
+        organization: "",
+    })
+    const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target
+        setForm((prev) => ({ ...prev, [name]: value }))
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError(null)
+        setSuccess(null)
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}${POLICY_PATH}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getIdToken()}`,
+                },
+                body: JSON.stringify(form),
+            })
+            
+            if (!res.ok) {
+                const data = await res.json()
+                throw new Error(data.message || "Failed to create policy")
+            }
+            
+            setSuccess("Policy created successfully!")
+            setTimeout(() => {
+                refresh()
+                onClose()
+            }, 1000)
+        } catch (err: any) {
+            setError(err.message)
+        }
+    }
+
+    return (
+        <div
+            style={{
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                backgroundColor: "white",
+                border: "1px solid #d1d5db",
+                borderRadius: 12,
+                padding: 32,
+                boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
+                minWidth: 400,
+                maxWidth: 600,
+                zIndex: 1000,
+                fontFamily: FONT_STACK,
+            }}
+        >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Create New Policy</h2>
+                <button
+                    onClick={onClose}
+                    style={{
+                        border: "none",
+                        background: "none",
+                        fontSize: 16,
+                        cursor: "pointer",
+                        padding: 4,
+                    }}
+                >
+                    ×
+                </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
+                    {Object.entries(form).map(([key, val]) => {
+                        const label = key
+                            .replace(/_/g, " ")
+                            .replace(/^\w/, (c) => c.toUpperCase())
+
+                        return (
+                            <div key={key} style={{ display: "flex", flexDirection: "column" }}>
+                                <label
+                                    htmlFor={key}
+                                    style={{
+                                        marginBottom: 8,
+                                        fontSize: 14,
+                                        fontWeight: 500,
+                                        color: "#374151",
+                                    }}
+                                >
+                                    {label}
+                                </label>
+                                <input
+                                    id={key}
+                                    name={key}
+                                    type="text"
+                                    value={val}
+                                    onChange={handleChange}
+                                    style={{
+                                        padding: 12,
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 8,
+                                        fontSize: 14,
+                                        fontFamily: FONT_STACK,
+                                        transition: "border-color 0.2s",
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
+                                    onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+                                />
+                            </div>
+                        )
+                    })}
+                </div>
+
+                {error && (
+                    <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        backgroundColor: "#fef2f2",
+                        color: "#dc2626",
+                        borderRadius: 8,
+                        fontSize: 14,
+                    }}>
+                        {error}
+                    </div>
+                )}
+
+                {success && (
+                    <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        backgroundColor: "#f0fdf4",
+                        color: "#16a34a",
+                        borderRadius: 8,
+                        fontSize: 14,
+                    }}>
+                        {success}
+                    </div>
+                )}
+
+                <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        style={{
+                            padding: "12px 20px",
+                            backgroundColor: "#f3f4f6",
+                            color: "#374151",
+                            border: "none",
+                            borderRadius: 8,
+                            fontSize: 14,
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        style={{
+                            padding: "12px 20px",
+                            backgroundColor: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            fontSize: 14,
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Create Policy
+                    </button>
+                </div>
+            </form>
+        </div>
+    )
 }
 
 function EditPolicyForm({
@@ -995,6 +1193,7 @@ export function PolicyPageOverride(): Override {
     const [policies, setPolicies] = useState<any[] | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [editingPolicy, setEditingPolicy] = useState<any | null>(null)
+    const [showCreateForm, setShowCreateForm] = useState(false)
     const [deletingPolicyId, setDeletingPolicyId] = useState<
         string | number | null
     >(null)
@@ -1264,41 +1463,13 @@ export function PolicyPageOverride(): Override {
                                     >
                                         {filteredPolicies.length} polissen
                                     </div>
-                                    <button
+                                    <NewPolicyButton
+                                        userInfo={userInfo}
                                         onClick={() => {
-                                            // TODO: Add create policy functionality
-                                            console.log('Create new policy')
+                                            setShowCreateForm(true)
                                         }}
-                                        style={{
-                                            padding: "10px 16px",
-                                            backgroundColor: "#10b981",
-                                            color: "white",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            cursor: "pointer",
-                                            fontFamily: FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#059669"
-                                            e.target.style.transform = "translateY(-1px)"
-                                            e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#10b981"
-                                            e.target.style.transform = "translateY(0)"
-                                            e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
-                                        }}
-                                    >
-                                        <FaPlus size={14} />
-                                        Nieuwe Polis
-                                    </button>
+                                        resourceOrganization={userInfo?.organization}
+                                    />
                                 </div>
                             </div>
 
@@ -1443,80 +1614,17 @@ export function PolicyPageOverride(): Override {
                                                     >
                                                         Bekijk Vloot
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation() // Prevent event bubbling
+                                                    <PolicyActionButtons
+                                                        userInfo={userInfo}
+                                                        onEdit={() => {
                                                             handleEdit(policy.id)
                                                         }}
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            backgroundColor:
-                                                                "#3b82f6",
-                                                            color: "#fff",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: "pointer",
-                                                            fontSize: "12px",
-                                                            fontWeight: "500",
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            gap: "4px",
-                                                            fontFamily:
-                                                                FONT_STACK,
-                                                            transition:
-                                                                "all 0.2s",
+                                                        onDelete={() => {
+                                                            confirmDelete(policy.id)
                                                         }}
-                                                        onMouseOver={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#2563eb")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#3b82f6")
-                                                        }
-                                                    >
-                                                        <FaEdit size={10} />{" "}
-                                                        Bewerk
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation() // Prevent event bubbling
-                                                            confirmDelete(
-                                                                policy.id
-                                                            )
-                                                        }}
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            backgroundColor:
-                                                                "#ef4444",
-                                                            color: "#fff",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: "pointer",
-                                                            fontSize: "12px",
-                                                            fontWeight: "500",
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            gap: "4px",
-                                                            fontFamily:
-                                                                FONT_STACK,
-                                                            transition:
-                                                                "all 0.2s",
-                                                        }}
-                                                        onMouseOver={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#dc2626")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#ef4444")
-                                                        }
-                                                    >
-                                                        <FaTrashAlt size={10} />{" "}
-                                                        Verwijder
-                                                    </button>
+                                                        resourceOrganization={policy.organization}
+                                                        policyStatus={policy.status || "active"}
+                                                    />
                                                 </div>
                                             </td>
                                             {visibleColumnsList.map((col) => {
@@ -1582,6 +1690,31 @@ export function PolicyPageOverride(): Override {
                 </div>
 
                 {/* Overlays */}
+                {showCreateForm &&
+                    ReactDOM.createPortal(
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                                backdropFilter: "blur(4px)",
+                                zIndex: 1000,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <CreatePolicyForm
+                                onClose={() => setShowCreateForm(false)}
+                                refresh={refresh}
+                            />
+                        </div>,
+                        document.body
+                    )}
+
                 {editingPolicy &&
                     ReactDOM.createPortal(
                         <div

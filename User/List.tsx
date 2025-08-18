@@ -3,6 +3,7 @@ import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding, FaFileContract, FaClipboardList, FaPlus } from "react-icons/fa"
+import { NewUserButton, EditUserButton, DeleteUserButton } from "../components/InsuranceButtons"
 import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
 import {
     API_BASE_URL,
@@ -131,8 +132,9 @@ async function fetchUsers(userInfo: UserInfo | null): Promise<any[]> {
     let users = json.users || json.data || json
 
     // Filter users based on user role and organization access
-    if (userInfo && !isAdmin(userInfo)) {
-        // Non-admin users can only see users from their own organizations
+    // Editors can view users (have USER_VIEW permission), but users cannot
+    if (userInfo && userInfo.role !== "admin" && userInfo.role !== "editor") {
+        // Regular users can only see users from their own organizations
         users = users.filter((user: any) => {
             if (!user.organizations) return false
             return user.organizations.some((org: string) =>
@@ -1465,41 +1467,13 @@ export function UserPageOverride(): Override {
                                     >
                                         {filteredUsers.length} gebruikers
                                     </div>
-                                    <button
+                                    <NewUserButton
+                                        userInfo={userInfo}
                                         onClick={() => {
                                             // TODO: Add create user functionality
                                             console.log('Create new user')
                                         }}
-                                        style={{
-                                            padding: "10px 16px",
-                                            backgroundColor: "#10b981",
-                                            color: "white",
-                                            border: "none",
-                                            borderRadius: "8px",
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            cursor: "pointer",
-                                            fontFamily: FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                            boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            e.target.style.backgroundColor = "#059669"
-                                            e.target.style.transform = "translateY(-1px)"
-                                            e.target.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.3)"
-                                        }}
-                                        onMouseOut={(e) => {
-                                            e.target.style.backgroundColor = "#10b981"
-                                            e.target.style.transform = "translateY(0)"
-                                            e.target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.2)"
-                                        }}
-                                    >
-                                        <FaPlus size={14} />
-                                        Nieuwe Gebruiker
-                                    </button>
+                                    />
                                 </div>
                             </div>
 

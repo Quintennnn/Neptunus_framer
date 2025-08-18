@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes } from "react-icons/fa"
-import { colors, styles, hover, animations } from "../theme"
+import { colors, styles, hover, animations, FONT_STACK } from "../theme"
 import { 
     API_BASE_URL, 
     API_PATHS, 

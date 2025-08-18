@@ -9,7 +9,8 @@ export const API_PATHS = {
   POLICY: "/neptunus/policy",
   BOAT: "/neptunus/boat",
   INSURED_OBJECT: "/neptunus/insured-object",
-  CHANGELOG: "/neptunus/changelog"
+  CHANGELOG: "/neptunus/changelog",
+  SCHEMA: "/neptunus/schema"
 } as const
 
 // ——— Authentication Helpers ———

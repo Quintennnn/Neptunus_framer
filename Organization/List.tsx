@@ -907,16 +907,12 @@ function EditOrgForm({
     const [name, setName] = useState(org.name || "")
     const [isSuperOrg, setIsSuperOrg] = useState(org.is_superorg || false)
     const [insuredObjectFieldsConfig, setInsuredObjectFieldsConfig] = useState(() => {
-        // Migrate from old boat_fields_config to new structure if needed
-        const legacyConfig = org.boat_fields_config || {}
+        // Use the new insured_object_fields_config structure
         const newConfig = org.insured_object_fields_config || {}
-        
-        // If we have new config, use it; otherwise migrate from legacy
-        const boatConfig = newConfig.boat || legacyConfig
         
         // Ensure required fields are always set to visible and required
         const enhancedBoatConfig = {
-            ...boatConfig,
+            ...newConfig.boat,
             waarde: { visible: true, required: true },
             ligplaats: { visible: true, required: true },
             ingangsdatum: { visible: true, required: true },

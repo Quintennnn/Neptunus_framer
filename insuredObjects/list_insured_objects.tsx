@@ -2064,7 +2064,10 @@ function EditInsuredObjectDialog({
 
             if (response.ok) {
                 const data = await response.json()
-                return data.organization.boat_fields_config
+                // Use the new insured_object_fields_config structure, falling back to legacy boat_fields_config
+                const orgConfig = data.organization.insured_object_fields_config?.boat || 
+                                data.organization.boat_fields_config
+                return orgConfig
             } else {
                 console.warn(
                     "Failed to fetch organization config:",

@@ -906,14 +906,27 @@ function EditOrgForm({
 }) {
     const [name, setName] = useState(org.name || "")
     const [isSuperOrg, setIsSuperOrg] = useState(org.is_superorg || false)
-    const [boatFieldsConfig, setBoatFieldsConfig] = useState(() => {
-        const initialConfig = org.boat_fields_config || {}
+    const [insuredObjectFieldsConfig, setInsuredObjectFieldsConfig] = useState(() => {
+        // Migrate from old boat_fields_config to new structure if needed
+        const legacyConfig = org.boat_fields_config || {}
+        const newConfig = org.insured_object_fields_config || {}
+        
+        // If we have new config, use it; otherwise migrate from legacy
+        const boatConfig = newConfig.boat || legacyConfig
+        
         // Ensure required fields are always set to visible and required
-        return {
-            ...initialConfig,
+        const enhancedBoatConfig = {
+            ...boatConfig,
             waarde: { visible: true, required: true },
             ligplaats: { visible: true, required: true },
             ingangsdatum: { visible: true, required: true },
+        }
+        
+        return {
+            boat: enhancedBoatConfig,
+            motor: newConfig.motor || {},
+            trailer: newConfig.trailer || {},
+            other: newConfig.other || {}
         }
     })
     const [error, setError] = useState<string | null>(null)
@@ -928,12 +941,15 @@ function EditOrgForm({
         property: "required" | "visible",
         value: boolean
     ) => {
-        setBoatFieldsConfig((prev) => ({
+        setInsuredObjectFieldsConfig((prev) => ({
             ...prev,
-            [fieldKey]: {
-                ...prev[fieldKey],
-                [property]: value,
-            },
+            boat: {
+                ...prev.boat,
+                [fieldKey]: {
+                    ...prev.boat[fieldKey],
+                    [property]: value,
+                },
+            }
         }))
     }
 
@@ -942,18 +958,21 @@ function EditOrgForm({
         setError(null)
         try {
             // Ensure required fields are always set to visible and required
-            const updatedBoatFieldsConfig = {
-                ...boatFieldsConfig,
-                // Force required fields to always be visible and required
-                waarde: { visible: true, required: true },
-                ligplaats: { visible: true, required: true },
-                ingangsdatum: { visible: true, required: true },
+            const updatedInsuredObjectFieldsConfig = {
+                ...insuredObjectFieldsConfig,
+                boat: {
+                    ...insuredObjectFieldsConfig.boat,
+                    // Force required fields to always be visible and required
+                    waarde: { visible: true, required: true },
+                    ligplaats: { visible: true, required: true },
+                    ingangsdatum: { visible: true, required: true },
+                }
             }
 
             const payload = {
                 name,
                 is_superorg: isSuperOrg,
-                boat_fields_config: updatedBoatFieldsConfig,
+                insured_object_fields_config: updatedInsuredObjectFieldsConfig,
                 auto_approval_config: autoApprovalConfig,
             }
 
@@ -1212,7 +1231,7 @@ function EditOrgForm({
                                     </thead>
                                     <tbody>
                                         {BOAT_FIELDS.map((field) => {
-                                            const config = boatFieldsConfig[
+                                            const config = insuredObjectFieldsConfig.boat[
                                                 field.key
                                             ] || { visible: false, required: false }
                                             return (

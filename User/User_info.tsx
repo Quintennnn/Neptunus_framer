@@ -117,7 +117,7 @@ export function UserInfoOverride(): Override {
                 to { transform: rotate(360deg); }
               }
             `}</style>
-                        Loading user info...
+                        Gebruikersinformatie laden...
                     </div>
                 </div>
             ),
@@ -157,7 +157,7 @@ export function UserInfoOverride(): Override {
                                 strokeLinejoin="round"
                             />
                         </svg>
-                        Error: {error}
+                        Fout: {error}
                     </div>
                 </div>
             ),

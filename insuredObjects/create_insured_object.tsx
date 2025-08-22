@@ -222,28 +222,28 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
 function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
     if (!schema) {
         // Fallback to minimal required fields
-        const commonFields = [
-            { key: "waarde", label: "Waarde", type: "currency" as const, required: true, visible: true },
-            { key: "ingangsdatum", label: "Ingangsdatum", type: "date" as const, required: false, visible: true },
-            { key: "notitie", label: "Notitie", type: "textarea" as const, required: false, visible: true },
+        const commonFields: FieldSchema[] = [
+            { key: "waarde", label: "Waarde", type: "currency", group: "essential", required: true, visible: true, sortable: true, width: "120px" },
+            { key: "ingangsdatum", label: "Ingangsdatum", type: "date", group: "dates", required: false, visible: true, sortable: true, width: "120px" },
+            { key: "notitie", label: "Notitie", type: "textarea", group: "metadata", required: false, visible: true, sortable: false, width: "200px" },
         ]
 
         switch (objectType) {
             case "boat":
                 return [
-                    { key: "merkBoot", label: "Merk Boot", type: "text" as const, required: true, visible: true },
-                    { key: "typeBoot", label: "Type Boot", type: "text" as const, required: true, visible: true },
+                    { key: "merkBoot", label: "Merk Boot", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "typeBoot", label: "Type Boot", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
                     ...commonFields
                 ]
             case "trailer":
                 return [
-                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text" as const, required: true, visible: true },
+                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "130px" },
                     ...commonFields
                 ]
             case "motor":
                 return [
-                    { key: "motorMerk", label: "Motor Merk", type: "text" as const, required: true, visible: true },
-                    { key: "motorSerienummer", label: "Motor Nummer", type: "text" as const, required: true, visible: true },
+                    { key: "motorMerk", label: "Motor Merk", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "motorSerienummer", label: "Motor Nummer", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
                     ...commonFields
                 ]
             default:
@@ -591,8 +591,8 @@ function InsuredObjectForm({
     const renderInput = (field: FieldSchema) => {
         const val = form[field.key as keyof InsuredObjectFormState]
 
-        // Skip objectType and organization fields (handled separately)
-        if (field.key === "objectType" || field.key === "organization") return null
+        // Skip objectType, organization, and status fields (handled automatically)
+        if (field.key === "objectType" || field.key === "organization" || field.key === "status") return null
 
         const isNumber = field.type === "number" || field.type === "currency"
         const isTextArea = field.type === "textarea"

@@ -17,6 +17,12 @@ import {
 // Define our form state shape for an Organization
 type OrganizationFormState = {
     name: string
+    street?: string
+    city?: string
+    state?: string
+    postal_code?: string
+    country?: string
+    linked_policy_id?: string
 }
 
 // Validation helper
@@ -41,6 +47,12 @@ function OrganizationForm({
 }) {
     const [form, setForm] = React.useState<OrganizationFormState>({
         name: "",
+        street: "",
+        city: "",
+        state: "",
+        postal_code: "",
+        country: "",
+        linked_policy_id: "",
     })
     const [error, setError] = React.useState<string | null>(null)
     const [success, setSuccess] = React.useState<string | null>(null)
@@ -50,7 +62,7 @@ function OrganizationForm({
         const { name, value } = e.target
         setError(null)
         setSuccess(null)
-        setForm((prev) => ({ ...prev, [name]: value }))
+        setForm((prev) => ({ ...prev, [name]: value || undefined }))
     }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -68,19 +80,39 @@ function OrganizationForm({
         setIsSubmitting(true)
 
         try {
+            // Debug: Log the form data being sent
+            console.log("Sending organization data:", form)
+            
+            // Prepare payload similar to the edit form
+            const payload = {
+                name: form.name,
+                street: form.street || undefined,
+                city: form.city || undefined,
+                state: form.state || undefined,
+                postal_code: form.postal_code || undefined,
+                country: form.country || undefined,
+                linked_policy_id: form.linked_policy_id || undefined,
+            }
+            
+            console.log("Prepared payload:", payload)
+            
             const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${getIdToken()}`,
                 },
-                body: JSON.stringify(form),
+                body: JSON.stringify(payload),
             })
             const data = await res.json()
 
+            console.log("API Response:", data)
+
             if (!res.ok) {
+                console.error("API Error Response:", data)
                 setError(formatErrorMessage(data))
             } else {
+                console.log("Organization created successfully:", data)
                 setSuccess(formatSuccessMessage(data, "Organization"))
                 // Auto-close after success
                 setTimeout(() => {
@@ -102,7 +134,7 @@ function OrganizationForm({
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%)",
-                width: "min(90vw, 500px)",
+                width: "min(90vw, 600px)",
                 maxHeight: "90vh",
                 padding: "32px",
                 background: "#fff",
@@ -235,6 +267,233 @@ function OrganizationForm({
                     />
                 </div>
 
+                {/* Address Fields */}
+                <div style={{ marginBottom: "24px" }}>
+                    <h3 style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#374151",
+                        marginBottom: "16px",
+                        borderBottom: "1px solid #e5e7eb",
+                        paddingBottom: "8px"
+                    }}>
+                        Adresgegevens (Optioneel)
+                    </h3>
+                    
+                    <div style={{ marginBottom: "16px" }}>
+                        <label htmlFor="street" style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151"
+                        }}>
+                            Straat
+                        </label>
+                        <input
+                            id="street"
+                            name="street"
+                            type="text"
+                            value={form.street || ""}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="Voer straatnaam en huisnummer in"
+                            style={{
+                                width: "100%",
+                                padding: "12px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontFamily: FONT_STACK,
+                                transition: "border-color 0.2s",
+                                backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                                boxSizing: "border-box",
+                            }}
+                            onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                            onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        />
+                    </div>
+
+                    <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+                        <div style={{ flex: "2" }}>
+                            <label htmlFor="city" style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Stad
+                            </label>
+                            <input
+                                id="city"
+                                name="city"
+                                type="text"
+                                value={form.city || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="Voer stad in"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
+                        <div style={{ flex: "1" }}>
+                            <label htmlFor="postal_code" style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Postcode
+                            </label>
+                            <input
+                                id="postal_code"
+                                name="postal_code"
+                                type="text"
+                                value={form.postal_code || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="1234AB"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "12px" }}>
+                        <div style={{ flex: "1" }}>
+                            <label htmlFor="state" style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Provincie/Staat
+                            </label>
+                            <input
+                                id="state"
+                                name="state"
+                                type="text"
+                                value={form.state || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="Voer provincie/staat in"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
+                        <div style={{ flex: "1" }}>
+                            <label htmlFor="country" style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Land
+                            </label>
+                            <input
+                                id="country"
+                                name="country"
+                                type="text"
+                                value={form.country || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="Nederland"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Policy Link Field */}
+                <div style={{ marginBottom: "24px" }}>
+                    <label htmlFor="linked_policy_id" style={{
+                        display: "block",
+                        marginBottom: "8px",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        color: "#374151"
+                    }}>
+                        Gekoppelde Polis ID (Optioneel)
+                    </label>
+                    <input
+                        id="linked_policy_id"
+                        name="linked_policy_id"
+                        type="text"
+                        value={form.linked_policy_id || ""}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        placeholder="Voer polis ID in"
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontFamily: FONT_STACK,
+                            transition: "border-color 0.2s",
+                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                            boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                    />
+                </div>
+
                 {/* Submit Buttons */}
                 <div
                     style={{
@@ -337,6 +596,9 @@ function OrganizationForm({
         </div>
     )
 }
+
+// Export the OrganizationForm component for use in other files
+export { OrganizationForm }
 
 // Enhanced trigger button component
 function OrganizationFormManager() {

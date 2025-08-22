@@ -3,12 +3,14 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus, FaClock } from "react-icons/fa"
 import { NewPolicyButton, PolicyActionButtons } from "../components/InsuranceButtons"
+import { UserInfoBanner } from "../components/UserInfoBanner"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
 const POLICY_PATH = "/neptunus/policy"
+const INSURED_OBJECT_PATH = "/neptunus/insured-object"
 
 // Enhanced font stack for better typography
 const FONT_STACK =
@@ -144,6 +146,30 @@ async function fetchPolicies(userInfo: UserInfo | null): Promise<any[]> {
     return policies
 }
 
+async function fetchPendingCount(): Promise<number> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+        
+        const res = await fetch(`${API_BASE_URL}${INSURED_OBJECT_PATH}?status=Pending`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+        
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const data = await res.json()
+        const result = data.items || data.objects || data.insuredObjects || data || []
+        return Array.isArray(result) ? result.length : 0
+    } catch (error) {
+        console.error("Error fetching pending count:", error)
+        return 0
+    }
+}
+
 // ——— Column Groups and Definitions ———
 type ColumnKey =
     | "polisnummer"
@@ -151,7 +177,8 @@ type ColumnKey =
     | "inventaristype"
     | "openstaandeAanpassingen"
     | "makelaarsnaam"
-    | "makelaarscontact"
+    | "makelaarsemail"
+    | "makelaarstelefoon"
     | "organization"
     | "createdAt"
     | "updatedAt"
@@ -214,11 +241,18 @@ const COLUMNS: {
         width: "130px",
     },
     {
-        key: "makelaarscontact",
-        label: "Makelaar Contact",
+        key: "makelaarsemail",
+        label: "Makelaar E-mail",
         priority: 2,
         group: "additional",
-        width: "130px",
+        width: "150px",
+    },
+    {
+        key: "makelaarstelefoon",
+        label: "Makelaar Telefoon",
+        priority: 2,
+        group: "additional",
+        width: "140px",
     },
     {
         key: "createdAt",
@@ -345,7 +379,8 @@ type PolicyFormState = {
     inventaristype: string
     openstaandeAanpassingen: string
     makelaarsnaam: string
-    makelaarscontact: string
+    makelaarsemail: string
+    makelaarstelefoon: string
     organization: string
 }
 
@@ -363,13 +398,71 @@ function CreatePolicyForm({
         inventaristype: "",
         openstaandeAanpassingen: "",
         makelaarsnaam: "",
-        makelaarscontact: "",
+        makelaarsemail: "",
+        makelaarstelefoon: "",
         organization: "",
     })
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [loadingOrganizations, setLoadingOrganizations] = useState(true)
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Fetch organizations and filter out those that already have policies
+    useEffect(() => {
+        async function fetchOrganizationsAndPolicies() {
+            try {
+                // Fetch both organizations and existing policies in parallel
+                const [orgsResponse, policiesResponse] = await Promise.all([
+                    fetch(`${API_BASE_URL}/neptunus/organization`, {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${getIdToken()}`,
+                        },
+                    }),
+                    fetch(`${API_BASE_URL}${POLICY_PATH}`, {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${getIdToken()}`,
+                        },
+                    })
+                ])
+
+                if (orgsResponse.ok && policiesResponse.ok) {
+                    const orgsData = await orgsResponse.json()
+                    const policiesData = await policiesResponse.json()
+                    
+                    const allOrganizations = orgsData.organizations || []
+                    const existingPolicies = policiesData.policies || []
+                    
+                    // Get organization names that already have policies
+                    const organizationsWithPolicies = new Set(
+                        existingPolicies.map((policy: any) => policy.organization)
+                    )
+                    
+                    // Filter out organizations that already have policies
+                    const availableOrganizations = allOrganizations.filter(
+                        (org: any) => !organizationsWithPolicies.has(org.name)
+                    )
+                    
+                    setOrganizations(availableOrganizations)
+                } else {
+                    console.error("Failed to fetch organizations or policies")
+                    setError("Kon organisaties niet ophalen")
+                }
+            } catch (err) {
+                console.error("Error fetching organizations and policies:", err)
+                setError("Kon organisaties niet ophalen")
+            } finally {
+                setLoadingOrganizations(false)
+            }
+        }
+
+        fetchOrganizationsAndPolicies()
+    }, [])
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         setForm((prev) => ({ ...prev, [name]: value }))
     }
@@ -378,6 +471,12 @@ function CreatePolicyForm({
         e.preventDefault()
         setError(null)
         setSuccess(null)
+        
+        // Validate that organization is selected
+        if (!form.organization) {
+            setError("Selecteer een organisatie")
+            return
+        }
         
         try {
             const res = await fetch(`${API_BASE_URL}${POLICY_PATH}`, {
@@ -394,7 +493,7 @@ function CreatePolicyForm({
                 throw new Error(data.message || "Failed to create policy")
             }
             
-            setSuccess("Policy created successfully!")
+            setSuccess("Polis succesvol aangemaakt!")
             setTimeout(() => {
                 refresh()
                 onClose()
@@ -423,7 +522,7 @@ function CreatePolicyForm({
             }}
         >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Create New Policy</h2>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Nieuwe Polis Aanmaken</h2>
                 <button
                     onClick={onClose}
                     style={{
@@ -441,7 +540,7 @@ function CreatePolicyForm({
             <form onSubmit={handleSubmit}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
                     {Object.entries(form).map(([key, val]) => {
-                        const label = key
+                        const label = key === "organization" ? "Organisatie" : key
                             .replace(/_/g, " ")
                             .replace(/^\w/, (c) => c.toUpperCase())
 
@@ -456,25 +555,60 @@ function CreatePolicyForm({
                                         color: "#374151",
                                     }}
                                 >
-                                    {label}
+                                    {label} {key === "organization" && <span style={{ color: "#ef4444" }}>*</span>}
                                 </label>
-                                <input
-                                    id={key}
-                                    name={key}
-                                    type="text"
-                                    value={val}
-                                    onChange={handleChange}
-                                    style={{
-                                        padding: 12,
-                                        border: "1px solid #d1d5db",
-                                        borderRadius: 8,
-                                        fontSize: 14,
-                                        fontFamily: FONT_STACK,
-                                        transition: "border-color 0.2s",
-                                    }}
-                                    onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
-                                    onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
-                                />
+                                {key === "organization" ? (
+                                    <select
+                                        id={key}
+                                        name={key}
+                                        value={val}
+                                        onChange={handleChange}
+                                        disabled={loadingOrganizations}
+                                        required
+                                        style={{
+                                            padding: 12,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                            fontFamily: FONT_STACK,
+                                            transition: "border-color 0.2s",
+                                            backgroundColor: loadingOrganizations ? "#f9fafb" : "#fff",
+                                        }}
+                                        onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
+                                        onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+                                    >
+                                        <option value="">
+                                            {loadingOrganizations 
+                                                ? "Organisaties laden..." 
+                                                : organizations.length === 0 
+                                                    ? "Alle organisaties hebben al een polis" 
+                                                    : "Selecteer een organisatie"}
+                                        </option>
+                                        {organizations.map((org) => (
+                                            <option key={org.id} value={org.name}>
+                                                {org.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <input
+                                        id={key}
+                                        name={key}
+                                        type="text"
+                                        value={val}
+                                        onChange={handleChange}
+                                        style={{
+                                            padding: 12,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                            fontFamily: FONT_STACK,
+                                            transition: "border-color 0.2s",
+                                        }}
+                                        onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
+                                        onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+                                    />
+                                )}
                             </div>
                         )
                     })}
@@ -522,7 +656,7 @@ function CreatePolicyForm({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -538,7 +672,7 @@ function CreatePolicyForm({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        Create Policy
+                        Polis Aanmaken
                     </button>
                 </div>
             </form>
@@ -561,7 +695,8 @@ function EditPolicyForm({
         inventaristype: policy.inventaristype || "",
         openstaandeAanpassingen: policy.openstaandeAanpassingen || "",
         makelaarsnaam: policy.makelaarsnaam || "",
-        makelaarscontact: policy.makelaarscontact || "",
+        makelaarsemail: policy.makelaarsemail || "",
+        makelaarstelefoon: policy.makelaarstelefoon || "",
         organization: policy.organization || "",
     })
     const [error, setError] = useState<string | null>(null)
@@ -597,7 +732,7 @@ function EditPolicyForm({
                 )
                 return
             }
-            setSuccess("Policy updated successfully.")
+            setSuccess("Polis succesvol bijgewerkt.")
             setTimeout(() => {
                 refresh()
                 onClose()
@@ -983,7 +1118,7 @@ function SearchAndFilterBar({
                             (e.target.style.backgroundColor = "#f3f4f6")
                         }
                     >
-                        <FaFilter /> Columns ({visibleColumns.size})
+                        <FaFilter /> Kolommen ({visibleColumns.size})
                     </button>
                 </div>
             </div>
@@ -1204,6 +1339,7 @@ export function PolicyPageOverride(): Override {
     )
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
+    const [pendingCount, setPendingCount] = useState<number>(0)
 
     const refresh = useCallback(() => {
         fetchPolicies(userInfo)
@@ -1238,6 +1374,15 @@ export function PolicyPageOverride(): Override {
             refresh()
         }
     }, [refresh, isLoadingUserInfo])
+
+    // Fetch pending count
+    useEffect(() => {
+        const loadPendingCount = async () => {
+            const count = await fetchPendingCount()
+            setPendingCount(count)
+        }
+        loadPendingCount()
+    }, [])
 
     const filteredPolicies =
         policies?.filter((policy) => {
@@ -1335,6 +1480,11 @@ export function PolicyPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
+                    {/* User Info Banner */}
+                    <div style={{ marginBottom: "20px" }}>
+                        <UserInfoBanner />
+                    </div>
+
                     <div
                         style={{
                             backgroundColor: "#fff",
@@ -1343,23 +1493,31 @@ export function PolicyPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
-                        {/* Inline Navigation Tabs */}
+                        {/* Enhanced Navigation Tabs */}
                         <div
                             style={{
-                                padding: "12px 24px",
+                                padding: "20px 24px",
                                 backgroundColor: "#f8fafc",
                                 borderBottom: "1px solid #e5e7eb",
                                 display: "flex",
-                                gap: "4px",
+                                gap: "8px",
                                 overflowX: "auto",
+                                alignItems: "center",
                             }}
                         >
                             {[
                                 { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                                 { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
+                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
                                 { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                 { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                            ].map((tab) => {
+                            ].filter((tab) => {
+                                // Hide pending, users and changelog tabs for regular users
+                                if (userInfo?.role === "user" && (tab.key === "pending" || tab.key === "users" || tab.key === "changelog")) {
+                                    return false
+                                }
+                                return true
+                            }).map((tab) => {
                                 const isActive = tab.key === "policies"
                                 const Icon = tab.icon
                                 
@@ -1367,38 +1525,71 @@ export function PolicyPageOverride(): Override {
                                     <button
                                         key={tab.key}
                                         onClick={() => {
-                                            window.location.href = tab.href
+                                            if (!isActive) {
+                                                window.location.href = tab.href
+                                            }
                                         }}
                                         style={{
-                                            padding: "8px 16px",
-                                            backgroundColor: isActive ? "#3b82f6" : "transparent",
+                                            padding: "16px 24px",
+                                            backgroundColor: isActive ? "#3b82f6" : "#ffffff",
                                             color: isActive ? "white" : "#6b7280",
-                                            border: isActive ? "none" : "1px solid #d1d5db",
-                                            borderRadius: "6px",
-                                            fontSize: "13px",
-                                            fontWeight: isActive ? "600" : "500",
+                                            border: isActive ? "none" : "2px solid #e5e7eb",
+                                            borderRadius: "12px",
+                                            fontSize: "15px",
+                                            fontWeight: "600",
                                             cursor: isActive ? "default" : "pointer",
-                                            fontFamily: "inherit",
+                                            fontFamily: FONT_STACK,
                                             display: "flex",
                                             alignItems: "center",
-                                            gap: "6px",
+                                            gap: "8px",
                                             transition: "all 0.2s",
+                                            minHeight: "48px",
+                                            boxShadow: isActive 
+                                                ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
+                                                : "0 2px 4px rgba(0,0,0,0.05)",
+                                            transform: isActive ? "translateY(-1px)" : "none",
                                         }}
                                         onMouseOver={(e) => {
                                             if (!isActive) {
-                                                e.target.style.backgroundColor = "#f3f4f6"
-                                                e.target.style.color = "#374151"
+                                                const target = e.target as HTMLElement
+                                                target.style.backgroundColor = "#f8fafc"
+                                                target.style.borderColor = "#3b82f6"
+                                                target.style.color = "#3b82f6"
+                                                target.style.transform = "translateY(-1px)"
+                                                target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                             }
                                         }}
                                         onMouseOut={(e) => {
                                             if (!isActive) {
-                                                e.target.style.backgroundColor = "transparent"
-                                                e.target.style.color = "#6b7280"
+                                                const target = e.target as HTMLElement
+                                                target.style.backgroundColor = "#ffffff"
+                                                target.style.borderColor = "#e5e7eb"
+                                                target.style.color = "#6b7280"
+                                                target.style.transform = "none"
+                                                target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                             }
                                         }}
                                     >
-                                        <Icon size={12} />
+                                        <Icon size={14} />
                                         {tab.label}
+                                        {/* Pending count badge */}
+                                        {tab.key === "pending" && pendingCount > 0 && (
+                                            <span
+                                                style={{
+                                                    backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
+                                                    color: "white",
+                                                    borderRadius: "10px",
+                                                    padding: "2px 6px",
+                                                    fontSize: "12px",
+                                                    fontWeight: "700",
+                                                    minWidth: "18px",
+                                                    textAlign: "center",
+                                                    marginLeft: "4px",
+                                                }}
+                                            >
+                                                {pendingCount}
+                                            </span>
+                                        )}
                                     </button>
                                 )
                             })}
@@ -1571,61 +1762,17 @@ export function PolicyPageOverride(): Override {
                                                     whiteSpace: "nowrap",
                                                 }}
                                             >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        gap: "8px",
+                                                <PolicyActionButtons
+                                                    userInfo={userInfo}
+                                                    onEdit={() => {
+                                                        handleEdit(policy.id)
                                                     }}
-                                                >
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation() // Prevent event bubbling
-                                                            navigateToBoats(
-                                                                policy
-                                                            )
-                                                        }}
-                                                        style={{
-                                                            padding: "8px 12px",
-                                                            backgroundColor:
-                                                                "#3b82f6",
-                                                            color: "#fff",
-                                                            border: "none",
-                                                            borderRadius: "6px",
-                                                            cursor: "pointer",
-                                                            fontSize: "12px",
-                                                            fontWeight: "500",
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            gap: "4px",
-                                                            fontFamily:
-                                                                FONT_STACK,
-                                                            transition:
-                                                                "all 0.2s",
-                                                        }}
-                                                        onMouseOver={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#2563eb")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            ((e.target as HTMLElement).style.backgroundColor =
-                                                                "#3b82f6")
-                                                        }
-                                                    >
-                                                        Bekijk Vloot
-                                                    </button>
-                                                    <PolicyActionButtons
-                                                        userInfo={userInfo}
-                                                        onEdit={() => {
-                                                            handleEdit(policy.id)
-                                                        }}
-                                                        onDelete={() => {
-                                                            confirmDelete(policy.id)
-                                                        }}
-                                                        resourceOrganization={policy.organization}
-                                                        policyStatus={policy.status || "active"}
-                                                    />
-                                                </div>
+                                                    onDelete={() => {
+                                                        confirmDelete(policy.id)
+                                                    }}
+                                                    resourceOrganization={policy.organization}
+                                                    policyStatus={policy.status || "active"}
+                                                />
                                             </td>
                                             {visibleColumnsList.map((col) => {
                                                 const cellValue =

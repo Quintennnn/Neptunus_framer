@@ -22,7 +22,8 @@ type PolicyFormState = {
     openstaandeAanpassingen: string
     polisnummer: string
     makelaarsnaam: string
-    makelaarscontact: string
+    makelaarsemail: string
+    makelaarstelefoon: string
     organization: string
 }
 
@@ -39,11 +40,28 @@ function validateForm(form: PolicyFormState): string[] {
     const organizationError = validateRequired(form.organization, "Organization")
     if (organizationError) errors.push(organizationError)
     
-    if (form.makelaarscontact && !isValidContactInfo(form.makelaarscontact)) {
-        errors.push("Makelaar contact moet een geldig e-mailadres of telefoonnummer zijn")
+    // Validate email if provided
+    if (form.makelaarsemail && !isValidEmail(form.makelaarsemail)) {
+        errors.push("Makelaar e-mail moet een geldig e-mailadres zijn")
+    }
+    
+    // Validate phone if provided
+    if (form.makelaarstelefoon && !isValidPhone(form.makelaarstelefoon)) {
+        errors.push("Makelaar telefoon moet een geldig telefoonnummer zijn")
     }
 
     return errors
+}
+
+// Helper functions for validation
+function isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+}
+
+function isValidPhone(phone: string): boolean {
+    const phoneRegex = /^[\d\s\-\+\(\)]+$/
+    return phoneRegex.test(phone) && phone.replace(/\D/g, '').length >= 8
 }
 
 
@@ -72,7 +90,8 @@ function PolicyForm({
         openstaandeAanpassingen: "",
         polisnummer: "",
         makelaarsnaam: "",
-        makelaarscontact: "",
+        makelaarsemail: "",
+        makelaarstelefoon: "",
         organization: "",
     })
     const [error, setError] = React.useState<string | null>(null)
@@ -147,7 +166,7 @@ function PolicyForm({
 
     // Define the field configuration type
     type FieldConfig = {
-        type: "text" | "textarea" | "select"
+        type: "text" | "textarea" | "select" | "email" | "tel"
         placeholder?: string
         required?: boolean
         options?: string[]
@@ -178,7 +197,8 @@ function PolicyForm({
             placeholder: "Selecteer inventaristype",
         },
         makelaarsnaam: { type: "text", placeholder: "Voer makelaarsnaam in" },
-        makelaarscontact: { type: "text", placeholder: "E-mail of telefoonnummer" },
+        makelaarsemail: { type: "email", placeholder: "Voer makelaar e-mailadres in" },
+        makelaarstelefoon: { type: "tel", placeholder: "Voer makelaar telefoonnummer in" },
         openstaandeAanpassingen: {
             type: "textarea",
             placeholder: "Beschrijf eventuele lopende aanpassingen",
@@ -236,7 +256,20 @@ function PolicyForm({
                     const config = fieldConfigs[
                         key as keyof PolicyFormState
                     ] || { type: "text" as const }
-                    const label = key
+                    
+                    // Dutch field labels
+                    const fieldLabels: Record<keyof PolicyFormState, string> = {
+                        klantnaam: "Klant Naam",
+                        inventaristype: "Inventaris Type",
+                        openstaandeAanpassingen: "Openstaande Aanpassingen",
+                        polisnummer: "Polis Nummer",
+                        makelaarsnaam: "Makelaar Naam",
+                        makelaarsemail: "Makelaar E-mail",
+                        makelaarstelefoon: "Makelaar Telefoon",
+                        organization: "Organisatie"
+                    }
+                    
+                    const label = fieldLabels[key as keyof PolicyFormState] || key
                         .replace(/_/g, " ")
                         .replace(/^\w/, (c) => c.toUpperCase())
                     const isTextarea = config.type === "textarea"

@@ -11,7 +11,7 @@ import {
 // Enhanced font stack
 const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "success"
+export type ButtonVariant = "primary" | "secondary" | "danger" | "success" | "blue"
 export type ButtonSize = "small" | "medium" | "large"
 export type ButtonBehavior = "hide" | "disable" | "request"
 
@@ -85,7 +85,7 @@ export function RoleBasedButton({
                         borderRadius: "50%",
                         animation: "spin 1s linear infinite"
                     }} />
-                    Loading...
+                    Laden...
                 </div>
             )
         }
@@ -187,6 +187,11 @@ export function RoleBasedButton({
                 backgroundColor: isDisabled ? "#9ca3af" : "#059669",
                 color: "#ffffff", 
                 boxShadow: isDisabled ? "none" : "0 2px 4px rgba(5, 150, 105, 0.2)"
+            },
+            blue: {
+                backgroundColor: isDisabled ? "#9ca3af" : "#3b82f6",
+                color: "#ffffff",
+                boxShadow: isDisabled ? "none" : "0 2px 4px rgba(59, 130, 246, 0.2)"
             }
         }
         
@@ -212,6 +217,10 @@ export function RoleBasedButton({
         } else if (variant === "danger") {
             button.style.backgroundColor = "#b91c1c"
             button.style.transform = "translateY(-1px)"
+        } else if (variant === "blue") {
+            button.style.backgroundColor = "#2563eb"
+            button.style.transform = "translateY(-1px)"
+            button.style.boxShadow = "0 4px 8px rgba(59, 130, 246, 0.3)"
         }
     }
     
@@ -228,6 +237,10 @@ export function RoleBasedButton({
         } else if (variant === "danger") {
             button.style.backgroundColor = "#dc2626"
             button.style.transform = "translateY(0)"
+        } else if (variant === "blue") {
+            button.style.backgroundColor = "#3b82f6"
+            button.style.transform = "translateY(0)"
+            button.style.boxShadow = "0 2px 4px rgba(59, 130, 246, 0.2)"
         }
     }
     
@@ -266,7 +279,7 @@ export function CreateButton(props: Omit<RoleBasedButtonProps, "permission" | "v
             {...props}
             permission="POLICY_CREATE"
             variant="primary"
-            actionName="Create"
+            actionName="Aanmaken"
         />
     )
 }
@@ -277,7 +290,7 @@ export function EditButton(props: Omit<RoleBasedButtonProps, "permission" | "var
             {...props}
             permission="POLICY_EDIT"
             variant="secondary"
-            actionName="Edit"
+            actionName="Bewerken"
         />
     )
 }
@@ -288,7 +301,7 @@ export function DeleteButton(props: Omit<RoleBasedButtonProps, "permission" | "v
             {...props}
             permission="POLICY_DELETE"
             variant="danger"
-            actionName="Delete"
+            actionName="Verwijderen"
             behavior="hide" // Hide delete buttons for unauthorized users
         />
     )

@@ -4,6 +4,7 @@ import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
+import { UserInfo as RBACUserInfo, hasPermission } from "../rbac"
 import {
     FaEdit,
     FaTrashAlt,
@@ -22,12 +23,62 @@ import {
     FaChevronDown,
     FaArrowLeft,
     FaPlus,
+    FaEllipsisV,
 } from "react-icons/fa"
 import { colors, styles, hover, FONT_STACK } from "../theme"
 import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
 import { ObjectType, OBJECT_TYPE_CONFIG } from "./create_insured_object"
-import { useDynamicSchema, DEFAULT_SCHEMA, FieldSchema, getFieldsForObjectType as getSchemaFieldsForObjectType, getFieldKeysForObjectType } from "../hooks/useDynamicSchema"
+import { useDynamicSchema, DEFAULT_SCHEMA, FieldSchema, getFieldsForObjectType as getSchemaFieldsForObjectType, getFieldKeysForObjectType, getUnifiedFieldValue } from "../hooks/useDynamicSchema"
 import { formatErrorMessage, formatSuccessMessage } from "../utils"
+
+// Local fallback mapping to prevent runtime errors
+const FALLBACK_FIELD_MAPPING = {
+    brand: {
+        boat: 'merkBoot',
+        trailer: 'trailerMerk', 
+        motor: 'motorMerk'
+    },
+    type: {
+        boat: 'typeBoot',
+        trailer: 'trailerType',
+        motor: 'motorModel'
+    }
+} as const
+
+// Fallback helper for getUnifiedFieldValue to prevent runtime errors
+function safeGetUnifiedFieldValue(object: any, unifiedKey: string): string {
+    try {
+        // First try the imported function
+        if (typeof getUnifiedFieldValue === 'function') {
+            try {
+                return getUnifiedFieldValue(object, unifiedKey)
+            } catch (error) {
+                console.warn('Error calling getUnifiedFieldValue:', error)
+            }
+        }
+        
+        // Fallback implementation using local mapping
+        const fieldMapping = FALLBACK_FIELD_MAPPING
+        
+        if (!(unifiedKey in fieldMapping)) {
+            return object[unifiedKey] || ''
+        }
+        
+        const mapping = fieldMapping[unifiedKey as keyof typeof fieldMapping]
+        const objectType = object.objectType
+        
+        if (objectType && objectType in mapping) {
+            const actualField = mapping[objectType as keyof typeof mapping]
+            return object[actualField] || ''
+        }
+        
+        return ''
+    } catch (error) {
+        console.error('Critical error in safeGetUnifiedFieldValue:', error)
+        // Ultimate fallback - just return the direct property or empty string
+        return object[unifiedKey] || ''
+    }
+}
 
 // ——— Simple Create Button Component ———
 function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
@@ -393,8 +444,8 @@ function InsuredObjectForm({
     const renderInput = (field: FieldSchema) => {
         const val = form[field.key as keyof InsuredObjectFormState]
 
-        // Skip objectType and organization fields (handled separately)
-        if (field.key === "objectType" || field.key === "organization") return null
+        // Skip objectType, organization, and status fields (handled automatically)
+        if (field.key === "objectType" || field.key === "organization" || field.key === "status") return null
 
         const isNumber = field.type === "number" || field.type === "currency"
         const isTextArea = field.type === "textarea"
@@ -600,7 +651,7 @@ function InsuredObjectForm({
 }
 
 // ——— Main modal that orchestrates the entire create flow ———
-function CreateObjectModal({ onClose }: { onClose: () => void }) {
+function CreateObjectModal({ onClose, onOrganizationSelect }: { onClose: () => void; onOrganizationSelect?: (org: string) => void }) {
     const [currentStep, setCurrentStep] = React.useState<'organization' | 'objectType' | 'form'>('organization')
     const [selectedOrganization, setSelectedOrganization] = React.useState<string>("")
     const [selectedObjectType, setSelectedObjectType] = React.useState<ObjectType | null>(null)
@@ -644,6 +695,7 @@ function CreateObjectModal({ onClose }: { onClose: () => void }) {
 
     const handleOrganizationSelect = (org: string) => {
         setSelectedOrganization(org)
+        onOrganizationSelect?.(org) // Notify parent component of organization change
         setCurrentStep('objectType')
     }
 
@@ -722,6 +774,242 @@ const STATUS_COLORS = {
     "Not Insured": { bg: "#f3f4f6", text: "#374151" },
 }
 
+// ——— Unified Status Component ———
+function UnifiedStatusCell({
+    object,
+    userInfo,
+    onApprove,
+    onDecline,
+}: {
+    object: InsuredObject
+    userInfo: UserInfo | null
+    onApprove: (object: InsuredObject) => void
+    onDecline: (object: InsuredObject) => void
+}) {
+    const [isHovered, setIsHovered] = useState(false)
+    const [showDeclineModal, setShowDeclineModal] = useState(false)
+    const [declineReason, setDeclineReason] = useState("")
+
+    const statusColor = STATUS_COLORS[object.status] || STATUS_COLORS["Not Insured"]
+    const isAdmin = userInfo?.role === "admin"
+    const canTakeAction = isAdmin && object.status === "Pending"
+
+    const handleDeclineClick = () => {
+        setShowDeclineModal(true)
+    }
+
+    const handleDeclineSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (declineReason.trim()) {
+            onDecline(object)
+            setShowDeclineModal(false)
+            setDeclineReason("")
+        }
+    }
+
+    return (
+        <>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    position: "relative",
+                    minWidth: canTakeAction ? "140px" : "80px",
+                }}
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+            >
+                {/* Status Badge */}
+                <div
+                    style={{
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        backgroundColor: statusColor.bg,
+                        color: statusColor.text,
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.2s ease",
+                        transform: isHovered && canTakeAction ? "scale(0.95)" : "scale(1)",
+                    }}
+                >
+                    {object.status}
+                </div>
+
+                {/* Admin Actions (visible on hover for pending items) */}
+                {canTakeAction && (
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: "4px",
+                            opacity: isHovered ? 1 : 0,
+                            transition: "opacity 0.2s ease",
+                            position: isHovered ? "static" : "absolute",
+                            right: isHovered ? "auto" : "0",
+                        }}
+                    >
+                        <button
+                            onClick={() => onApprove(object)}
+                            style={{
+                                padding: "4px 6px",
+                                borderRadius: "4px",
+                                backgroundColor: colors.success,
+                                color: "white",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "11px",
+                                fontWeight: "500",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "2px",
+                                transition: "background-color 0.2s ease",
+                            }}
+                            onMouseOver={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = `${colors.success}dd`
+                            }}
+                            onMouseOut={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = colors.success
+                            }}
+                            title="Approve"
+                        >
+                            <FaCheck size={10} />
+                            Approve
+                        </button>
+                        <button
+                            onClick={handleDeclineClick}
+                            style={{
+                                padding: "4px 6px",
+                                borderRadius: "4px",
+                                backgroundColor: colors.error,
+                                color: "white",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "11px",
+                                fontWeight: "500",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "2px",
+                                transition: "background-color 0.2s ease",
+                            }}
+                            onMouseOver={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = `${colors.error}dd`
+                            }}
+                            onMouseOut={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = colors.error
+                            }}
+                            title="Decline"
+                        >
+                            <FaTimes size={10} />
+                            Decline
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Decline Reason Modal */}
+            {showDeclineModal && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: "white",
+                            borderRadius: "8px",
+                            padding: "24px",
+                            maxWidth: "400px",
+                            width: "90%",
+                            maxHeight: "90vh",
+                            overflow: "auto",
+                        }}
+                    >
+                        <h3 style={{ margin: "0 0 16px", color: colors.gray900 }}>
+                            Decline Object
+                        </h3>
+                        <form onSubmit={handleDeclineSubmit}>
+                            <div style={{ marginBottom: "16px" }}>
+                                <label
+                                    style={{
+                                        display: "block",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                        marginBottom: "6px",
+                                        color: colors.gray700,
+                                    }}
+                                >
+                                    Reason for declining:
+                                </label>
+                                <textarea
+                                    value={declineReason}
+                                    onChange={(e) => setDeclineReason(e.target.value)}
+                                    placeholder="Enter decline reason..."
+                                    required
+                                    style={{
+                                        width: "100%",
+                                        minHeight: "80px",
+                                        padding: "8px",
+                                        border: `1px solid ${colors.gray300}`,
+                                        borderRadius: "4px",
+                                        fontSize: "14px",
+                                        resize: "vertical",
+                                    }}
+                                />
+                            </div>
+                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowDeclineModal(false)
+                                        setDeclineReason("")
+                                    }}
+                                    style={{
+                                        padding: "8px 16px",
+                                        border: `1px solid ${colors.gray300}`,
+                                        backgroundColor: "white",
+                                        color: colors.gray700,
+                                        borderRadius: "4px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{
+                                        padding: "8px 16px",
+                                        border: "none",
+                                        backgroundColor: colors.error,
+                                        color: "white",
+                                        borderRadius: "4px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    Decline
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </>
+    )
+}
+
 // ——— User Role Detection ———
 interface UserInfo {
     sub: string
@@ -796,6 +1084,60 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         return processedUserInfo
     } catch (error) {
         console.error("Failed to fetch user info:", error)
+        return null
+    }
+}
+
+// Broker info interface (matching UserInfoBanner)
+interface BrokerInfo {
+    name: string
+    email: string
+    phone: string
+    company?: string
+}
+
+// Fetch broker info from policies for the organization
+async function fetchBrokerInfoForOrganization(organizationName: string): Promise<BrokerInfo | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        // Fetch policies for this organization
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.POLICY}?organization=${encodeURIComponent(organizationName)}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) {
+            console.warn(`Failed to fetch policies for broker info: ${res.status} ${res.statusText}`)
+            return null
+        }
+        
+        const responseData = await res.json()
+        const policies = responseData.policies || []
+
+        if (policies.length === 0) {
+            return null
+        }
+
+        // Get broker info from the first policy (assuming same broker for organization)
+        const firstPolicy = policies[0]
+        if (firstPolicy.makelaarsnaam && (firstPolicy.makelaarsemail || firstPolicy.makelaarstelefoon)) {
+            return {
+                name: firstPolicy.makelaarsnaam || "Onbekende Makelaar",
+                email: firstPolicy.makelaarsemail || "",
+                phone: firstPolicy.makelaarstelefoon || "",
+                company: "Verzekeringsmakelaar" // You might want to add this field to policies
+            }
+        }
+
+        return null
+    } catch (error) {
+        console.error("Failed to fetch broker info:", error)
         return null
     }
 }
@@ -898,34 +1240,34 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
 function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
     if (!schema) {
         // Fallback to minimal required fields
-        const commonFields: Partial<FieldSchema>[] = [
-            { key: "waarde", label: "Waarde", type: "currency", required: true, visible: true },
-            { key: "ingangsdatum", label: "Ingangsdatum", type: "date", required: false, visible: true },
-            { key: "notitie", label: "Notitie", type: "textarea", required: false, visible: true },
+        const commonFields: FieldSchema[] = [
+            { key: "waarde", label: "Waarde", type: "currency", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+            { key: "ingangsdatum", label: "Ingangsdatum", type: "date", group: "basic", required: false, visible: true, sortable: true, width: "120px" },
+            { key: "notitie", label: "Notitie", type: "textarea", group: "metadata", required: false, visible: true, sortable: false, width: "200px" },
         ]
 
-        let typeSpecificFields: Partial<FieldSchema>[] = []
+        let typeSpecificFields: FieldSchema[] = []
         switch (objectType) {
             case "boat":
                 typeSpecificFields = [
-                    { key: "merkBoot", label: "Merk Boot", type: "text", required: true, visible: true },
-                    { key: "typeBoot", label: "Type Boot", type: "text", required: true, visible: true },
+                    { key: "merkBoot", label: "Merk Boot", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "typeBoot", label: "Type Boot", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
                 ]
                 break
             case "trailer":
                 typeSpecificFields = [
-                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text", required: true, visible: true },
+                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "130px" },
                 ]
                 break
             case "motor":
                 typeSpecificFields = [
-                    { key: "motorMerk", label: "Motor Merk", type: "text", required: true, visible: true },
-                    { key: "motorSerienummer", label: "Motor Nummer", type: "text", required: true, visible: true },
+                    { key: "motorMerk", label: "Motor Merk", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "motorSerienummer", label: "Motor Nummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
                 ]
                 break
         }
 
-        return [...typeSpecificFields, ...commonFields] as FieldSchema[]
+        return [...typeSpecificFields, ...commonFields]
     }
 
     // Filter fields for the specific object type and only show visible ones
@@ -1019,11 +1361,7 @@ interface InsuredObject extends BaseInsuredObject {
 
 // ——— Column Groups and Definitions ———
 const COLUMN_GROUPS = {
-    essential: { label: "Essentieel", color: "#059669" },
-    identity: { label: "Identiteit", color: "#3b82f6" },
-    technical: { label: "Technisch", color: "#8b5cf6" },
-    financial: { label: "Financieel", color: "#f59e0b" },
-    dates: { label: "Data", color: "#ef4444" },
+    basic: { label: "Standaard Velden", color: "#059669" },
     metadata: { label: "Metadata", color: "#6b7280" },
 }
 
@@ -1182,22 +1520,32 @@ function SearchAndFilterBar({
         useState<HTMLButtonElement | null>(null)
     const [columnDropdownPosition, setColumnDropdownPosition] = useState({
         top: 0,
-        right: 0,
+        left: 0,
+        useLeft: true,
     })
     const [orgDropdownPosition, setOrgDropdownPosition] = useState({
         top: 0,
-        right: 0,
+        left: 0,
+        useLeft: true,
     })
     const [objectTypeDropdownPosition, setObjectTypeDropdownPosition] =
-        useState({ top: 0, right: 0 })
+        useState({ top: 0, left: 0, useLeft: true })
 
     // Calculate dropdown positions
     useEffect(() => {
         if (columnButtonRef && showColumnFilter) {
             const rect = columnButtonRef.getBoundingClientRect()
+            const dropdownWidth = 250 // minWidth from the dropdown
+            const viewportWidth = window.innerWidth
+            
+            // Check if there's enough space on the right
+            const spaceOnRight = viewportWidth - rect.right
+            const useLeft = spaceOnRight >= dropdownWidth
+            
             setColumnDropdownPosition({
                 top: rect.bottom + 8,
-                right: window.innerWidth - rect.right,
+                left: useLeft ? rect.left : rect.right - dropdownWidth,
+                useLeft: useLeft,
             })
         }
     }, [columnButtonRef, showColumnFilter])
@@ -1205,9 +1553,17 @@ function SearchAndFilterBar({
     useEffect(() => {
         if (orgButtonRef && showOrgFilterDropdown) {
             const rect = orgButtonRef.getBoundingClientRect()
+            const dropdownWidth = 200 // estimated width for org dropdown
+            const viewportWidth = window.innerWidth
+            
+            // Check if there's enough space on the right
+            const spaceOnRight = viewportWidth - rect.right
+            const useLeft = spaceOnRight >= dropdownWidth
+            
             setOrgDropdownPosition({
                 top: rect.bottom + 8,
-                right: window.innerWidth - rect.right,
+                left: useLeft ? rect.left : rect.right - dropdownWidth,
+                useLeft: useLeft,
             })
         }
     }, [orgButtonRef, showOrgFilterDropdown])
@@ -1215,9 +1571,17 @@ function SearchAndFilterBar({
     useEffect(() => {
         if (objectTypeButtonRef && showObjectTypeFilterDropdown) {
             const rect = objectTypeButtonRef.getBoundingClientRect()
+            const dropdownWidth = 180 // estimated width for object type dropdown
+            const viewportWidth = window.innerWidth
+            
+            // Check if there's enough space on the right
+            const spaceOnRight = viewportWidth - rect.right
+            const useLeft = spaceOnRight >= dropdownWidth
+            
             setObjectTypeDropdownPosition({
                 top: rect.bottom + 8,
-                right: window.innerWidth - rect.right,
+                left: useLeft ? rect.left : rect.right - dropdownWidth,
+                useLeft: useLeft,
             })
         }
     }, [objectTypeButtonRef, showObjectTypeFilterDropdown])
@@ -1399,7 +1763,7 @@ function SearchAndFilterBar({
                             style={{
                                 position: "fixed",
                                 top: `${orgDropdownPosition.top}px`,
-                                right: `${orgDropdownPosition.right}px`,
+                                left: `${orgDropdownPosition.left}px`,
                                 backgroundColor: "#fff",
                                 border: "1px solid #d1d5db",
                                 borderRadius: "8px",
@@ -1514,7 +1878,7 @@ function SearchAndFilterBar({
                             style={{
                                 position: "fixed",
                                 top: `${objectTypeDropdownPosition.top}px`,
-                                right: `${objectTypeDropdownPosition.right}px`,
+                                left: `${objectTypeDropdownPosition.left}px`,
                                 backgroundColor: "#fff",
                                 border: "1px solid #d1d5db",
                                 borderRadius: "8px",
@@ -1647,7 +2011,7 @@ function SearchAndFilterBar({
                             style={{
                                 position: "fixed",
                                 top: `${columnDropdownPosition.top}px`,
-                                right: `${columnDropdownPosition.right}px`,
+                                left: `${columnDropdownPosition.left}px`,
                                 backgroundColor: "#fff",
                                 border: "1px solid #d1d5db",
                                 borderRadius: "8px",
@@ -1664,14 +2028,14 @@ function SearchAndFilterBar({
                                 <button
                                     onClick={() => {
                                         columns.filter(
-                                            (col) => col.group !== "essential"
+                                            (col) => col.group !== "basic"
                                         ).forEach((col) => {
                                             if (visibleColumns.has(col.key)) {
                                                 onToggleColumn(col.key)
                                             }
                                         })
                                         columns.filter(
-                                            (col) => col.group === "essential"
+                                            (col) => col.group === "basic"
                                         ).forEach((col) => {
                                             if (!visibleColumns.has(col.key)) {
                                                 onToggleColumn(col.key)
@@ -1799,128 +2163,214 @@ function SearchAndFilterBar({
 
 // ——— Action Buttons ———
 
-// General Action buttons for object table rows
-function GeneralActionButtons({
+// Action dropdown menu for object table rows
+function ActionDropdownMenu({
     object,
     onEdit,
     onDelete,
+    userInfo,
 }: {
     object: InsuredObject
     onEdit: (object: InsuredObject) => void
     onDelete: (object: InsuredObject) => void
+    userInfo: UserInfo | null
 }) {
+    const [isOpen, setIsOpen] = useState(false)
+    const [dropdownPosition, setDropdownPosition] = useState({
+        top: 0,
+        left: 0,
+        useLeft: true,
+    })
+    const dropdownRef = React.useRef<HTMLDivElement>(null)
+    const buttonRef = React.useRef<HTMLButtonElement>(null)
+
+    // Check permissions
+    const canEdit = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : false
+    const canDelete = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_DELETE') : false
+
+    // Don't render if user has no permissions
+    if (!canEdit && !canDelete) {
+        return null
+    }
+
+    // Calculate dropdown position when opening
+    const handleToggle = () => {
+        if (!isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect()
+            const dropdownWidth = 120 // minWidth from the dropdown
+            const viewportWidth = window.innerWidth
+            
+            // Check if there's enough space on the right
+            const spaceOnRight = viewportWidth - rect.right
+            const useLeft = spaceOnRight >= dropdownWidth
+            
+            setDropdownPosition({
+                top: rect.bottom + 2,
+                left: useLeft ? rect.left : rect.right - dropdownWidth,
+                useLeft: useLeft,
+            })
+        }
+        setIsOpen(!isOpen)
+    }
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false)
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [])
+
+    const handleEdit = () => {
+        onEdit(object)
+        setIsOpen(false)
+    }
+
+    const handleDelete = () => {
+        onDelete(object)
+        setIsOpen(false)
+    }
+
     return (
-        <div
-            style={{
-                display: "flex",
-                gap: "8px",
-                flexWrap: "wrap",
-                alignItems: "center",
-            }}
-        >
+        <div style={{ position: "relative" }} ref={dropdownRef}>
             <button
-                onClick={() => onEdit(object)}
+                ref={buttonRef}
+                onClick={handleToggle}
                 style={{
-                    ...styles.primaryButton,
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    borderRadius: 6,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                }}
-                onMouseOver={(e) =>
-                    hover.primaryButton(e.target as HTMLElement)
-                }
-                onMouseOut={(e) =>
-                    hover.resetPrimaryButton(e.target as HTMLElement)
-                }
-            >
-                <FaEdit size={10} /> Bewerken
-            </button>
-            <button
-                onClick={() => onDelete(object)}
-                style={{
-                    ...styles.primaryButton,
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    borderRadius: 6,
-                    backgroundColor: colors.error,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
+                    ...styles.iconButton,
+                    border: `1px solid ${colors.gray300}`,
+                    borderRadius: "6px",
+                    padding: "8px",
+                    backgroundColor: "transparent",
                 }}
                 onMouseOver={(e) => {
-                    e.target.style.backgroundColor = "#dc2626"
+                    const target = e.target as HTMLElement
+                    hover.iconButton(target)
+                    target.style.borderColor = colors.primary
+                    target.style.color = colors.primary
                 }}
                 onMouseOut={(e) => {
-                    e.target.style.backgroundColor = colors.error
+                    const target = e.target as HTMLElement
+                    hover.resetIconButton(target)
+                    target.style.borderColor = colors.gray300
+                    target.style.color = colors.gray500
                 }}
             >
-                <FaTrashAlt size={10} /> Verwijderen
+                <FaEllipsisV size={12} />
             </button>
+            
+            {isOpen && ReactDOM.createPortal(
+                <>
+                    <div
+                        style={{
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 999,
+                        }}
+                        onClick={() => setIsOpen(false)}
+                    />
+                    <div
+                        style={{
+                            position: "fixed",
+                            top: `${dropdownPosition.top}px`,
+                            left: `${dropdownPosition.left}px`,
+                            backgroundColor: colors.white,
+                            border: `1px solid ${colors.gray200}`,
+                            borderRadius: "8px",
+                            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                            zIndex: 1000,
+                            minWidth: "140px",
+                            padding: "8px 0",
+                            fontFamily: FONT_STACK,
+                        }}
+                    >
+                    {canEdit && (
+                        <button
+                            onClick={handleEdit}
+                            style={{
+                                width: "100%",
+                                padding: "12px 16px",
+                                border: "none",
+                                backgroundColor: "transparent",
+                                cursor: "pointer",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                color: colors.gray700,
+                                textAlign: "left",
+                                transition: "all 0.2s",
+                                fontFamily: FONT_STACK,
+                                borderRadius: "6px",
+                            }}
+                            onMouseOver={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = colors.gray100
+                                target.style.color = colors.primary
+                            }}
+                            onMouseOut={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = "transparent"
+                                target.style.color = colors.gray700
+                            }}
+                        >
+                            <FaEdit size={12} color={colors.primary} />
+                            Bewerken
+                        </button>
+                    )}
+                    {canDelete && (
+                        <button
+                            onClick={handleDelete}
+                            style={{
+                                width: "100%",
+                                padding: "12px 16px",
+                                border: "none",
+                                backgroundColor: "transparent",
+                                cursor: "pointer",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                color: colors.gray700,
+                                textAlign: "left",
+                                transition: "all 0.2s",
+                                fontFamily: FONT_STACK,
+                                borderRadius: "6px",
+                            }}
+                            onMouseOver={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = colors.errorBg
+                                target.style.color = colors.error
+                            }}
+                            onMouseOut={(e) => {
+                                const target = e.target as HTMLElement
+                                target.style.backgroundColor = "transparent"
+                                target.style.color = colors.gray700
+                            }}
+                        >
+                            <FaTrashAlt size={12} color={colors.error} />
+                            Verwijderen
+                        </button>
+                    )}
+                    </div>
+                </>,
+                document.body
+            )}
         </div>
     )
 }
 
-// Status Action buttons for admin-only approval/decline actions
-function StatusActionButtons({
-    object,
-    onApprove,
-    onDecline,
-}: {
-    object: InsuredObject
-    onApprove: (object: InsuredObject) => void
-    onDecline: (object: InsuredObject) => void
-}) {
-    if (object.status !== "Pending") return null
-
-    return (
-        <div
-            style={{
-                display: "flex",
-                gap: "6px",
-                flexWrap: "wrap",
-                alignItems: "center",
-            }}
-        >
-            <button
-                onClick={() => onApprove(object)}
-                style={{
-                    ...styles.iconButton,
-                    backgroundColor: colors.success,
-                    color: colors.white,
-                }}
-                title="Approve"
-                onMouseOver={(e) => {
-                    e.target.style.backgroundColor = `${colors.success}dd`
-                }}
-                onMouseOut={(e) => {
-                    e.target.style.backgroundColor = colors.success
-                }}
-            >
-                <FaCheck size={12} />
-            </button>
-            <button
-                onClick={() => onDecline(object)}
-                style={{
-                    ...styles.iconButton,
-                    backgroundColor: colors.error,
-                    color: colors.white,
-                }}
-                title="Decline"
-                onMouseOver={(e) => {
-                    e.target.style.backgroundColor = `${colors.error}dd`
-                }}
-                onMouseOut={(e) => {
-                    e.target.style.backgroundColor = colors.error
-                }}
-            >
-                <FaTimes size={12} />
-            </button>
-        </div>
-    )
-}
 
 // ——— Modal Dialog Components ———
 function ConfirmDeleteDialog({
@@ -2835,6 +3285,7 @@ function InsuredObjectList() {
         string | null
     >(null)
     const [searchTerm, setSearchTerm] = useState("")
+    const [brokerInfo, setBrokerInfo] = useState<BrokerInfo | null>(null)
     
     // Dynamic schema hook
     const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(currentOrganization || undefined)
@@ -2849,7 +3300,7 @@ function InsuredObjectList() {
         if (COLUMNS.length > 0) {
             setVisibleColumns(
                 new Set(
-                    COLUMNS.filter((col) => col.group === "essential").map(
+                    COLUMNS.filter((col) => col.group === "basic").map(
                         (col) => col.key
                     )
                 )
@@ -2977,6 +3428,25 @@ function InsuredObjectList() {
         }
     }, [currentOrganization, userInfo])
 
+    // Fetch broker info when organization changes
+    useEffect(() => {
+        async function loadBrokerInfo() {
+            if (currentOrganization) {
+                try {
+                    const brokerData = await fetchBrokerInfoForOrganization(currentOrganization)
+                    setBrokerInfo(brokerData)
+                } catch (error) {
+                    console.error("Failed to fetch broker info:", error)
+                    setBrokerInfo(null)
+                }
+            } else {
+                setBrokerInfo(null)
+            }
+        }
+
+        loadBrokerInfo()
+    }, [currentOrganization])
+
     async function fetchObjects() {
         try {
             const token = getIdToken()
@@ -3031,7 +3501,70 @@ function InsuredObjectList() {
         : []
 
     const getVisibleColumnsList = () => {
-        return COLUMNS.filter((col) => visibleColumns.has(col.key))
+        // Define the desired column order: actions, type, status, waarde, brand, model/type, CIN nummer
+        const columnOrder = [
+            'objectType',    // type
+            'status',        // status  
+            'waarde',        // waarde
+            'brand',         // Unified brand/merk
+            'type',          // Unified model/type
+            'cinNummer',     // CIN nummer
+            // All other fields follow in their original order
+        ]
+        
+        // Filter out object-specific brand/type columns if unified columns are available
+        const hasUnifiedBrand = COLUMNS.some(col => col.key === 'brand' && visibleColumns.has(col.key))
+        const hasUnifiedType = COLUMNS.some(col => col.key === 'type' && visibleColumns.has(col.key))
+        
+        const filteredColumns = COLUMNS.filter((col) => {
+            if (!visibleColumns.has(col.key)) return false
+            
+            // Hide object-specific brand columns if unified brand is available
+            if (hasUnifiedBrand && ['merkBoot', 'trailerMerk', 'motorMerk'].includes(col.key)) {
+                return false
+            }
+            
+            // Hide object-specific type columns if unified type is available  
+            if (hasUnifiedType && ['typeBoot', 'trailerType', 'motorModel'].includes(col.key)) {
+                return false
+            }
+            
+            // Hide columns that have no data in the current filtered set
+            const columnHasData = filteredObjects.some(obj => {
+                const value = (col.key === 'brand' || col.key === 'type') 
+                    ? safeGetUnifiedFieldValue(obj, col.key)
+                    : obj[col.key as keyof InsuredObject]
+                return value !== null && value !== undefined && value !== ''
+            })
+            
+            // Always show essential columns even if empty
+            const essentialColumns = ['objectType', 'status', 'waarde', 'brand', 'type']
+            if (essentialColumns.includes(col.key)) {
+                return true
+            }
+            
+            return columnHasData
+        })
+        
+        // Sort columns based on the desired order
+        return filteredColumns.sort((a, b) => {
+            const aIndex = columnOrder.indexOf(a.key)
+            const bIndex = columnOrder.indexOf(b.key)
+            
+            // If both columns are in the order list, sort by their position
+            if (aIndex !== -1 && bIndex !== -1) {
+                return aIndex - bIndex
+            }
+            
+            // If only 'a' is in the order list, it comes first
+            if (aIndex !== -1) return -1
+            
+            // If only 'b' is in the order list, it comes first
+            if (bIndex !== -1) return 1
+            
+            // If neither is in the order list, maintain original order (by key alphabetically)
+            return a.key.localeCompare(b.key)
+        })
     }
 
     const visibleColumnsList = getVisibleColumnsList()
@@ -3214,10 +3747,10 @@ function InsuredObjectList() {
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) => {
-                            e.target.style.backgroundColor = "#e5e7eb"
+                            (e.target as HTMLButtonElement).style.backgroundColor = "#e5e7eb"
                         }}
                         onMouseOut={(e) => {
-                            e.target.style.backgroundColor = "#f3f4f6"
+                            (e.target as HTMLButtonElement).style.backgroundColor = "#f3f4f6"
                         }}
                     >
                         <FaArrowLeft size={12} />
@@ -3230,8 +3763,9 @@ function InsuredObjectList() {
             {/* User Info Banner */}
             <div style={{ marginBottom: "20px" }}>
                 <UserInfoBanner
-                    currentOrganization={currentOrganization}
+                    currentOrganization={currentOrganization || undefined}
                     showCurrentOrg={!!currentOrganization}
+                    brokerInfo={brokerInfo || undefined}
                 />
             </div>
 
@@ -3269,7 +3803,7 @@ function InsuredObjectList() {
                                 <FaUserShield size={20} color={colors.primary} />
                             )}
                             {userRole === "editor" && (
-                                <FaUserEdit size={20} color={colors.secondary} />
+                                <FaUserEdit size={20} color={colors.primary} />
                             )}
                             {userRole === "user" && (
                                 <FaUser size={20} color={colors.gray500} />
@@ -3365,22 +3899,6 @@ function InsuredObjectList() {
                                     Actions
                                 </th>
 
-                                {/* Status Actions Column (Admin only) */}
-                                {isAdmin(userInfo) && (
-                                    <th
-                                        style={{
-                                            padding: "12px 8px",
-                                            textAlign: "left",
-                                            borderBottom: "2px solid #e2e8f0",
-                                            fontWeight: "600",
-                                            color: "#475569",
-                                            fontSize: "13px",
-                                            width: "100px",
-                                        }}
-                                    >
-                                        Status
-                                    </th>
-                                )}
 
                                 {/* Dynamic columns */}
                                 {visibleColumnsList.map((col) => (
@@ -3436,32 +3954,17 @@ function InsuredObjectList() {
                                             padding: "12px 8px",
                                             borderBottom: "1px solid #f1f5f9",
                                             whiteSpace: "nowrap",
+                                            textAlign: "right",
                                         }}
                                     >
-                                        <GeneralActionButtons
+                                        <ActionDropdownMenu
                                             object={object}
                                             onEdit={handleEdit}
                                             onDelete={handleDelete}
+                                            userInfo={userInfo}
                                         />
                                     </td>
 
-                                    {/* Status Actions cell (Admin only) */}
-                                    {isAdmin(userInfo) && (
-                                        <td
-                                            style={{
-                                                padding: "12px 8px",
-                                                borderBottom:
-                                                    "1px solid #f1f5f9",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            <StatusActionButtons
-                                                object={object}
-                                                onApprove={handleApprove}
-                                                onDecline={handleDecline}
-                                            />
-                                        </td>
-                                    )}
 
                                     {/* Dynamic data cells */}
                                     {visibleColumnsList.map((col) => {
@@ -3506,9 +4009,6 @@ function InsuredObjectList() {
 
                                         // Special handling for status column to show colored badge
                                         if (col.key === "status") {
-                                            const statusColor =
-                                                STATUS_COLORS[object.status] ||
-                                                STATUS_COLORS["Not Insured"]
                                             return (
                                                 <td
                                                     key={col.key}
@@ -3521,31 +4021,20 @@ function InsuredObjectList() {
                                                         lineHeight: "1.3",
                                                     }}
                                                 >
-                                                    <div
-                                                        style={{
-                                                            padding: "4px 8px",
-                                                            borderRadius:
-                                                                "12px",
-                                                            fontSize: "12px",
-                                                            fontWeight: "500",
-                                                            backgroundColor:
-                                                                statusColor.bg,
-                                                            color: statusColor.text,
-                                                            display:
-                                                                "inline-block",
-                                                        }}
-                                                    >
-                                                        {object.status}
-                                                    </div>
+                                                    <UnifiedStatusCell
+                                                        object={object}
+                                                        userInfo={userInfo}
+                                                        onApprove={handleApprove}
+                                                        onDecline={handleDecline}
+                                                    />
                                                 </td>
                                             )
                                         }
 
-                                        // Regular cell rendering
-                                        const cellValue =
-                                            object[
-                                                col.key as keyof InsuredObject
-                                            ]
+                                        // Regular cell rendering with unified field support
+                                        const cellValue = (col.key === 'brand' || col.key === 'type') 
+                                            ? safeGetUnifiedFieldValue(object, col.key)
+                                            : object[col.key as keyof InsuredObject]
                                         const displayValue =
                                             renderObjectCellValue(
                                                 col,
@@ -3700,6 +4189,7 @@ function InsuredObjectList() {
             {showCreateForm && (
                 <CreateObjectModal 
                     onClose={() => setShowCreateForm(false)} 
+                    onOrganizationSelect={setCurrentOrganization}
                 />
             )}
             </div>

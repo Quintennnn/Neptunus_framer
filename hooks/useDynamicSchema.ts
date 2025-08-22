@@ -5,7 +5,7 @@ export interface FieldSchema {
     key: string
     label: string
     type: "text" | "number" | "currency" | "date" | "status" | "textarea"
-    group: "essential" | "financial" | "dates" | "identity" | "technical" | "metadata"
+    group: "basic" | "metadata"
     required: boolean
     visible: boolean
     sortable: boolean
@@ -93,7 +93,7 @@ export function getFieldsForObjectType(schema: FieldSchema[] | null, objectType?
     if (!schema) {
         return DEFAULT_SCHEMA.filter(field => {
             // If no object type specified, return basic fields
-            if (!objectType) return field.group === "essential" || !field.objectTypes
+            if (!objectType) return field.group === "basic" || !field.objectTypes
             // If object type specified, return fields that don't specify objectTypes or include this objectType
             return !field.objectTypes || field.objectTypes.includes(objectType)
         })
@@ -119,7 +119,7 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "objectType",
         label: "Type",
         type: "text",
-        group: "essential",
+        group: "basic",
         required: true,
         visible: true,
         sortable: true,
@@ -129,9 +129,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "status",
         label: "Status",
         type: "status",
-        group: "essential",
-        required: true,
-        visible: true,
+        group: "basic",
+        required: false,  // Status is automatically set, not user input
+        visible: true,    // Now visible as requested
         sortable: true,
         width: "100px"
     },
@@ -139,9 +139,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "organization",
         label: "Organization",
         type: "text",
-        group: "essential",
+        group: "basic",
         required: true,
-        visible: true,
+        visible: false,  // Hidden from list view by default
         sortable: true,
         width: "150px"
     },
@@ -149,7 +149,7 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "waarde",
         label: "Waarde",
         type: "currency",
-        group: "essential",
+        group: "basic",
         required: true,
         visible: true,
         sortable: true,
@@ -159,9 +159,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "premiepromillage",
         label: "Premie ‰",
         type: "number",
-        group: "financial",
+        group: "basic",
         required: true,
-        visible: true,
+        visible: false,  // Hidden by default - available in column filter
         sortable: true,
         width: "100px"
     },
@@ -169,9 +169,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "eigenRisico",
         label: "Eigen Risico",
         type: "currency",
-        group: "financial",
+        group: "basic",
         required: true,
-        visible: true,
+        visible: false,  // Hidden by default - available in column filter
         sortable: true,
         width: "100px"
     },
@@ -179,9 +179,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "ingangsdatum",
         label: "Ingangsdatum",
         type: "date",
-        group: "dates",
+        group: "basic",
         required: true,
-        visible: true,
+        visible: false,  // Hidden by default - available in column filter
         sortable: true,
         width: "120px"
     },
@@ -189,9 +189,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "uitgangsdatum",
         label: "Uitgangsdatum",
         type: "date",
-        group: "dates",
+        group: "basic",
         required: false,
-        visible: true,
+        visible: false,  // Hidden by default - available in column filter
         sortable: true,
         width: "120px"
     },
@@ -200,9 +200,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "merkBoot",
         label: "Merk Boot",
         type: "text",
-        group: "identity",
-        required: false,
-        visible: true,
+        group: "basic",
+        required: true,
+        visible: false,  // Hidden by default - replaced by unified brand column
         sortable: true,
         width: "120px",
         objectTypes: ["boat"]
@@ -211,9 +211,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "typeBoot",
         label: "Type Boot",
         type: "text",
-        group: "identity",
-        required: false,
-        visible: true,
+        group: "basic",
+        required: true,
+        visible: false,  // Hidden by default - available in column filter
         sortable: true,
         width: "120px",
         objectTypes: ["boat"]
@@ -222,21 +222,141 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "ligplaats",
         label: "Ligplaats",
         type: "text",
-        group: "identity",
-        required: false,
+        group: "basic",
+        required: true,
+        visible: false,  // Hidden by default - available in column filter
+        sortable: true,
+        width: "150px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "bootnummer",
+        label: "Bootnummer",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: false,  // Hidden by default - available in column filter
+        sortable: true,
+        width: "120px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "aantalMotoren",
+        label: "Aantal Motoren",
+        type: "number",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "80px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "typeMerkMotor",
+        label: "Type/Merk Motor",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "120px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "motornummer",
+        label: "Motornummer",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "130px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "bouwjaar",
+        label: "Bouwjaar",
+        type: "number",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "100px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "cinNummer",
+        label: "CIN Nummer",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "120px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "aantalVerzekerdeDagen",
+        label: "Aantal Verzekerde Dagen",
+        type: "number",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "120px",
+        objectTypes: ["boat"]
+    },
+    {
+        key: "totalePremieOverHetJaar",
+        label: "Totale Premie Over Het Jaar",
+        type: "currency",
+        group: "basic",
+        required: true,
         visible: true,
         sortable: true,
         width: "150px",
         objectTypes: ["boat"]
+    },
+    {
+        key: "totalePremieOverDeVerzekerdePeriode",
+        label: "Totale Premie Over De Verzekerde Periode",
+        type: "currency",
+        group: "basic",
+        required: true,
+        visible: false,  // Hidden by default - available in column filter
+        sortable: true,
+        width: "180px",
+        objectTypes: ["boat"]
+    },
+    // Unified fields for all object types
+    {
+        key: "brand",
+        label: "Brand/Merk",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "120px"
+    },
+    {
+        key: "type",
+        label: "Model/Type",
+        type: "text",
+        group: "basic",
+        required: true,
+        visible: true,
+        sortable: true,
+        width: "120px"
     },
     // Trailer-specific fields
     {
         key: "trailerMerk",
         label: "Trailer Merk",
         type: "text",
-        group: "identity",
+        group: "basic",
         required: false,
-        visible: true,
+        visible: false,  // Hidden by default - replaced by unified brand column
         sortable: true,
         width: "120px",
         objectTypes: ["trailer"]
@@ -245,9 +365,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "trailerType",
         label: "Trailer Type",
         type: "text",
-        group: "identity",
+        group: "basic",
         required: false,
-        visible: true,
+        visible: false,  // Hidden by default - replaced by unified type column
         sortable: true,
         width: "120px",
         objectTypes: ["trailer"]
@@ -257,9 +377,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "motorMerk",
         label: "Motor Merk",
         type: "text",
-        group: "identity",
+        group: "basic",
         required: false,
-        visible: true,
+        visible: false,  // Hidden by default - replaced by unified brand column
         sortable: true,
         width: "120px",
         objectTypes: ["motor"]
@@ -268,9 +388,9 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         key: "motorModel",
         label: "Motor Model",
         type: "text",
-        group: "identity",
+        group: "basic",
         required: false,
-        visible: true,
+        visible: false,  // Hidden by default - replaced by unified type column
         sortable: true,
         width: "120px",
         objectTypes: ["motor"]
@@ -287,3 +407,34 @@ export const DEFAULT_SCHEMA: FieldSchema[] = [
         width: "200px"
     }
 ]
+
+// Unified field mapping for smart column consolidation
+export const UNIFIED_FIELD_MAPPING = {
+    brand: {
+        boat: 'merkBoot',
+        trailer: 'trailerMerk', 
+        motor: 'motorMerk'
+    },
+    type: {
+        boat: 'typeBoot',
+        trailer: 'trailerType',
+        motor: 'motorModel'
+    }
+} as const
+
+// Helper function to get the actual field value for unified columns
+export function getUnifiedFieldValue(object: any, unifiedKey: string): string {
+    if (!(unifiedKey in UNIFIED_FIELD_MAPPING)) {
+        return object[unifiedKey] || ''
+    }
+    
+    const mapping = UNIFIED_FIELD_MAPPING[unifiedKey as keyof typeof UNIFIED_FIELD_MAPPING]
+    const objectType = object.objectType
+    
+    if (objectType && objectType in mapping) {
+        const actualField = mapping[objectType as keyof typeof mapping]
+        return object[actualField] || ''
+    }
+    
+    return ''
+}

@@ -18,6 +18,7 @@ import {
     FaCheckCircle,
     FaExclamationTriangle,
     FaClipboardList,
+    FaClock,
     FaFileContract,
     FaUsers,
     FaPlus,
@@ -35,6 +36,7 @@ import {
     validateRequired,
     validateStringLength
 } from "../utils"
+import { OrganizationForm } from "./Create"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -123,11 +125,17 @@ function hasOrganizationAccess(userInfo: UserInfo | null, organization: string):
 }
 
 const ORG_COLUMNS = [
-    { key: "name", label: "Name", width: "200px" },
-    { key: "is_superorg", label: "Super Org", width: "100px" },
-    { key: "createdAt", label: "Created", width: "150px" },
-    { key: "updatedAt", label: "Updated", width: "150px" },
-    { key: "lastUpdatedBy", label: "Updated By", width: "180px" },
+    { key: "name", label: "Naam", width: "200px" },
+    { key: "is_superorg", label: "Super Organisatie", width: "100px" },
+    { key: "street", label: "Straat", width: "180px" },
+    { key: "city", label: "Stad", width: "120px" },
+    { key: "postal_code", label: "Postcode", width: "100px" },
+    { key: "state", label: "Provincie/Staat", width: "140px" },
+    { key: "country", label: "Land", width: "120px" },
+    { key: "linked_policy_id", label: "Gekoppelde Polis", width: "150px" },
+    { key: "createdAt", label: "Aangemaakt", width: "150px" },
+    { key: "updatedAt", label: "Bijgewerkt", width: "150px" },
+    { key: "lastUpdatedBy", label: "Bijgewerkt Door", width: "180px" },
 ]
 
 // Available boat fields that can be configured (Dutch field names)
@@ -185,6 +193,8 @@ function ColumnFilterDropdown({
                 boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
                 zIndex: 1000,
                 minWidth: 200,
+                maxHeight: "400px",
+                overflow: "hidden",
                 fontFamily: FONT_STACK,
             }}
         >
@@ -198,7 +208,7 @@ function ColumnFilterDropdown({
                 }}
             >
                 <span style={{ fontWeight: 600, fontSize: 14 }}>
-                    Show Columns
+                    Toon Kolommen
                 </span>
                 <button
                     onClick={onClose}
@@ -213,7 +223,13 @@ function ColumnFilterDropdown({
                     <FaTimes size={12} />
                 </button>
             </div>
-            <div style={{ padding: 8 }}>
+            <div 
+                style={{ 
+                    padding: 8, 
+                    maxHeight: "320px", 
+                    overflowY: "auto" 
+                }}
+            >
                 {columns.map((col) => (
                     <label
                         key={col.key}
@@ -266,10 +282,10 @@ function ConfirmDeleteDialog({
             <div
                 style={{ ...styles.title, fontSize: "18px", marginBottom: 12 }}
             >
-                Delete Organization
+                Verwijder Organisatie
             </div>
             <p style={{ fontSize: 14, marginBottom: 20, color: colors.gray500 }}>
-                Are you sure you want to delete this organization?
+                Weet je zeker dat je deze organisatie wilt verwijderen?
             </p>
             <div style={styles.buttonGroup}>
                 <button
@@ -282,7 +298,7 @@ function ConfirmDeleteDialog({
                     onMouseOver={(e) => hover.secondaryButton(e.target)}
                     onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
                 >
-                    Cancel
+                    Annuleren
                 </button>
                 <button
                     onClick={onConfirm}
@@ -294,7 +310,7 @@ function ConfirmDeleteDialog({
                     onMouseOver={(e) => (e.target.style.backgroundColor = "#dc2626")}
                     onMouseOut={(e) => (e.target.style.backgroundColor = colors.error)}
                 >
-                    Delete
+                    Verwijderen
                 </button>
             </div>
         </div>
@@ -302,9 +318,9 @@ function ConfirmDeleteDialog({
 }
 
 /**
- * Auto-Approval Configuration UI for Organizations
+ * Auto-Goedkeuring Configuratie UI voor Organisaties
  * 
- * This component provides an interface for administrators to set up auto-approval rules
+ * Dit component biedt een interface voor beheerders om auto-goedkeuring regels in te stellen
  * for boat applications. It includes:
  * - Enable/disable auto-approval
  * - Multiple rules with AND/OR logic
@@ -317,23 +333,23 @@ function ConfirmDeleteDialog({
 // Available operators for different field types
 const OPERATORS = {
     numeric: [
-        { value: "eq", label: "Equal to" },
-        { value: "ne", label: "Not equal to" },
-        { value: "lt", label: "Less than" },
-        { value: "le", label: "Less than or equal" },
-        { value: "gt", label: "Greater than" },
-        { value: "ge", label: "Greater than or equal" },
-        { value: "between", label: "Between" }
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "lt", label: "Kleiner dan" },
+        { value: "le", label: "Kleiner dan of gelijk aan" },
+        { value: "gt", label: "Groter dan" },
+        { value: "ge", label: "Groter dan of gelijk aan" },
+        { value: "between", label: "Tussen" }
     ],
     string: [
-        { value: "eq", label: "Equal to" },
-        { value: "ne", label: "Not equal to" },
-        { value: "in", label: "In list" },
-        { value: "not_in", label: "Not in list" },
-        { value: "contains", label: "Contains" },
-        { value: "starts_with", label: "Starts with" },
-        { value: "ends_with", label: "Ends with" },
-        { value: "regex", label: "Regular expression" }
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "in", label: "In lijst" },
+        { value: "not_in", label: "Niet in lijst" },
+        { value: "contains", label: "Bevat" },
+        { value: "starts_with", label: "Begint met" },
+        { value: "ends_with", label: "Eindigt met" },
+        { value: "regex", label: "Reguliere expressie" }
     ]
 }
 
@@ -343,7 +359,9 @@ const OPERATORS = {
 // - ligplaats: string field, supports contains, in list (with fuzzy matching), etc.
 // - typeBoot: string field with fuzzy matching against predefined types
 const FIELD_TYPES = {
-    waarde: "numeric", // value
+    waarde: "numeric", // value - this is the boat value field
+    ligplaats: "string", // mooringLocation - required field
+    ingangsdatum: "string", // insuranceStartDate - date field (treated as string for now)
     bouwjaar: "numeric", // yearOfConstruction
     aantalMotoren: "numeric", // numberOfEngines
     aantalVerzekerdeDagen: "numeric", // numberOfInsuredDays
@@ -351,7 +369,6 @@ const FIELD_TYPES = {
     eigenRisico: "numeric", // deductible
     totalePremieOverHetJaar: "numeric", // totalAnnualPremium
     totalePremieOverDeVerzekerdePeriode: "numeric", // totalPremiumForInsuredPeriod
-    ligplaats: "string", // mooringLocation
     typeBoot: "string", // boatType
     typeMerkMotor: "string", // engineType
     merkBoot: "string", // boatBrand
@@ -361,42 +378,68 @@ const FIELD_TYPES = {
     notitie: "string" // notes
 }
 
-function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange: (config: any) => void, orgName: string }) {
-    const [retroactiveStatus, setRetroactiveStatus] = useState<'idle' | 'testing' | 'applying' | 'success' | 'error'>('idle')
-    const [retroactiveResult, setRetroactiveResult] = useState<any>(null)
+function AutoApprovalTab({ config, onChange, org }: { config: any, onChange: (config: any) => void, org: any }) {
+    const [availableFields, setAvailableFields] = useState<Array<{ key: string, label: string, type: string }>>([])
+    const [isLoadingFields, setIsLoadingFields] = useState(true)
 
-    const handleRetroactiveApproval = async (dryRun: boolean = false) => {
-        setRetroactiveStatus(dryRun ? 'testing' : 'applying')
-        setRetroactiveResult(null)
-        
+    // Extract visible fields from organization configuration
+    useEffect(() => {
+        if (!org?.insured_object_fields_config?.boat) {
+            setIsLoadingFields(false)
+            return
+        }
+
         try {
-            const response = await fetch(`${API_BASE_URL}/neptunus/organization/apply-retroactive-approval`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getIdToken()}`,
-                },
-                body: JSON.stringify({
-                    organization_name: orgName,
-                    dry_run: dryRun
+            setIsLoadingFields(true)
+            
+            const boatConfig = org.insured_object_fields_config.boat
+            
+            // Create a combined field list from required fields and configurable fields
+            const allFieldsMap = new Map()
+            
+            // Add required fields (always visible)
+            REQUIRED_BOAT_FIELDS.forEach(field => {
+                allFieldsMap.set(field.key, {
+                    key: field.key,
+                    label: field.label,
+                    type: FIELD_TYPES[field.key as keyof typeof FIELD_TYPES] || 'string',
+                    visible: true // Required fields are always visible
                 })
             })
-
-            if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.message || 'Failed to apply retroactive approval')
-            }
-
-            const result = await response.json()
-            setRetroactiveResult(result.results)
-            setRetroactiveStatus('success')
             
-        } catch (error: any) {
-            console.error('Retroactive approval failed:', error)
-            setRetroactiveResult({ error: error.message })
-            setRetroactiveStatus('error')
+            // Add configurable fields
+            BOAT_FIELDS.forEach(field => {
+                allFieldsMap.set(field.key, {
+                    key: field.key,
+                    label: field.label,
+                    type: FIELD_TYPES[field.key as keyof typeof FIELD_TYPES] || 'string',
+                    visible: boatConfig[field.key]?.visible || false
+                })
+            })
+            
+            // Filter to only visible fields for auto-approval conditions
+            const visibleFields = Array.from(allFieldsMap.values())
+                .filter(field => field.visible)
+                .map(field => ({
+                    key: field.key,
+                    label: field.label,
+                    type: field.type
+                }))
+            
+            console.log('Available fields for auto-approval (visible only):', visibleFields)
+            setAvailableFields(visibleFields)
+        } catch (error) {
+            console.error("Error extracting visible fields from organization:", error)
+            // Fallback to all required fields if there's an error
+            const fallbackFields = REQUIRED_BOAT_FIELDS.map(f => ({ 
+                ...f, 
+                type: FIELD_TYPES[f.key as keyof typeof FIELD_TYPES] || 'string' 
+            }))
+            setAvailableFields(fallbackFields)
+        } finally {
+            setIsLoadingFields(false)
         }
-    }
+    }, [org])
 
     const addRule = () => {
         const newRule = {
@@ -428,7 +471,8 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
 
     const addCondition = (ruleIndex: number, fieldKey: string) => {
         const rule = config.rules[ruleIndex]
-        const fieldType = FIELD_TYPES[fieldKey as keyof typeof FIELD_TYPES] || "string"
+        const field = availableFields.find(f => f.key === fieldKey)
+        const fieldType = field?.type || "string"
         const defaultOperator = fieldType === "numeric" ? "lt" : "eq"
         
         const newCondition = {
@@ -469,14 +513,24 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
         updateRule(ruleIndex, updatedRule)
     }
 
+    if (isLoadingFields) {
+        return (
+            <div style={{ padding: 20, textAlign: "center" }}>
+                <p style={{ color: colors.gray500 }}>Beschikbare velden laden...</p>
+            </div>
+        )
+    }
+
     return (
         <div>
             <div style={{ marginBottom: 20 }}>
                 <h3 style={{ ...styles.title, fontSize: 16, marginBottom: 8 }}>
-                    Auto-Approval Configuration
+                    Auto-Goedkeuring Configuratie
                 </h3>
                 <p style={{ fontSize: 14, color: colors.gray500, marginBottom: 16 }}>
-                    Configure rules to automatically approve boats that meet specific criteria.
+                    Configureer regels om automatisch boten goed te keuren die aan specifieke criteria voldoen.
+                    <br /><br />
+                    <strong>Hoe meerdere regels werken:</strong> Als je meerdere regels hebt, wordt een boot automatisch goedgekeurd zodra het voldoet aan <em>één van de regels</em> (OF-logica). Binnen elke regel kun je kiezen of alle voorwaarden moeten kloppen (EN) of slechts één voorwaarde (OF).
                 </p>
                 
                 <label style={{ display: "flex", alignItems: "center", marginBottom: 16, cursor: "pointer" }}>
@@ -486,7 +540,7 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                         onChange={(e) => onChange({ ...config, enabled: e.target.checked })}
                         style={{ marginRight: 8 }}
                     />
-                    <span style={{ fontWeight: 500 }}>Enable Auto-Approval</span>
+                    <span style={{ fontWeight: 500 }}>Auto-Goedkeuring Inschakelen</span>
                 </label>
             </div>
 
@@ -503,10 +557,10 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                                 fontSize: 12,
                                 borderRadius: 6,
                             }}
-                            onMouseOver={(e) => hover.primaryButton(e.target)}
-                            onMouseOut={(e) => hover.resetPrimaryButton(e.target)}
+                            onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
+                            onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
                         >
-                            + Add Rule
+                            + Regel Toevoegen
                         </button>
                     </div>
 
@@ -518,7 +572,7 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                             textAlign: "center", 
                             color: colors.gray500 
                         }}>
-                            No rules configured. Click "Add Rule" to create your first auto-approval rule.
+                            Geen regels geconfigureerd. Klik op "Regel Toevoegen" om je eerste auto-goedkeuring regel aan te maken.
                         </div>
                     ) : (
                         config.rules.map((rule: any, ruleIndex: number) => (
@@ -526,6 +580,7 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                                 key={ruleIndex}
                                 rule={rule}
                                 ruleIndex={ruleIndex}
+                                availableFields={availableFields}
                                 onUpdate={(updatedRule) => updateRule(ruleIndex, updatedRule)}
                                 onDelete={() => deleteRule(ruleIndex)}
                                 onAddCondition={(fieldKey) => addCondition(ruleIndex, fieldKey)}
@@ -536,9 +591,9 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                     )}
 
                     <div style={{ ...styles.card, marginTop: 20, backgroundColor: colors.gray50 }}>
-                        <h4 style={{ ...styles.title, fontSize: 14, marginBottom: 8 }}>Default Action</h4>
+                        <h4 style={{ ...styles.title, fontSize: 14, marginBottom: 8 }}>Standaard Actie</h4>
                         <p style={{ fontSize: 12, color: colors.gray500, marginBottom: 12 }}>
-                            What should happen when no rules match?
+                            Wat moet er gebeuren als geen enkele regel overeenkomt?
                         </p>
                         <select
                             value={config.default_action}
@@ -550,89 +605,10 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
                                 fontSize: 14,
                             }}
                         >
-                            <option value="pending">Keep as Pending (Manual Review)</option>
-                            <option value="auto_approve">Auto-Approve</option>
+                            <option value="pending">Behouden als In Behandeling (Handmatige Beoordeling)</option>
+                            <option value="auto_approve">Automatisch Goedkeuren</option>
                         </select>
                     </div>
-
-                    {config.rules.length > 0 && (
-                        <div style={{ ...styles.card, marginTop: 20, backgroundColor: "#eff6ff", border: "1px solid #dbeafe" }}>
-                            <h4 style={{ ...styles.title, fontSize: 14, marginBottom: 8 }}>Apply to Existing Boats</h4>
-                            <p style={{ fontSize: 12, color: colors.gray500, marginBottom: 12 }}>
-                                Apply these auto-approval rules to boats that are currently pending.
-                            </p>
-                            
-                            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                                <button
-                                    type="button"
-                                    onClick={() => handleRetroactiveApproval(true)}
-                                    disabled={retroactiveStatus === 'testing' || retroactiveStatus === 'applying'}
-                                    style={{
-                                        ...styles.primaryButton,
-                                        padding: "8px 12px",
-                                        backgroundColor: "#3b82f6",
-                                        borderRadius: 6,
-                                        fontSize: 12,
-                                        gap: 4,
-                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
-                                        opacity: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? 0.6 : 1,
-                                    }}
-                                >
-                                    <FaPlayCircle size={12} />
-                                    {retroactiveStatus === 'testing' ? 'Testing...' : 'Test Rules (Dry Run)'}
-                                </button>
-                                
-                                <button
-                                    type="button"
-                                    onClick={() => handleRetroactiveApproval(false)}
-                                    disabled={retroactiveStatus === 'testing' || retroactiveStatus === 'applying'}
-                                    style={{
-                                        ...styles.primaryButton,
-                                        padding: "8px 12px",
-                                        borderRadius: 6,
-                                        fontSize: 12,
-                                        gap: 4,
-                                        cursor: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? "not-allowed" : "pointer",
-                                        opacity: retroactiveStatus === 'testing' || retroactiveStatus === 'applying' ? 0.6 : 1,
-                                    }}
-                                    onMouseOver={(e) => !e.target.disabled && hover.primaryButton(e.target)}
-                                    onMouseOut={(e) => !e.target.disabled && hover.resetPrimaryButton(e.target)}
-                                >
-                                    <FaCheckCircle size={12} />
-                                    {retroactiveStatus === 'applying' ? 'Applying...' : 'Apply Rules Now'}
-                                </button>
-                            </div>
-
-                            {retroactiveResult && (
-                                <div style={{ 
-                                    padding: 12, 
-                                    backgroundColor: retroactiveStatus === 'error' ? colors.errorBg : colors.successBg, 
-                                    border: `1px solid ${retroactiveStatus === 'error' ? colors.errorBorder : colors.successBorder}`,
-                                    borderRadius: 6,
-                                    fontSize: 12
-                                }}>
-                                    {retroactiveStatus === 'error' ? (
-                                        <div style={{ color: "#dc2626", display: "flex", alignItems: "center", gap: 4 }}>
-                                            <FaExclamationTriangle size={12} />
-                                            Error: {retroactiveResult.error}
-                                        </div>
-                                    ) : (
-                                        <div style={{ color: "#166534" }}>
-                                            <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                                                Results {retroactiveResult.would_approve !== undefined ? '(Preview)' : '(Applied)'}:
-                                            </div>
-                                            <div>• Total pending boats: {retroactiveResult.total_pending || 0}</div>
-                                            <div>• Would be approved: {retroactiveResult.would_approve || retroactiveResult.auto_approved || 0}</div>
-                                            <div>• Would remain pending: {retroactiveResult.would_remain_pending || retroactiveResult.still_pending || 0}</div>
-                                            {retroactiveResult.errors > 0 && (
-                                                <div style={{ color: "#dc2626" }}>• Errors: {retroactiveResult.errors}</div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
         </div>
@@ -642,6 +618,7 @@ function AutoApprovalTab({ config, onChange, orgName }: { config: any, onChange:
 function RuleEditor({ 
     rule, 
     ruleIndex, 
+    availableFields,
     onUpdate, 
     onDelete, 
     onAddCondition, 
@@ -650,16 +627,13 @@ function RuleEditor({
 }: {
     rule: any,
     ruleIndex: number,
+    availableFields: Array<{ key: string, label: string, type: string }>,
     onUpdate: (rule: any) => void,
     onDelete: () => void,
     onAddCondition: (fieldKey: string) => void,
     onUpdateCondition: (fieldKey: string, conditionData: any) => void,
     onRemoveCondition: (fieldKey: string) => void
 }) {
-    const availableFields = BOAT_FIELDS.filter(field => 
-        FIELD_TYPES.hasOwnProperty(field.key as keyof typeof FIELD_TYPES)
-    )
-
     const unusedFields = availableFields.filter(field => 
         !rule.conditions.hasOwnProperty(field.key)
     )
@@ -699,8 +673,8 @@ function RuleEditor({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        <option value="AND">AND (All conditions must match)</option>
-                        <option value="OR">OR (Any condition can match)</option>
+                        <option value="AND">EN (Alle voorwaarden moeten kloppen)</option>
+                        <option value="OR">OF (Elke voorwaarde kan kloppen)</option>
                     </select>
                     <button
                         type="button"
@@ -716,7 +690,7 @@ function RuleEditor({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        Delete Rule
+                        Regel Verwijderen
                     </button>
                 </div>
             </div>
@@ -739,6 +713,7 @@ function RuleEditor({
                         <ConditionEditor
                             key={fieldKey}
                             fieldKey={fieldKey}
+                            field={availableFields.find(f => f.key === fieldKey)}
                             condition={condition}
                             onUpdate={(conditionData) => onUpdateCondition(fieldKey, conditionData)}
                             onRemove={() => onRemoveCondition(fieldKey)}
@@ -764,7 +739,7 @@ function RuleEditor({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        <option value="">Add condition...</option>
+                        <option value="">Voorwaarde toevoegen...</option>
                         {unusedFields.map(field => (
                             <option key={field.key} value={field.key}>
                                 {field.label}
@@ -779,17 +754,18 @@ function RuleEditor({
 
 function ConditionEditor({ 
     fieldKey, 
+    field,
     condition, 
     onUpdate, 
     onRemove 
 }: {
     fieldKey: string,
+    field?: { key: string, label: string, type: string },
     condition: any,
     onUpdate: (condition: any) => void,
     onRemove: () => void
 }) {
-    const field = BOAT_FIELDS.find(f => f.key === fieldKey)
-    const fieldType = FIELD_TYPES[fieldKey as keyof typeof FIELD_TYPES] || "string"
+    const fieldType = field?.type || "string"
     const operators = OPERATORS[fieldType as keyof typeof OPERATORS] || OPERATORS.string
 
     const handleValueChange = (value: string) => {
@@ -906,6 +882,12 @@ function EditOrgForm({
 }) {
     const [name, setName] = useState(org.name || "")
     const [isSuperOrg, setIsSuperOrg] = useState(org.is_superorg || false)
+    const [street, setStreet] = useState(org.street || "")
+    const [city, setCity] = useState(org.city || "")
+    const [state, setState] = useState(org.state || "")
+    const [postalCode, setPostalCode] = useState(org.postal_code || "")
+    const [country, setCountry] = useState(org.country || "")
+    const [linkedPolicyId, setLinkedPolicyId] = useState(org.linked_policy_id || "")
     const [insuredObjectFieldsConfig, setInsuredObjectFieldsConfig] = useState(() => {
         // Use the new insured_object_fields_config structure
         const newConfig = org.insured_object_fields_config || {}
@@ -937,16 +919,25 @@ function EditOrgForm({
         property: "required" | "visible",
         value: boolean
     ) => {
-        setInsuredObjectFieldsConfig((prev) => ({
-            ...prev,
-            boat: {
-                ...prev.boat,
-                [fieldKey]: {
-                    ...prev.boat[fieldKey],
-                    [property]: value,
-                },
+        setInsuredObjectFieldsConfig((prev) => {
+            const updatedConfig = {
+                ...prev,
+                boat: {
+                    ...prev.boat,
+                    [fieldKey]: {
+                        ...prev.boat[fieldKey],
+                        [property]: value,
+                    },
+                }
             }
-        }))
+            
+            // If visibility is turned off, also turn off required
+            if (property === "visible" && !value) {
+                updatedConfig.boat[fieldKey].required = false
+            }
+            
+            return updatedConfig
+        })
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -968,6 +959,12 @@ function EditOrgForm({
             const payload = {
                 name,
                 is_superorg: isSuperOrg,
+                street: street || undefined,
+                city: city || undefined,
+                state: state || undefined,
+                postal_code: postalCode || undefined,
+                country: country || undefined,
+                linked_policy_id: linkedPolicyId || undefined,
                 insured_object_fields_config: updatedInsuredObjectFieldsConfig,
                 auto_approval_config: autoApprovalConfig,
             }
@@ -1011,7 +1008,7 @@ function EditOrgForm({
                 overflow: "auto",
             }}
         >
-            <h2 style={{ marginBottom: 16 }}>Edit Organization</h2>
+            <h2 style={{ marginBottom: 16 }}>Organisatie Bewerken</h2>
 
             {/* Tab Navigation */}
             <div
@@ -1055,7 +1052,7 @@ function EditOrgForm({
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Boat Fields Configuration
+                    Boot Velden Configuratie
                 </button>
                 <button
                     onClick={() => setActiveTab("approval")}
@@ -1073,7 +1070,7 @@ function EditOrgForm({
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Auto-Approval Settings
+                    Auto-Goedkeuring Instellingen
                 </button>
             </div>
 
@@ -1123,6 +1120,160 @@ function EditOrgForm({
                                 Super Organization
                             </span>
                         </label>
+
+                        {/* Address Section */}
+                        <div style={{ marginTop: 24 }}>
+                            <h3 style={{
+                                fontSize: 16,
+                                fontWeight: 600,
+                                marginBottom: 16,
+                                paddingBottom: 8,
+                                borderBottom: "1px solid #e5e7eb"
+                            }}>
+                                Adresgegevens (Optioneel)
+                            </h3>
+                            
+                            <div style={{ marginBottom: 16 }}>
+                                <label style={{
+                                    display: "block",
+                                    marginBottom: 8,
+                                    fontWeight: 500
+                                }}>
+                                    Straat
+                                </label>
+                                <input
+                                    value={street}
+                                    onChange={(e) => setStreet(e.target.value)}
+                                    placeholder="Voer straatnaam en huisnummer in"
+                                    style={{
+                                        width: "100%",
+                                        padding: 12,
+                                        fontSize: 14,
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 8,
+                                        marginBottom: 16,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                                <div style={{ flex: 2 }}>
+                                    <label style={{
+                                        display: "block",
+                                        marginBottom: 8,
+                                        fontWeight: 500
+                                    }}>
+                                        Stad
+                                    </label>
+                                    <input
+                                        value={city}
+                                        onChange={(e) => setCity(e.target.value)}
+                                        placeholder="Voer stad in"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{
+                                        display: "block",
+                                        marginBottom: 8,
+                                        fontWeight: 500
+                                    }}>
+                                        Postcode
+                                    </label>
+                                    <input
+                                        value={postalCode}
+                                        onChange={(e) => setPostalCode(e.target.value)}
+                                        placeholder="1234AB"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{
+                                        display: "block",
+                                        marginBottom: 8,
+                                        fontWeight: 500
+                                    }}>
+                                        Provincie/Staat
+                                    </label>
+                                    <input
+                                        value={state}
+                                        onChange={(e) => setState(e.target.value)}
+                                        placeholder="Voer provincie/staat in"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{
+                                        display: "block",
+                                        marginBottom: 8,
+                                        fontWeight: 500
+                                    }}>
+                                        Land
+                                    </label>
+                                    <input
+                                        value={country}
+                                        onChange={(e) => setCountry(e.target.value)}
+                                        placeholder="Nederland"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: 16 }}>
+                                <label style={{
+                                    display: "block",
+                                    marginBottom: 8,
+                                    fontWeight: 500
+                                }}>
+                                    Gekoppelde Polis ID (Optioneel)
+                                </label>
+                                <input
+                                    value={linkedPolicyId}
+                                    onChange={(e) => setLinkedPolicyId(e.target.value)}
+                                    placeholder="Voer polis ID in"
+                                    style={{
+                                        width: "100%",
+                                        padding: 12,
+                                        fontSize: 14,
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 8,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                />
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -1136,7 +1287,7 @@ function EditOrgForm({
                                     marginBottom: 8,
                                 }}
                             >
-                                Configure Boat Fields
+                                Boot Velden Configureren
                             </h3>
                             <p
                                 style={{
@@ -1159,7 +1310,7 @@ function EditOrgForm({
                                     marginBottom: 8,
                                     color: colors.primary 
                                 }}>
-                                    Required Fields (Always Visible & Required)
+                                    Verplichte Velden (Altijd Zichtbaar & Verplicht)
                                 </h4>
                                 <div style={{ 
                                     padding: 12, 
@@ -1185,7 +1336,7 @@ function EditOrgForm({
                                     marginBottom: 12,
                                     color: colors.gray700 
                                 }}>
-                                    Optional Fields (Configurable)
+                                    Optionele Velden (Configureerbaar)
                                 </h4>
                                 <table style={{ width: "100%", fontSize: 14 }}>
                                     <thead
@@ -1203,7 +1354,7 @@ function EditOrgForm({
                                                     fontWeight: 600,
                                                 }}
                                             >
-                                                Field
+                                                Veld
                                             </th>
                                             <th
                                                 style={{
@@ -1212,7 +1363,7 @@ function EditOrgForm({
                                                     fontWeight: 600,
                                                 }}
                                             >
-                                                Visible
+                                                Zichtbaar
                                             </th>
                                             <th
                                                 style={{
@@ -1221,7 +1372,7 @@ function EditOrgForm({
                                                     fontWeight: 600,
                                                 }}
                                             >
-                                                Required
+                                                Verplicht
                                             </th>
                                         </tr>
                                     </thead>
@@ -1326,7 +1477,7 @@ function EditOrgForm({
                     <AutoApprovalTab 
                         config={autoApprovalConfig}
                         onChange={setAutoApprovalConfig}
-                        orgName={org.name}
+                        org={org}
                     />
                 )}
 
@@ -1353,7 +1504,7 @@ function EditOrgForm({
                         onMouseOver={(e) => hover.secondaryButton(e.target)}
                         onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -1366,363 +1517,10 @@ function EditOrgForm({
                             fontFamily: FONT_STACK,
                         }}
                     >
-                        Save Changes
+                        Wijzigingen Opslaan
                     </button>
                 </div>
             </form>
-        </div>
-    )
-}
-
-// Organization Form Types and Components
-type OrganizationFormState = {
-    name: string
-}
-
-// Validation helper for organization form
-function validateOrganizationForm(form: OrganizationFormState): string[] {
-    const errors: string[] = []
-
-    const nameError = validateRequired(form.name, "Organization name") || 
-                      validateStringLength(form.name, "Organization name", 2, 100)
-    if (nameError) errors.push(nameError)
-
-    return errors
-}
-
-// Organization Creation Modal Component
-function OrganizationCreationModal({
-    onClose,
-    onSuccess,
-}: {
-    onClose: () => void
-    onSuccess?: () => void
-}) {
-    const [form, setForm] = React.useState<OrganizationFormState>({
-        name: "",
-    })
-    const [error, setError] = React.useState<string | null>(null)
-    const [success, setSuccess] = React.useState<string | null>(null)
-    const [isSubmitting, setIsSubmitting] = React.useState(false)
-
-    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-        const { name, value } = e.target
-        setError(null)
-        setSuccess(null)
-        setForm((prev) => ({ ...prev, [name]: value }))
-    }
-
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-
-        // Client-side validation
-        const validationErrors = validateOrganizationForm(form)
-        if (validationErrors.length > 0) {
-            setError(validationErrors.join("\n"))
-            return
-        }
-
-        setError(null)
-        setSuccess(null)
-        setIsSubmitting(true)
-
-        try {
-            const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${getIdToken()}`,
-                },
-                body: JSON.stringify(form),
-            })
-            const data = await res.json()
-
-            if (!res.ok) {
-                setError(formatErrorMessage(data))
-            } else {
-                setSuccess(formatSuccessMessage(data, "Organization"))
-                // Auto-close after success
-                setTimeout(() => {
-                    onSuccess?.()
-                    onClose()
-                }, 2000)
-            }
-        } catch (err: any) {
-            setError(err.message || "Failed to submit form. Please try again.")
-        } finally {
-            setIsSubmitting(false)
-        }
-    }
-
-    return (
-        <div
-            style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                backdropFilter: "blur(4px)",
-                zIndex: 1000,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-            }}
-        >
-            <div
-                style={{
-                    position: "fixed",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)",
-                    width: "min(90vw, 500px)",
-                    maxHeight: "90vh",
-                    padding: "32px",
-                    background: "#fff",
-                    borderRadius: "16px",
-                    boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                    fontFamily: FONT_STACK,
-                    zIndex: 1001,
-                    overflow: "auto",
-                }}
-            >
-                {/* Header */}
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "24px",
-                    }}
-                >
-                    <div
-                        style={{
-                            fontSize: "24px",
-                            fontWeight: "600",
-                            color: "#1f2937",
-                        }}
-                    >
-                        Nieuwe Organisatie Aanmaken
-                    </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            padding: "8px",
-                            backgroundColor: "transparent",
-                            border: "none",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            color: "#6b7280",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "all 0.2s",
-                        }}
-                        onMouseOver={(e) => {
-                            const target = e.target as HTMLElement;
-                            target.style.backgroundColor = "#f3f4f6";
-                        }}
-                        onMouseOut={(e) => {
-                            const target = e.target as HTMLElement;
-                            target.style.backgroundColor = "transparent";
-                        }}
-                    >
-                        <FaTimes size={16} />
-                    </button>
-                </div>
-
-                {/* Error Display */}
-                {error && (
-                    <div
-                        style={{
-                            color: "#dc2626",
-                            backgroundColor: "#fef2f2",
-                            padding: "12px 16px",
-                            borderRadius: "8px",
-                            marginBottom: "24px",
-                            fontSize: "14px",
-                            border: "1px solid #fecaca",
-                            whiteSpace: "pre-wrap",
-                        }}
-                    >
-                        {error}
-                    </div>
-                )}
-
-                {/* Success Display */}
-                {success && (
-                    <div
-                        style={{
-                            color: "#059669",
-                            backgroundColor: "#ecfdf5",
-                            padding: "12px 16px",
-                            borderRadius: "8px",
-                            marginBottom: "24px",
-                            fontSize: "14px",
-                            border: "1px solid #a7f3d0",
-                        }}
-                    >
-                        {success}
-                    </div>
-                )}
-
-                {/* Form */}
-                <form onSubmit={handleSubmit}>
-                    <div style={{ marginBottom: "24px" }}>
-                        <label
-                            htmlFor="name"
-                            style={{
-                                display: "block",
-                                marginBottom: "8px",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                color: "#374151",
-                            }}
-                        >
-                            Organisatienaam
-                            <span style={{ color: "#ef4444" }}>*</span>
-                        </label>
-                        <input
-                            id="name"
-                            name="name"
-                            type="text"
-                            value={form.name}
-                            onChange={handleChange}
-                            disabled={isSubmitting}
-                            placeholder="Voer organisatienaam in"
-                            style={{
-                                width: "100%",
-                                padding: "12px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "8px",
-                                fontSize: "14px",
-                                fontFamily: FONT_STACK,
-                                transition: "border-color 0.2s",
-                                backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
-                                cursor: isSubmitting ? "not-allowed" : "text",
-                                boxSizing: "border-box",
-                            }}
-                            onFocus={(e) => {
-                                if (!isSubmitting) {
-                                    const target = e.target as HTMLElement;
-                                    target.style.borderColor = "#10b981";
-                                }
-                            }}
-                            onBlur={(e) => {
-                                const target = e.target as HTMLElement;
-                                target.style.borderColor = "#d1d5db";
-                            }}
-                        />
-                    </div>
-
-                    {/* Submit Buttons */}
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "flex-end",
-                            gap: "12px",
-                            paddingTop: "24px",
-                            borderTop: "1px solid #e5e7eb",
-                        }}
-                    >
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            style={{
-                                padding: "12px 24px",
-                                backgroundColor: "#f3f4f6",
-                                color: "#374151",
-                                border: "none",
-                                borderRadius: "8px",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                cursor: isSubmitting ? "not-allowed" : "pointer",
-                                fontFamily: FONT_STACK,
-                                transition: "all 0.2s",
-                                opacity: isSubmitting ? 0.6 : 1,
-                            }}
-                            onMouseOver={(e) => {
-                                if (!isSubmitting) {
-                                    const target = e.target as HTMLElement;
-                                    target.style.backgroundColor = "#e5e7eb";
-                                }
-                            }}
-                            onMouseOut={(e) => {
-                                const target = e.target as HTMLElement;
-                                target.style.backgroundColor = "#f3f4f6";
-                            }}
-                        >
-                            Annuleren
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            style={{
-                                padding: "12px 24px",
-                                backgroundColor: isSubmitting
-                                    ? "#9ca3af"
-                                    : "#10b981",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "8px",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                cursor: isSubmitting ? "not-allowed" : "pointer",
-                                fontFamily: FONT_STACK,
-                                transition: "all 0.2s",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                            }}
-                            onMouseOver={(e) => {
-                                if (!isSubmitting) {
-                                    const target = e.target as HTMLElement;
-                                    target.style.backgroundColor = "#059669";
-                                }
-                            }}
-                            onMouseOut={(e) => {
-                                if (!isSubmitting) {
-                                    const target = e.target as HTMLElement;
-                                    target.style.backgroundColor = "#10b981";
-                                }
-                            }}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div
-                                        style={{
-                                            width: "16px",
-                                            height: "16px",
-                                            border: "2px solid #ffffff",
-                                            borderTop: "2px solid transparent",
-                                            borderRadius: "50%",
-                                            animation: "spin 1s linear infinite",
-                                        }}
-                                    />
-                                    Aanmaken...
-                                </>
-                            ) : (
-                                <>
-                                    <FaPlus size={12} />
-                                    Organisatie Aanmaken
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </form>
-
-                {/* Add spinning animation for loading spinner */}
-                <style>
-                    {`
-                        @keyframes spin {
-                            0% { transform: rotate(0deg); }
-                            100% { transform: rotate(360deg); }
-                        }
-                    `}
-                </style>
-            </div>
         </div>
     )
 }
@@ -1741,9 +1539,34 @@ export function OrganizationPageOverride(): Override {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
+    const [pendingCount, setPendingCount] = useState<number>(0)
     const [sortField, setSortField] = useState<string | null>(null)
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
     const [showCreateModal, setShowCreateModal] = useState(false)
+
+    async function fetchPendingCount(): Promise<number> {
+        try {
+            const token = getIdToken()
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
+            if (token) headers.Authorization = `Bearer ${token}`
+            
+            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending`, {
+                method: "GET",
+                headers,
+                mode: "cors",
+            })
+            
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+            const data = await res.json()
+            const result = data.items || data.objects || data.insuredObjects || data || []
+            return Array.isArray(result) ? result.length : 0
+        } catch (error) {
+            console.error("Error fetching pending count:", error)
+            return 0
+        }
+    }
 
     const refresh = useCallback(() => {
         fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
@@ -1794,6 +1617,15 @@ export function OrganizationPageOverride(): Override {
             refresh()
         }
     }, [refresh, isLoadingUserInfo])
+
+    // Fetch pending count
+    useEffect(() => {
+        const loadPendingCount = async () => {
+            const count = await fetchPendingCount()
+            setPendingCount(count)
+        }
+        loadPendingCount()
+    }, [])
 
     // Filter and sort organizations
     const filteredAndSortedOrgs = React.useMemo(() => {
@@ -1896,7 +1728,7 @@ export function OrganizationPageOverride(): Override {
                         fontSize: 16,
                     }}
                 >
-                    Loading organizations...
+                    Organisaties laden...
                 </div>
             ),
         }
@@ -1914,7 +1746,7 @@ export function OrganizationPageOverride(): Override {
                         fontSize: 14,
                     }}
                 >
-                    Error: {error}
+                    Fout: {error}
                 </div>
             ),
         }
@@ -1945,34 +1777,38 @@ export function OrganizationPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
-                        {/* Navigation Tabs Section */}
+                        {/* Enhanced Navigation Tabs Section */}
                         <div
                             style={{
-                                padding: "12px 24px",
+                                padding: "20px 24px",
                                 backgroundColor: "#f8fafc",
                                 borderBottom: "1px solid #e5e7eb",
                                 display: "flex",
-                                gap: "4px",
+                                gap: "8px",
                                 overflowX: "auto",
+                                alignItems: "center",
                             }}
                         >
                             <button
                                 style={{
-                                    padding: "8px 16px",
+                                    padding: "16px 24px",
                                     backgroundColor: "#3b82f6",
                                     color: "white",
                                     border: "none",
-                                    borderRadius: "6px",
-                                    fontSize: "13px",
+                                    borderRadius: "12px",
+                                    fontSize: "15px",
                                     fontWeight: "600",
                                     cursor: "default",
                                     fontFamily: FONT_STACK,
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: "6px",
+                                    gap: "8px",
+                                    minHeight: "48px",
+                                    boxShadow: "0 2px 8px rgba(59, 130, 246, 0.15)",
+                                    transform: "translateY(-1px)",
                                 }}
                             >
-                                <FaBuilding size={12} />
+                                <FaBuilding size={14} />
                                 Organisaties
                             </button>
                             <button
@@ -1980,94 +1816,185 @@ export function OrganizationPageOverride(): Override {
                                     window.location.href = '/policies'
                                 }}
                                 style={{
-                                    padding: "8px 16px",
-                                    backgroundColor: "transparent",
+                                    padding: "16px 24px",
+                                    backgroundColor: "#ffffff",
                                     color: "#6b7280",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "6px",
-                                    fontSize: "13px",
-                                    fontWeight: "500",
+                                    border: "2px solid #e5e7eb",
+                                    borderRadius: "12px",
+                                    fontSize: "15px",
+                                    fontWeight: "600",
                                     cursor: "pointer",
                                     fontFamily: FONT_STACK,
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: "6px",
+                                    gap: "8px",
                                     transition: "all 0.2s",
+                                    minHeight: "48px",
+                                    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
                                 }}
                                 onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#374151"
+                                    e.target.style.backgroundColor = "#f8fafc"
+                                    e.target.style.borderColor = "#3b82f6"
+                                    e.target.style.color = "#3b82f6"
+                                    e.target.style.transform = "translateY(-1px)"
+                                    e.target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                 }}
                                 onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
+                                    e.target.style.backgroundColor = "#ffffff"
+                                    e.target.style.borderColor = "#e5e7eb"
                                     e.target.style.color = "#6b7280"
+                                    e.target.style.transform = "none"
+                                    e.target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                 }}
                             >
-                                <FaFileContract size={12} />
+                                <FaFileContract size={14} />
                                 Polissen
                             </button>
-                            <button
-                                onClick={() => {
-                                    window.location.href = '/users'
-                                }}
-                                style={{
-                                    padding: "8px 16px",
-                                    backgroundColor: "transparent",
-                                    color: "#6b7280",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "6px",
-                                    fontSize: "13px",
-                                    fontWeight: "500",
-                                    cursor: "pointer",
-                                    fontFamily: FONT_STACK,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    transition: "all 0.2s",
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#374151"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#6b7280"
-                                }}
-                            >
-                                <FaUsers size={12} />
-                                Gebruikers
-                            </button>
-                            <button
-                                onClick={() => {
-                                    window.location.href = '/changelog'
-                                }}
-                                style={{
-                                    padding: "8px 16px",
-                                    backgroundColor: "transparent",
-                                    color: "#6b7280",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "6px",
-                                    fontSize: "13px",
-                                    fontWeight: "500",
-                                    cursor: "pointer",
-                                    fontFamily: FONT_STACK,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "6px",
-                                    transition: "all 0.2s",
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#374151"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#6b7280"
-                                }}
-                            >
-                                <FaClipboardList size={12} />
-                                Changelog
-                            </button>
+                            {/* Only show Pending tab for admin and editor roles */}
+                            {userInfo?.role !== "user" && (
+                                <button
+                                    onClick={() => {
+                                        window.location.href = '/pending-overview'
+                                    }}
+                                    style={{
+                                        padding: "16px 24px",
+                                        backgroundColor: "#ffffff",
+                                        color: "#6b7280",
+                                        border: "2px solid #e5e7eb",
+                                        borderRadius: "12px",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        transition: "all 0.2s",
+                                        minHeight: "48px",
+                                        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                                        position: "relative",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f8fafc"
+                                        e.target.style.borderColor = "#3b82f6"
+                                        e.target.style.color = "#3b82f6"
+                                        e.target.style.transform = "translateY(-1px)"
+                                        e.target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "#ffffff"
+                                        e.target.style.borderColor = "#e5e7eb"
+                                        e.target.style.color = "#6b7280"
+                                        e.target.style.transform = "none"
+                                        e.target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
+                                    }}
+                                >
+                                    <FaClock size={14} />
+                                    Pending Items
+                                    {/* Pending count badge */}
+                                    {pendingCount > 0 && (
+                                        <span
+                                            style={{
+                                                backgroundColor: "#dc2626",
+                                                color: "white",
+                                                borderRadius: "10px",
+                                                padding: "2px 6px",
+                                                fontSize: "12px",
+                                                fontWeight: "700",
+                                                minWidth: "18px",
+                                                textAlign: "center",
+                                                marginLeft: "4px",
+                                            }}
+                                        >
+                                            {pendingCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+                            {/* Only show Users tab for admin and editor roles */}
+                            {userInfo?.role !== "user" && (
+                                <button
+                                    onClick={() => {
+                                        window.location.href = '/users'
+                                    }}
+                                    style={{
+                                        padding: "16px 24px",
+                                        backgroundColor: "#ffffff",
+                                        color: "#6b7280",
+                                        border: "2px solid #e5e7eb",
+                                        borderRadius: "12px",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        transition: "all 0.2s",
+                                        minHeight: "48px",
+                                        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f8fafc"
+                                        e.target.style.borderColor = "#3b82f6"
+                                        e.target.style.color = "#3b82f6"
+                                        e.target.style.transform = "translateY(-1px)"
+                                        e.target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "#ffffff"
+                                        e.target.style.borderColor = "#e5e7eb"
+                                        e.target.style.color = "#6b7280"
+                                        e.target.style.transform = "none"
+                                        e.target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
+                                    }}
+                                >
+                                    <FaUsers size={14} />
+                                    Gebruikers
+                                </button>
+                            )}
+                            {/* Only show Changelog tab for admin and editor roles */}
+                            {userInfo?.role !== "user" && (
+                                <button
+                                    onClick={() => {
+                                        window.location.href = '/changelog'
+                                    }}
+                                    style={{
+                                        padding: "16px 24px",
+                                        backgroundColor: "#ffffff",
+                                        color: "#6b7280",
+                                        border: "2px solid #e5e7eb",
+                                        borderRadius: "12px",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        transition: "all 0.2s",
+                                        minHeight: "48px",
+                                        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f8fafc"
+                                        e.target.style.borderColor = "#3b82f6"
+                                        e.target.style.color = "#3b82f6"
+                                        e.target.style.transform = "translateY(-1px)"
+                                        e.target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "#ffffff"
+                                        e.target.style.borderColor = "#e5e7eb"
+                                        e.target.style.color = "#6b7280"
+                                        e.target.style.transform = "none"
+                                        e.target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
+                                    }}
+                                >
+                                    <FaClipboardList size={14} />
+                                    Changelog
+                                </button>
+                            )}
                         </div>
 
                         {/* Main Header Section */}
@@ -2228,7 +2155,7 @@ export function OrganizationPageOverride(): Override {
                                                 color: "#374151",
                                             }}
                                         >
-                                            Actions
+                                            Acties
                                         </th>
                                         {visible.map((col) => (
                                             <th
@@ -2431,9 +2358,9 @@ export function OrganizationPageOverride(): Override {
                                                                 style={{
                                                                     display: "none",
                                                                     position: "absolute",
-                                                                    left: 0,
-                                                                    top: "100%",
-                                                                    marginTop: 4,
+                                                                    left: "-70px", // Position it to the left of center to better align
+                                                                    bottom: "100%", // Keep it above the button
+                                                                    marginBottom: 4,
                                                                     backgroundColor: "white",
                                                                     border: "1px solid #d1d5db",
                                                                     borderRadius: 6,
@@ -2550,16 +2477,18 @@ export function OrganizationPageOverride(): Override {
                 {/* Create Organization Modal */}
                 {showCreateModal &&
                     ReactDOM.createPortal(
-                        <OrganizationCreationModal
-                            onClose={() => setShowCreateModal(false)}
-                            onSuccess={() => {
-                                refresh() // Refresh the organization list
-                                console.log("Organization created successfully!")
-                            }}
-                        />,
+                        <div style={styles.modalOverlay}>
+                            <OrganizationForm
+                                onClose={() => setShowCreateModal(false)}
+                                onSuccess={() => {
+                                    refresh() // Refresh the organization list
+                                    console.log("Organization created successfully!")
+                                }}
+                            />
+                        </div>,
                         document.body
                     )}
             </>
         ),
     }
-}
+} 

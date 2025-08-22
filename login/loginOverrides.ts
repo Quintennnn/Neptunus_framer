@@ -1,10 +1,4 @@
-import React, {
-    useEffect,
-    useState,
-    createContext,
-    useContext,
-    ReactNode,
-} from "react"
+import React, { useState, createContext, useContext } from "react"
 import { Override } from "framer"
 
 // --- AWS Cognito constants ---
@@ -35,14 +29,14 @@ function decodeJWT(token: string): any {
 // Create a global state as backup to test
 declare global {
     interface Window {
-        debugLogin: {
+        debugLogin?: {
             email: string
             password: string
         }
     }
 }
 
-// Initialize global state
+// Initialize global state only on client
 if (typeof window !== "undefined" && !window.debugLogin) {
     window.debugLogin = { email: "", password: "" }
 }
@@ -55,13 +49,9 @@ interface LoginContextType {
     setPassword(val: string): void
     error: string
     setError(val: string): void
-
-    // new token fields:
     idToken: string
     accessToken: string
     refreshToken: string
-
-    // setter for all three at once:
     setTokens(tokens: {
         idToken: string
         accessToken: string
@@ -69,7 +59,6 @@ interface LoginContextType {
     }): void
 }
 
-// 2) Update defaultContext to include stub values:
 const defaultContext: LoginContextType = {
     email: "",
     setEmail: () => {},
@@ -77,13 +66,9 @@ const defaultContext: LoginContextType = {
     setPassword: () => {},
     error: "",
     setError: () => {},
-
-    // tokens default to empty
     idToken: "",
     accessToken: "",
     refreshToken: "",
-
-    // no-op setter
     setTokens: () => {},
 }
 
@@ -93,18 +78,15 @@ function useLoginContext(): LoginContextType {
     return useContext(LoginContext)
 }
 
-// --- PROVIDER OVERRIDE (WITH GLOBAL BACKUP) ---
+// --- PROVIDER OVERRIDE ---
 export function loginProvider(): Override {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [error, setError] = useState("")
-
-    // token state
     const [idToken, setIdToken] = useState("")
     const [accessToken, setAccessToken] = useState("")
     const [refreshToken, setRefreshToken] = useState("")
 
-    // single setter for all three
     const setTokens = (tokens: {
         idToken: string
         accessToken: string
@@ -113,27 +95,26 @@ export function loginProvider(): Override {
         setIdToken(tokens.idToken)
         setAccessToken(tokens.accessToken)
         setRefreshToken(tokens.refreshToken)
-        // console.log("Entering the setTokens function")
-        // (optional) persist them in sessionStorage/localStorage:
-        sessionStorage.setItem("idToken", tokens.idToken)
-        sessionStorage.setItem("accessToken", tokens.accessToken)
-        sessionStorage.setItem("refreshToken", tokens.refreshToken)
 
-        console.log(
-            "→ [sessionStorage] idToken:",
-            sessionStorage.getItem("idToken")
-        )
-        console.log(
-            "→ [sessionStorage] accessToken:",
-            sessionStorage.getItem("accessToken")
-        )
-        console.log(
-            "→ [sessionStorage] refreshToken:",
-            sessionStorage.getItem("refreshToken")
-        )
+        if (typeof window !== "undefined") {
+            sessionStorage.setItem("idToken", tokens.idToken)
+            sessionStorage.setItem("accessToken", tokens.accessToken)
+            sessionStorage.setItem("refreshToken", tokens.refreshToken)
+
+            console.log(
+                "→ [sessionStorage] idToken:",
+                sessionStorage.getItem("idToken")
+            )
+            console.log(
+                "→ [sessionStorage] accessToken:",
+                sessionStorage.getItem("accessToken")
+            )
+            console.log(
+                "→ [sessionStorage] refreshToken:",
+                sessionStorage.getItem("refreshToken")
+            )
+        }
     }
-
-    // … your debug logging here …
 
     return {
         children: (children) => (
@@ -145,8 +126,6 @@ export function loginProvider(): Override {
                     setPassword,
                     error,
                     setError,
-
-                    // expose the tokens and setter
                     idToken,
                     accessToken,
                     refreshToken,
@@ -159,7 +138,7 @@ export function loginProvider(): Override {
     }
 }
 
-// --- EMAIL INPUT (WITH GLOBAL BACKUP) ---
+// --- EMAIL INPUT ---
 export function emailInput(): Override {
     const { email, setEmail } = useLoginContext()
     console.log("🟢 EMAIL INPUT rendering, context email:", email)
@@ -171,15 +150,14 @@ export function emailInput(): Override {
             console.log("🟢 EMAIL onChange:", val)
             setEmail(val)
 
-            // Also set global for debugging
-            if (window.debugLogin) {
+            if (typeof window !== "undefined" && window.debugLogin) {
                 window.debugLogin.email = val
             }
         },
     }
 }
 
-// --- PASSWORD INPUT (WITH GLOBAL BACKUP) ---
+// --- PASSWORD INPUT ---
 export function passwordInput(): Override {
     const { password, setPassword } = useLoginContext()
     console.log("🟡 PASSWORD INPUT rendering, context password:", password)
@@ -187,13 +165,11 @@ export function passwordInput(): Override {
     return {
         value: password,
         onChange: (event: any) => {
-            // Changed from onTextChange to onChange
             const val = event.target.value
             console.log("🟡 PASSWORD onChange:", val)
             setPassword(val)
 
-            // Also set global for debugging
-            if (window.debugLogin) {
+            if (typeof window !== "undefined" && window.debugLogin) {
                 window.debugLogin.password = val
             }
         },
@@ -203,37 +179,32 @@ export function passwordInput(): Override {
 // --- ERROR LABEL ---
 export function loginErrorLabel(): Override {
     const { error } = useLoginContext()
-
     return {
         visible: !!error,
         text: error,
     }
 }
 
-// --- LOGIN BUTTON (WITH GLOBAL BACKUP) ---
+// --- LOGIN BUTTON ---
 export function loginButton(): Override {
-    const { email, password, setError, setTokens } = useLoginContext()
+    const { email, password, setError } = useLoginContext()
     const [loading, setLoading] = useState(false)
 
     console.log("🔴 LOGIN BUTTON rendering")
-    console.log("Context email:", email)
-    console.log("Context password:", password)
-    console.log("Global email:", window.debugLogin?.email)
-    console.log("Global password:", window.debugLogin?.password)
+    if (typeof window !== "undefined") {
+        console.log("Global email:", window.debugLogin?.email)
+        console.log("Global password:", window.debugLogin?.password)
+    }
 
     const handleLogin = async () => {
         console.log("🔴 LOGIN CLICKED!")
-        console.log("Context email:", email)
-        console.log("Context password:", password)
-        console.log("Global email:", window.debugLogin?.email)
-        console.log("Global password:", window.debugLogin?.password)
+        let finalEmail = email
+        let finalPassword = password
 
-        // Use global as fallback if context is empty
-        const finalEmail = email || window.debugLogin?.email || ""
-        const finalPassword = password || window.debugLogin?.password || ""
-
-        console.log("Final email:", finalEmail)
-        console.log("Final password:", finalPassword)
+        if (typeof window !== "undefined") {
+            finalEmail = email || window.debugLogin?.email || ""
+            finalPassword = password || window.debugLogin?.password || ""
+        }
 
         if (!finalEmail || !finalPassword) {
             setError("Please enter both email and password.")
@@ -263,31 +234,27 @@ export function loginButton(): Override {
 
             const data = await res.json()
             console.log("AWS Cognito Response:", data)
+
             if (data.AuthenticationResult) {
-                const {
-                    IdToken,
-                    AccessToken,
-                    RefreshToken,
-                    ExpiresIn,
-                    TokenType,
-                } = data.AuthenticationResult
-                console.log("Setting ID token:", IdToken)
-                sessionStorage.setItem("idToken", IdToken)
-                sessionStorage.setItem("accessToken", AccessToken)
-                sessionStorage.setItem("refreshToken", RefreshToken)
+                const { IdToken, AccessToken, RefreshToken } =
+                    data.AuthenticationResult
 
-                // Extract and store userId from IdToken
-                const decoded = decodeJWT(IdToken)
-                if (decoded && decoded.sub) {
-                    sessionStorage.setItem("userId", decoded.sub)
-                    console.log("→ [sessionStorage] userId:", decoded.sub)
+                if (typeof window !== "undefined") {
+                    sessionStorage.setItem("idToken", IdToken)
+                    sessionStorage.setItem("accessToken", AccessToken)
+                    sessionStorage.setItem("refreshToken", RefreshToken)
+
+                    const decoded = decodeJWT(IdToken)
+                    if (decoded && decoded.sub) {
+                        sessionStorage.setItem("userId", decoded.sub)
+                        console.log("→ [sessionStorage] userId:", decoded.sub)
+                    }
+
+                    // Navigate after login
+                    window.location.href =
+                        "https://neptunus.framer.website/organizations"
                 }
-
-                // Navigate to organizations page after successful login
-                window.location.href = "https://neptunus.framer.website/organizations"
             } else {
-                // no AuthenticationResult? probably an error
-                console.warn("No tokens received:", data)
                 setError(data.message || "Login failed")
             }
         } catch (err: any) {

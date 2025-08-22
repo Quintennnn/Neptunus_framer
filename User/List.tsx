@@ -2,9 +2,10 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding, FaFileContract, FaClipboardList, FaPlus } from "react-icons/fa"
+import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding, FaFileContract, FaClipboardList, FaPlus, FaClock } from "react-icons/fa"
 import { NewUserButton, EditUserButton, DeleteUserButton } from "../components/InsuranceButtons"
-import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
+import { UserInfoBanner } from "../components/UserInfoBanner"
+import { colors, styles, hover, animations, FONT_STACK } from "../theme"
 import {
     API_BASE_URL,
     API_PATHS,
@@ -12,7 +13,8 @@ import {
     getUserId,
     formatErrorMessage,
     formatSuccessMessage,
-} from "../Utils.tsx"
+    validateEmail,
+} from "../utils"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -172,8 +174,8 @@ type ColumnKey =
     | "updatedAt"
 
 const COLUMN_GROUPS = {
-    essential: { label: "Essential", priority: 1 },
-    additional: { label: "Additional", priority: 2 },
+    essential: { label: "Essentiële", priority: 1 },
+    additional: { label: "Aanvullend", priority: 2 },
 }
 
 const COLUMNS: {
@@ -193,7 +195,7 @@ const COLUMNS: {
     },
     {
         key: "email",
-        label: "Email",
+        label: "E-mail",
         priority: 1,
         group: "essential",
         width: "200px",
@@ -216,14 +218,14 @@ const COLUMNS: {
     },
     {
         key: "createdAt",
-        label: "Created",
+        label: "Aangemaakt",
         priority: 2,
         group: "additional",
         width: "110px",
     },
     {
         key: "updatedAt",
-        label: "Updated",
+        label: "Bijgewerkt",
         priority: 2,
         group: "additional",
         width: "110px",
@@ -339,7 +341,7 @@ function ConfirmDeleteDialog({
                     gap: "8px",
                 }}
             >
-                ⚠️ Delete User
+                ⚠️ Gebruiker Verwijderen
             </div>
             <div 
                 id="delete-description"
@@ -354,7 +356,7 @@ function ConfirmDeleteDialog({
                     lineHeight: "1.5",
                 }}
             >
-                Are you sure you want to delete {username ? `user "${username}"` : "this user"}? This action cannot be undone and will permanently remove all associated data.
+                Weet je zeker dat je {username ? `gebruiker "${username}"` : "deze gebruiker"} wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt en zal alle bijbehorende gegevens permanent verwijderen.
             </div>
             <div style={{
                 ...styles.buttonGroup,
@@ -367,7 +369,7 @@ function ConfirmDeleteDialog({
                     onMouseEnter={() => setHoveredButton("cancel")}
                     onMouseLeave={() => setHoveredButton(null)}
                 >
-                    Cancel
+                    Annuleren
                 </button>
                 <button
                     onClick={onConfirm}
@@ -375,7 +377,7 @@ function ConfirmDeleteDialog({
                     onMouseEnter={() => setHoveredButton("delete")}
                     onMouseLeave={() => setHoveredButton(null)}
                 >
-                    Delete User
+                    Gebruiker Verwijderen
                 </button>
             </div>
         </div>
@@ -553,7 +555,7 @@ function EditUserForm({
                         marginBottom: "4px",
                     }}
                 >
-                    Username (Cognito Sub)
+                    Gebruikersnaam (Cognito Sub)
                 </div>
                 <div
                     style={{
@@ -610,7 +612,7 @@ function EditUserForm({
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
                     <label htmlFor="role" style={styles.label}>
-                        Role
+                        Rol
                     </label>
                     <select
                         id="role"
@@ -631,7 +633,7 @@ function EditUserForm({
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                    <label style={styles.label}>Organizations</label>
+                    <label style={styles.label}>Organisaties</label>
                     <div
                         style={{
                             border: "1px solid #d1d5db",
@@ -675,7 +677,7 @@ function EditUserForm({
                                     textAlign: "center",
                                 }}
                             >
-                                Organizations unavailable
+                                Organisaties niet beschikbaar
                             </div>
                         ) : availableOrganizations.length === 0 ? (
                             <div
@@ -789,7 +791,7 @@ function EditUserForm({
                             e.currentTarget.style.backgroundColor = "#f3f4f6"
                         }}
                     >
-                        Cancel
+                        Annuleren
                     </button>
                     <button
                         type="submit"
@@ -819,10 +821,256 @@ function EditUserForm({
                             }
                         }}
                     >
-                        Save Changes
+                        Wijzigingen Opslaan
                     </button>
                 </div>
             </form>
+        </div>
+    )
+}
+
+// ——— Create User Form ———
+type CreateUserFormState = {
+    email: string
+}
+
+function CreateUserForm({
+    onClose,
+    refresh,
+}: {
+    onClose(): void
+    refresh(): void
+}) {
+    const [form, setForm] = useState<CreateUserFormState>({
+        email: "",
+    })
+    const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+
+    // Validation helper
+    function validateForm(form: CreateUserFormState): string[] {
+        const errors: string[] = []
+        const emailError = validateEmail(form.email)
+        if (emailError) errors.push(emailError)
+        return errors
+    }
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target
+        setError(null)
+        setSuccess(null)
+        setForm((f) => ({ ...f, [name]: value }))
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault()
+
+        // Client-side validation
+        const validationErrors = validateForm(form)
+        if (validationErrors.length > 0) {
+            setError(validationErrors.join("\n"))
+            return
+        }
+
+        // Check if user is authenticated
+        const token = getIdToken()
+        if (!token) {
+            setError(
+                "Je moet ingelogd zijn om een gebruiker aan te maken. Log eerst in."
+            )
+            return
+        }
+
+        setError(null)
+        setSuccess(null)
+        setIsSubmitting(true)
+
+        try {
+            console.log("Creating user with payload:", form)
+            const res = await fetch(API_BASE_URL + API_PATHS.SIGNUP, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(form),
+            })
+            const data = await res.json()
+
+            console.log("User creation response:", data)
+
+            if (!res.ok) {
+                setError(formatErrorMessage(data))
+            } else {
+                setSuccess(formatSuccessMessage(data, "User"))
+                // Auto-close and refresh after success
+                setTimeout(() => {
+                    refresh()
+                    onClose()
+                }, 2000)
+            }
+        } catch (err: any) {
+            console.error("User creation error:", err)
+            setError(err.message || "Failed to submit form. Please try again.")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    return (
+        <div
+            style={{
+                ...styles.modal,
+                width: "min(90vw, 500px)",
+                maxHeight: "90vh",
+                padding: "32px",
+            }}
+        >
+            {/* Header */}
+            <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "24px",
+            }}>
+                <div style={styles.title}>
+                    Nieuwe Gebruiker Aanmaken
+                </div>
+                <button
+                    onClick={onClose}
+                    style={{
+                        ...buttonVariants.base,
+                        ...buttonVariants.secondary,
+                        padding: "8px",
+                        minWidth: "auto",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#e5e7eb"
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#f3f4f6"
+                    }}
+                >
+                    ✕
+                </button>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+                <div style={styles.errorAlert}>
+                    {error}
+                </div>
+            )}
+
+            {/* Success Display */}
+            {success && (
+                <div style={styles.successAlert}>
+                    {success}
+                </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: "24px" }}>
+                    <label htmlFor="email" style={styles.label}>
+                        E-mailadres
+                        <span style={{ color: colors.error }}>*</span>
+                    </label>
+                    <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={form.email}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        placeholder="Voer e-mailadres gebruiker in"
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                        }}
+                        onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
+                    />
+                </div>
+
+                {/* Submit Buttons */}
+                <div style={styles.buttonGroup}>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        style={{
+                            ...buttonVariants.base,
+                            ...buttonVariants.secondary,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            opacity: isSubmitting ? 0.6 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                            if (!isSubmitting) {
+                                e.currentTarget.style.backgroundColor = "#e5e7eb"
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!isSubmitting) {
+                                e.currentTarget.style.backgroundColor = "#f3f4f6"
+                            }
+                        }}
+                    >
+                        Annuleren
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        style={{
+                            ...buttonVariants.base,
+                            ...(isSubmitting 
+                                ? {
+                                    backgroundColor: colors.disabled,
+                                    color: "#ffffff",
+                                    borderColor: colors.disabled,
+                                    cursor: "not-allowed",
+                                  }
+                                : buttonVariants.primary
+                            ),
+                        }}
+                        onMouseEnter={(e) => {
+                            if (!isSubmitting) {
+                                e.currentTarget.style.backgroundColor = "#2563eb"
+                                e.currentTarget.style.borderColor = "#2563eb"
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (!isSubmitting) {
+                                e.currentTarget.style.backgroundColor = "#3b82f6"
+                                e.currentTarget.style.borderColor = "#3b82f6"
+                            }
+                        }}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <div style={{
+                                    ...styles.spinner,
+                                    marginRight: "8px",
+                                }} />
+                                Aanmaken...
+                            </>
+                        ) : (
+                            <>
+                                <FaPlus size={12} style={{ marginRight: "6px" }} />
+                                Gebruiker Aanmaken
+                            </>
+                        )}
+                    </button>
+                </div>
+            </form>
+
+            {/* Add spinning animation for loading spinner */}
+            <style>{animations}</style>
         </div>
     )
 }
@@ -1054,7 +1302,7 @@ function SearchAndFilterBar({
                                             cursor: "pointer",
                                         }}
                                     >
-                                        Essential Only
+                                        Alleen Essentiële
                                     </button>
                                     <button
                                         onClick={() =>
@@ -1074,7 +1322,7 @@ function SearchAndFilterBar({
                                             cursor: "pointer",
                                         }}
                                     >
-                                        Show All
+                                        Toon Alles
                                     </button>
                                 </div>
                             </div>
@@ -1178,6 +1426,7 @@ export function UserPageOverride(): Override {
     const [users, setUsers] = useState<any[] | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [editingUser, setEditingUser] = useState<any | null>(null)
+    const [creatingUser, setCreatingUser] = useState(false)
     const [deletingUserId, setDeletingUserId] = useState<
         string | number | null
     >(null)
@@ -1188,6 +1437,31 @@ export function UserPageOverride(): Override {
     )
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(true)
+    const [pendingCount, setPendingCount] = useState<number>(0)
+
+    async function fetchPendingCount(): Promise<number> {
+        try {
+            const token = getIdToken()
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
+            if (token) headers.Authorization = `Bearer ${token}`
+            
+            const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending`, {
+                method: "GET",
+                headers,
+                mode: "cors",
+            })
+            
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+            const data = await res.json()
+            const result = data.items || data.objects || data.insuredObjects || data || []
+            return Array.isArray(result) ? result.length : 0
+        } catch (error) {
+            console.error("Error fetching pending count:", error)
+            return 0
+        }
+    }
 
     const refresh = useCallback(() => {
         fetchUsers(userInfo)
@@ -1231,6 +1505,15 @@ export function UserPageOverride(): Override {
             refresh()
         }
     }, [refresh, isLoadingUserInfo])
+
+    // Fetch pending count
+    useEffect(() => {
+        const loadPendingCount = async () => {
+            const count = await fetchPendingCount()
+            setPendingCount(count)
+        }
+        loadPendingCount()
+    }, [])
 
     const filteredUsers =
         users?.filter((user) => {
@@ -1298,7 +1581,7 @@ export function UserPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Loading users...
+                    Gebruikers laden...
                 </div>
             ),
         }
@@ -1317,7 +1600,7 @@ export function UserPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Error: {error}
+                    Fout: {error}
                 </div>
             ),
         }
@@ -1338,6 +1621,11 @@ export function UserPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
+                    {/* User Info Banner */}
+                    <div style={{ marginBottom: "20px" }}>
+                        <UserInfoBanner />
+                    </div>
+
                     <div
                         style={{
                             backgroundColor: "#fff",
@@ -1346,23 +1634,31 @@ export function UserPageOverride(): Override {
                             overflow: "hidden",
                         }}
                     >
-                        {/* Navigation Tabs at Top */}
+                        {/* Enhanced Navigation Tabs at Top */}
                         <div
                             style={{
-                                padding: "12px 24px",
+                                padding: "20px 24px",
                                 backgroundColor: "#f8fafc",
                                 borderBottom: "1px solid #e5e7eb",
                                 display: "flex",
-                                gap: "4px",
+                                gap: "8px",
                                 overflowX: "auto",
+                                alignItems: "center",
                             }}
                         >
                             {[
                                 { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                                 { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
+                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
                                 { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                 { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                            ].map((tab) => {
+                            ].filter((tab) => {
+                                // Hide pending, users, and changelog tabs for regular users
+                                if (userInfo?.role === "user" && (tab.key === "pending" || tab.key === "users" || tab.key === "changelog")) {
+                                    return false
+                                }
+                                return true
+                            }).map((tab) => {
                                 const isActive = tab.key === "users"
                                 const Icon = tab.icon
                                 
@@ -1370,38 +1666,71 @@ export function UserPageOverride(): Override {
                                     <button
                                         key={tab.key}
                                         onClick={() => {
-                                            window.location.href = tab.href
+                                            if (!isActive) {
+                                                window.location.href = tab.href
+                                            }
                                         }}
                                         style={{
-                                            padding: "8px 16px",
-                                            backgroundColor: isActive ? "#3b82f6" : "transparent",
+                                            padding: "16px 24px",
+                                            backgroundColor: isActive ? "#3b82f6" : "#ffffff",
                                             color: isActive ? "white" : "#6b7280",
-                                            border: isActive ? "none" : "1px solid #d1d5db",
-                                            borderRadius: "6px",
-                                            fontSize: "13px",
-                                            fontWeight: isActive ? "600" : "500",
+                                            border: isActive ? "none" : "2px solid #e5e7eb",
+                                            borderRadius: "12px",
+                                            fontSize: "15px",
+                                            fontWeight: "600",
                                             cursor: isActive ? "default" : "pointer",
                                             fontFamily: FONT_STACK,
                                             display: "flex",
                                             alignItems: "center",
-                                            gap: "6px",
+                                            gap: "8px",
                                             transition: "all 0.2s",
+                                            minHeight: "48px",
+                                            boxShadow: isActive 
+                                                ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
+                                                : "0 2px 4px rgba(0,0,0,0.05)",
+                                            transform: isActive ? "translateY(-1px)" : "none",
                                         }}
                                         onMouseOver={(e) => {
                                             if (!isActive) {
-                                                e.target.style.backgroundColor = "#f3f4f6"
-                                                e.target.style.color = "#374151"
+                                                const target = e.target as HTMLElement
+                                                target.style.backgroundColor = "#f8fafc"
+                                                target.style.borderColor = "#3b82f6"
+                                                target.style.color = "#3b82f6"
+                                                target.style.transform = "translateY(-1px)"
+                                                target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                             }
                                         }}
                                         onMouseOut={(e) => {
                                             if (!isActive) {
-                                                e.target.style.backgroundColor = "transparent"
-                                                e.target.style.color = "#6b7280"
+                                                const target = e.target as HTMLElement
+                                                target.style.backgroundColor = "#ffffff"
+                                                target.style.borderColor = "#e5e7eb"
+                                                target.style.color = "#6b7280"
+                                                target.style.transform = "none"
+                                                target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                             }
                                         }}
                                     >
-                                        <Icon size={12} />
+                                        <Icon size={14} />
                                         {tab.label}
+                                        {/* Pending count badge */}
+                                        {tab.key === "pending" && pendingCount > 0 && (
+                                            <span
+                                                style={{
+                                                    backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
+                                                    color: "white",
+                                                    borderRadius: "10px",
+                                                    padding: "2px 6px",
+                                                    fontSize: "12px",
+                                                    fontWeight: "700",
+                                                    minWidth: "18px",
+                                                    textAlign: "center",
+                                                    marginLeft: "4px",
+                                                }}
+                                            >
+                                                {pendingCount}
+                                            </span>
+                                        )}
                                     </button>
                                 )
                             })}
@@ -1469,11 +1798,10 @@ export function UserPageOverride(): Override {
                                     </div>
                                     <NewUserButton
                                         userInfo={userInfo}
-                                        onClick={() => {
-                                            // TODO: Add create user functionality
-                                            console.log('Create new user')
-                                        }}
-                                    />
+                                        onClick={() => setCreatingUser(true)}
+                                    >
+                                        Nieuwe Gebruiker
+                                    </NewUserButton>
                                 </div>
                             </div>
 
@@ -1582,62 +1910,20 @@ export function UserPageOverride(): Override {
                                                         gap: "8px",
                                                     }}
                                                 >
-                                                    <button
+                                                    <EditUserButton
+                                                        userInfo={userInfo}
                                                         onClick={() =>
                                                             handleEdit(user.id)
                                                         }
-                                                        style={{
-                                                            ...buttonVariants.base,
-                                                            ...buttonVariants.primary,
-                                                            padding: "8px 12px",
-                                                            fontSize: "12px",
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            gap: "4px",
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.backgroundColor = "#2563eb"
-                                                            e.currentTarget.style.borderColor = "#2563eb"
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.backgroundColor = "#3b82f6"
-                                                            e.currentTarget.style.borderColor = "#3b82f6"
-                                                        }}
-                                                        title={`Edit user ${user.username || user.email}`}
-                                                    >
-                                                        <FaEdit size={10} />{" "}
-                                                        Edit
-                                                    </button>
-                                                    <button
+                                                    />
+                                                    <DeleteUserButton
+                                                        userInfo={userInfo}
                                                         onClick={() =>
                                                             confirmDelete(
                                                                 user.id
                                                             )
                                                         }
-                                                        style={{
-                                                            ...buttonVariants.base,
-                                                            ...buttonVariants.danger,
-                                                            padding: "8px 12px",
-                                                            fontSize: "12px",
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            gap: "4px",
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.backgroundColor = "#b91c1c"
-                                                            e.currentTarget.style.borderColor = "#b91c1c"
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.backgroundColor = "#dc2626"
-                                                            e.currentTarget.style.borderColor = "#dc2626"
-                                                        }}
-                                                        title={`Delete user ${user.username || user.email}`}
-                                                    >
-                                                        <FaTrashAlt size={10} />{" "}
-                                                        Delete
-                                                    </button>
+                                                    />
                                                 </div>
                                             </td>
                                             {visibleColumnsList.map((col) => {
@@ -1749,6 +2035,17 @@ export function UserPageOverride(): Override {
                             <EditUserForm
                                 user={editingUser}
                                 onClose={() => setEditingUser(null)}
+                                refresh={refresh}
+                            />
+                        </div>,
+                        document.body
+                    )}
+
+                {creatingUser &&
+                    ReactDOM.createPortal(
+                        <div style={styles.modalOverlay}>
+                            <CreateUserForm
+                                onClose={() => setCreatingUser(false)}
                                 refresh={refresh}
                             />
                         </div>,

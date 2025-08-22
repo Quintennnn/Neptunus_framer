@@ -16,15 +16,37 @@ import {
     FaFileContract,
     FaUsers,
     FaClipboardList,
+    FaShip,
+    FaUserTie,
+    FaCog,
+    FaShieldAlt,
+    FaTruck,
+    FaCogs,
 } from "react-icons/fa"
 
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
 const CHANGELOG_PATH = "/neptunus/changelog"
+const INSURED_OBJECT_PATH = "/neptunus/insured-object"
 
 // Enhanced font stack for better typography
 const FONT_STACK =
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+
+// Add CSS animation for loading spinner
+if (typeof document !== 'undefined') {
+    const style = document.createElement('style')
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    `
+    if (!document.head.querySelector('style[data-changelog-spinner]')) {
+        style.setAttribute('data-changelog-spinner', 'true')
+        document.head.appendChild(style)
+    }
+}
 
 function getIdToken(): string | null {
     return sessionStorage.getItem("idToken")
@@ -46,25 +68,270 @@ async function fetchChangelog(): Promise<any[]> {
     return json.items || json.data || json
 }
 
+async function fetchPendingCount(): Promise<number> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+        
+        const res = await fetch(`${API_BASE_URL}${INSURED_OBJECT_PATH}?status=Pending`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+        
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const data = await res.json()
+        const result = data.items || data.objects || data.insuredObjects || data || []
+        return Array.isArray(result) ? result.length : 0
+    } catch (error) {
+        console.error("Error fetching pending count:", error)
+        return 0
+    }
+}
+
+// Helper function to get UX-friendly table name
+function getTableDisplayName(sourceTableTag: string): string {
+    switch (sourceTableTag.toLowerCase()) {
+        case "user":
+            return "Gebruikers"
+        case "insuredobject":
+            return "Verzekerde Objecten"
+        case "policy":
+            return "Polissen"
+        case "organization":
+            return "Organisaties"
+        default:
+            return sourceTableTag
+    }
+}
+
+// Helper function to get icon and display name based on insured object type
+function getInsuredObjectIconAndName(formattedChanges: any, entityId: string): { icon: React.ReactNode, displayName: string } {
+    // Check for boat/ship
+    if (formattedChanges?.merkBoot || formattedChanges?.typeBoot || formattedChanges?.bootnummer) {
+        const boatNumber = formattedChanges.bootnummer || ""
+        const displayName = boatNumber ? `Boat: ${boatNumber}` : "Boat: Unknown"
+        return {
+            icon: <FaShip style={{ color: "#3b82f6" }} />,
+            displayName
+        }
+    }
+    
+    // Check for trailer
+    if (formattedChanges?.trailerRegistratienummer) {
+        const trailerNumber = formattedChanges.trailerRegistratienummer
+        return {
+            icon: <FaTruck style={{ color: "#f59e0b" }} />,
+            displayName: `Trailer: ${trailerNumber}`
+        }
+    }
+    
+    // Check for motor
+    if (formattedChanges?.motorMerk || formattedChanges?.motorSerienummer) {
+        const motorNumber = formattedChanges.motorSerienummer || "Unknown"
+        return {
+            icon: <FaCogs style={{ color: "#dc2626" }} />,
+            displayName: `Motor: ${motorNumber}`
+        }
+    }
+    
+    // Check for objectType to determine type
+    if (formattedChanges?.objectType) {
+        const objectType = formattedChanges.objectType.toLowerCase()
+        if (objectType.includes('boat') || objectType.includes('boot')) {
+            return {
+                icon: <FaShip style={{ color: "#3b82f6" }} />,
+                displayName: "Boat: Unknown"
+            }
+        } else if (objectType.includes('trailer')) {
+            return {
+                icon: <FaTruck style={{ color: "#f59e0b" }} />,
+                displayName: "Trailer: Unknown"
+            }
+        } else if (objectType.includes('motor')) {
+            return {
+                icon: <FaCogs style={{ color: "#dc2626" }} />,
+                displayName: "Motor: Unknown"
+            }
+        }
+    }
+    
+    // Default to boat if no specific type found
+    return {
+        icon: <FaShip style={{ color: "#3b82f6" }} />,
+        displayName: `Object: ${entityId.slice(-8)}`
+    }
+}
+
+// ——— Entity Information Fetching ———
+async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes: any): Promise<{
+    displayName: string
+    organization?: string
+    icon: React.ReactNode
+} | null> {
+    if (!entityId || !sourceTableTag) return null
+    
+    // First try to extract info from changes data (which is always available)
+    const formattedChanges = formatDynamoDBValue(changes)
+    let displayName = "Unknown"
+    let organization = ""
+    let icon: React.ReactNode = <FaClipboardList />
+
+    // Set icon and display name based on source table and content
+    switch (sourceTableTag.toLowerCase()) {
+        case "insuredobject":
+            const insuredObjectInfo = getInsuredObjectIconAndName(formattedChanges, entityId)
+            icon = insuredObjectInfo.icon
+            displayName = insuredObjectInfo.displayName
+            break
+        case "policy":
+            icon = <FaFileContract style={{ color: "#10b981" }} />
+            const polisnummer = formattedChanges?.polisnummer || entityId.slice(-8)
+            displayName = `Polis: ${polisnummer}`
+            break
+        case "organization":
+            icon = <FaBuilding style={{ color: "#f59e0b" }} />
+            const orgName = formattedChanges?.name || entityId.slice(-8)
+            displayName = `Organisatie: ${orgName}`
+            break
+        case "user":
+            icon = <FaUser style={{ color: "#8b5cf6" }} />
+            const email = formattedChanges?.email || formattedChanges?.username || entityId.slice(-8)
+            displayName = `User: ${email}`
+            break
+    }
+
+    // Extract organization information
+    organization = formattedChanges?.organization || ""
+    if (sourceTableTag.toLowerCase() === "user") {
+        organization = Array.isArray(formattedChanges?.organizations) ? 
+            formattedChanges.organizations[0] : 
+            (formattedChanges?.organizations || "")
+    } else if (sourceTableTag.toLowerCase() === "organization") {
+        organization = displayName.replace("Organisatie: ", "")
+    }
+
+    // If we got good info from changes, return it
+    if (displayName !== "Unknown" && displayName !== `${sourceTableTag} ${entityId.slice(-8)}`) {
+        return {
+            displayName,
+            organization,
+            icon
+        }
+    }
+
+    // Only try API call as enhancement, not as primary source
+    const token = getIdToken()
+    if (!token) {
+        // Return the info we have from changes
+        return {
+            displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
+            organization,
+            icon
+        }
+    }
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+    }
+    
+    try {
+        let endpoint = ""
+        
+        switch (sourceTableTag.toLowerCase()) {
+            case "insuredobject":
+                endpoint = `/neptunus/insured-object/${entityId}`
+                break
+            case "policy":
+                endpoint = `/neptunus/policy/${entityId}`
+                break
+            case "organization":
+                endpoint = `/neptunus/organization/${entityId}`
+                break
+            case "user":
+                endpoint = `/neptunus/user/${entityId}`
+                break
+            default:
+                // Return changes-based info for unknown types
+                return {
+                    displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
+                    organization,
+                    icon
+                }
+        }
+
+        const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+        
+        if (res.ok) {
+            const data = await res.json()
+            
+            // Enhance the display info with API data if available
+            if (sourceTableTag.toLowerCase() === "insuredobject") {
+                const obj = data.insuredObject || data
+                if (obj.merkBoot || obj.typeBoot) {
+                    const boatName = obj.merkBoot || obj.typeBoot || ""
+                    const boatNumber = obj.bootnummer || ""
+                    displayName = boatName ? 
+                        (boatNumber ? `${boatName} (${boatNumber})` : boatName) :
+                        (boatNumber ? `Boot ${boatNumber}` : displayName)
+                }
+                organization = obj.organization || organization
+                
+            } else if (sourceTableTag.toLowerCase() === "policy") {
+                const policy = data.policy || data
+                if (policy.polisnummer) {
+                    displayName = policy.polisnummer
+                }
+                organization = policy.organization || organization
+                
+            } else if (sourceTableTag.toLowerCase() === "organization") {
+                const org = data.organization || data
+                if (org.name) {
+                    displayName = org.name
+                    organization = org.name
+                }
+            }
+        }
+        // If API call fails, we still have the changes-based info to fall back on
+        
+    } catch (error) {
+        console.warn(`Could not fetch ${sourceTableTag} details for ${entityId}:`, error)
+        // Continue with changes-based info
+    }
+
+    return {
+        displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
+        organization,
+        icon
+    }
+}
+
 // ——— Time Helpers ———
 function getRelativeTime(timestamp: string): string {
     const now = new Date()
     const changeTime = new Date(timestamp)
     
-    // Handle potential timezone issues by ensuring we're comparing UTC times
-    const nowUTC = new Date(now.getTime() + (now.getTimezoneOffset() * 60000))
-    const changeTimeUTC = new Date(changeTime.getTime() + (changeTime.getTimezoneOffset() * 60000))
+    // Subtract 2 hours to correct for timezone difference
+    changeTime.setHours(changeTime.getHours() + 2)
     
-    const diffMs = nowUTC.getTime() - changeTimeUTC.getTime()
+    const diffMs = now.getTime() - changeTime.getTime()
     const diffSeconds = Math.floor(diffMs / 1000)
     const diffMinutes = Math.floor(diffSeconds / 60)
     const diffHours = Math.floor(diffMinutes / 60)
     const diffDays = Math.floor(diffHours / 24)
 
-    if (diffSeconds < 60) return "Just now"
-    if (diffMinutes < 60) return `${diffMinutes}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays < 7) return `${diffDays}d ago`
+    if (diffSeconds < 60) return "Zojuist"
+    if (diffMinutes < 60) return `${diffMinutes}m geleden`
+    if (diffHours < 24) return `${diffHours}u geleden`
+    if (diffDays < 7) return `${diffDays}d geleden`
 
     return changeTime.toLocaleDateString()
 }
@@ -148,7 +415,9 @@ function formatChangeValue(value: any): string {
     if (typeof value === "string") {
         // Check if it's a date string
         if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-            return new Date(value).toLocaleString()
+            const dateValue = new Date(value)
+            dateValue.setHours(dateValue.getHours() + 2)
+            return dateValue.toLocaleString('nl-NL')
         }
         return value
     }
@@ -203,12 +472,12 @@ type ColumnKey =
     | "action"
     | "sourceTableName"
     | "lastUpdatedBy"
-    | "entityId"
+    | "entityInfo"
     | "changes"
 
 const COLUMN_GROUPS = {
-    essential: { label: "Essential", priority: 1 },
-    additional: { label: "Additional", priority: 2 },
+    essential: { label: "Essentiële", priority: 1 },
+    additional: { label: "Aanvullend", priority: 2 },
 }
 
 const COLUMNS: {
@@ -220,59 +489,285 @@ const COLUMNS: {
 }[] = [
     {
         key: "timestamp",
-        label: "When",
+        label: "Wanneer",
         priority: 1,
         group: "essential",
         width: "120px",
     },
     {
         key: "action",
-        label: "Action",
+        label: "Actie",
         priority: 1,
         group: "essential",
         width: "100px",
     },
     {
         key: "sourceTableName",
-        label: "Table",
+        label: "Tabel",
         priority: 1,
         group: "essential",
         width: "180px",
     },
     {
+        key: "entityInfo",
+        label: "Item",
+        priority: 1,
+        group: "essential",
+        width: "220px",
+    },
+    {
         key: "lastUpdatedBy",
-        label: "Modified By",
+        label: "Gewijzigd Door",
         priority: 1,
         group: "essential",
         width: "160px",
     },
     {
-        key: "entityId",
-        label: "Entity ID",
-        priority: 2,
-        group: "additional",
-        width: "120px",
-    },
-    {
         key: "changes",
-        label: "Changes",
+        label: "Wijzigingen",
         priority: 2,
         group: "additional",
         width: "100px",
     },
 ]
 
+// ——— Entity History Builder ———
+function buildEntityHistory(changelog: any[]): Map<string, any[]> {
+    const entityHistories = new Map<string, any[]>()
+    
+    // Sort changelog by timestamp (oldest first) to build proper history
+    const sortedChangelog = [...changelog].sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+    
+    for (const entry of sortedChangelog) {
+        if (!entry.entityId) continue
+        
+        if (!entityHistories.has(entry.entityId)) {
+            entityHistories.set(entry.entityId, [])
+        }
+        
+        entityHistories.get(entry.entityId)!.push(entry)
+    }
+    
+    return entityHistories
+}
+
+// ——— Get Previous State for Entity ———
+function getPreviousEntityState(entityHistory: any[], currentEntryIndex: number, currentChanges: any): any {
+    if (currentEntryIndex <= 0 || !currentChanges) return null
+    
+    // Get the fields that are changing in the current entry
+    const currentFields = Object.keys(currentChanges)
+    
+    // Look through previous entries to find the last known value for each field
+    const previousState: any = {}
+    
+    for (const field of currentFields) {
+        // Find the most recent previous entry that had this field
+        for (let i = currentEntryIndex - 1; i >= 0; i--) {
+            const entry = entityHistory[i]
+            if (!entry.changes || entry.action === 'DELETE') continue
+            
+            if (field in entry.changes) {
+                // Found the previous value for this field
+                if (entry.action === 'CREATE' || entry.action === 'UPDATE') {
+                    previousState[field] = formatDynamoDBValue(entry.changes[field])
+                    break // Found the most recent value, stop looking
+                }
+            }
+        }
+    }
+    
+    return Object.keys(previousState).length > 0 ? previousState : null
+}
+
+
+// ——— Enhanced Change Value Formatter for Old/New Values ———
+function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
+    const formatSingleValue = (value: any): string => {
+        if (value === null || value === undefined) return "(geen waarde)"
+        if (typeof value === "boolean") return value ? "✓ Ja" : "✗ Nee"
+        if (typeof value === "string") {
+            if (value === "") return "(lege tekst)"
+            if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                const dateValue = new Date(value)
+                dateValue.setHours(dateValue.getHours() + 2)
+                return dateValue.toLocaleString('nl-NL')
+            }
+            return value
+        }
+        if (typeof value === "number") return value.toLocaleString('nl-NL')
+        if (Array.isArray(value)) {
+            if (value.length === 0) return "Lege lijst"
+            return value.length <= 3 ? value.join(", ") : `${value.slice(0, 3).join(", ")} ... (+${value.length - 3} meer)`
+        }
+        if (typeof value === "object") {
+            const keys = Object.keys(value)
+            if (keys.length === 0) return "Leeg object"
+            return keys.length <= 2 ? keys.map(k => `${k}: ${value[k]}`).join(", ") : `${keys.length} velden`
+        }
+        return String(value)
+    }
+
+    const oldFormatted = formatSingleValue(oldValue)
+    const newFormatted = formatSingleValue(newValue)
+    
+    // Handle cases where values are the same (shouldn't happen in updates, but just in case)
+    if (oldFormatted === newFormatted) {
+        return (
+            <div style={{ 
+                padding: "4px 8px",
+                backgroundColor: "#f3f4f6",
+                borderRadius: "4px",
+                color: "#6b7280" 
+            }}>
+                <span style={{ 
+                    fontSize: "10px", 
+                    fontWeight: "600", 
+                    color: "#6b7280",
+                    textTransform: "uppercase",
+                    marginRight: "6px"
+                }}>Ongewijzigd:</span>
+                {newFormatted}
+            </div>
+        )
+    }
+
+    // Handle case where old value was null (new addition)
+    if (oldValue === null || oldValue === undefined) {
+        return (
+            <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "6px",
+                padding: "6px 10px",
+                backgroundColor: "#ecfdf5",
+                borderRadius: "6px",
+                border: "1px solid #a7f3d0"
+            }}>
+                <span style={{ 
+                    fontSize: "11px", 
+                    fontWeight: "600", 
+                    color: "#059669",
+                    textTransform: "uppercase"
+                }}>Toegevoegd:</span>
+                <span style={{ color: "#059669", fontWeight: "500" }}>
+                    {newFormatted}
+                </span>
+            </div>
+        )
+    }
+
+    // Handle case where new value is null (deletion)
+    if (newValue === null || newValue === undefined) {
+        return (
+            <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "6px",
+                padding: "6px 10px",
+                backgroundColor: "#fef2f2",
+                borderRadius: "6px",
+                border: "1px solid #fecaca"
+            }}>
+                <span style={{ 
+                    fontSize: "11px", 
+                    fontWeight: "600", 
+                    color: "#dc2626",
+                    textTransform: "uppercase"
+                }}>Verwijderd:</span>
+                <span style={{ color: "#dc2626", textDecoration: "line-through" }}>
+                    {oldFormatted}
+                </span>
+            </div>
+        )
+    }
+
+    // Normal update case - show old and new values side by side
+    return (
+        <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "1fr auto 1fr", 
+            gap: "8px", 
+            alignItems: "center",
+            padding: "8px",
+            backgroundColor: "#fef9e7",
+            borderRadius: "8px",
+            border: "1px solid #fed7aa"
+        }}>
+            <div style={{ 
+                display: "flex", 
+                flexDirection: "column",
+                gap: "2px",
+                padding: "6px 8px",
+                backgroundColor: "#fef2f2",
+                borderRadius: "6px",
+                border: "1px solid #fecaca"
+            }}>
+                <span style={{ 
+                    fontSize: "10px", 
+                    fontWeight: "600", 
+                    color: "#dc2626",
+                    textTransform: "uppercase"
+                }}>Oud:</span>
+                <span style={{ color: "#dc2626", fontSize: "12px", textDecoration: "line-through" }}>
+                    {oldFormatted}
+                </span>
+            </div>
+            
+            <div style={{ 
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ca8a04",
+                fontSize: "14px",
+                fontWeight: "bold"
+            }}>
+                →
+            </div>
+            
+            <div style={{ 
+                display: "flex", 
+                flexDirection: "column",
+                gap: "2px",
+                padding: "6px 8px",
+                backgroundColor: "#ecfdf5",
+                borderRadius: "6px",
+                border: "1px solid #a7f3d0"
+            }}>
+                <span style={{ 
+                    fontSize: "10px", 
+                    fontWeight: "600", 
+                    color: "#059669",
+                    textTransform: "uppercase"
+                }}>Nieuw:</span>
+                <span style={{ color: "#059669", fontWeight: "500", fontSize: "12px" }}>
+                    {newFormatted}
+                </span>
+            </div>
+        </div>
+    )
+}
+
 // ——— Expandable Changes Component ———
 function ExpandableChanges({
     changes,
+    action,
     isExpanded,
     onToggle,
+    previousState,
 }: {
     changes: any
+    action: string
     isExpanded: boolean
     onToggle: () => void
+    previousState?: any
 }) {
     const changesCount = Object.keys(changes || {}).length
+    const isUpdate = action?.toUpperCase() === "UPDATE"
+    const isDelete = action?.toUpperCase() === "DELETE"
+    const isCreate = action?.toUpperCase() === "CREATE"
 
     return (
         <div>
@@ -303,7 +798,10 @@ function ExpandableChanges({
                 ) : (
                     <FaChevronRight size={10} />
                 )}
-                {changesCount} field{changesCount !== 1 ? "s" : ""}
+                {changesCount} veld{changesCount !== 1 ? "en" : ""}
+                {isUpdate && " (met vergelijking)"}
+                {isCreate && " (nieuwe waarden)"}
+                {isDelete && " (verwijderde waarden)"}
             </button>
 
             {isExpanded && (
@@ -315,46 +813,83 @@ function ExpandableChanges({
                         borderRadius: "6px",
                         border: "1px solid #e5e7eb",
                         fontSize: "12px",
-                        fontFamily:
-                            "monaco, 'Cascadia Code', 'Roboto Mono', monospace",
+                        fontFamily: FONT_STACK,
                     }}
                 >
                     {Object.entries(changes || {}).map(
                         ([key, value]: [string, any]) => {
                             const formattedValue = formatDynamoDBValue(value)
-                            const displayValue = formatChangeValue(formattedValue)
+                            let displayValue: React.ReactNode
+                            
+                            if (isUpdate && previousState && key in previousState) {
+                                // We have historical data - show before/after comparison
+                                const oldValue = previousState[key]
+                                displayValue = formatOldNewValue(oldValue, formattedValue)
+                            } else if (isCreate) {
+                                // New field being added
+                                displayValue = formatOldNewValue(null, formattedValue)
+                            } else if (isDelete) {
+                                // Field being deleted
+                                displayValue = formatOldNewValue(formattedValue, null)
+                            } else if (isUpdate) {
+                                // Update without historical context - show as changed value
+                                displayValue = (
+                                    <div style={{ 
+                                        padding: "6px 10px",
+                                        backgroundColor: "#fefce8",
+                                        borderRadius: "6px",
+                                        border: "1px solid #fde68a"
+                                    }}>
+                                        <span style={{ 
+                                            fontSize: "11px", 
+                                            fontWeight: "600", 
+                                            color: "#ca8a04",
+                                            textTransform: "uppercase",
+                                            display: "block",
+                                            marginBottom: "4px"
+                                        }}>Gewijzigd naar:</span>
+                                        <span style={{ color: "#92400e", fontSize: "12px" }}>
+                                            {formatChangeValue(formattedValue)}
+                                        </span>
+                                    </div>
+                                )
+                            } else {
+                                // Fallback display
+                                displayValue = (
+                                    <div style={{ color: "#6b7280" }}>
+                                        {formatChangeValue(formattedValue)}
+                                    </div>
+                                )
+                            }
                             
                             return (
                                 <div
                                     key={key}
                                     style={{
-                                        marginBottom: "8px",
+                                        marginBottom: "12px",
                                         wordBreak: "break-word",
-                                        padding: "8px",
+                                        padding: "10px",
                                         backgroundColor: "#ffffff",
-                                        borderRadius: "4px",
+                                        borderRadius: "6px",
                                         border: "1px solid #e5e7eb",
+                                        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                                     }}
                                 >
                                     <div
                                         style={{
                                             fontWeight: "600",
                                             color: "#374151",
-                                            marginBottom: "4px",
+                                            marginBottom: "6px",
                                             fontSize: "13px",
                                             fontFamily: FONT_STACK,
                                         }}
                                     >
                                         {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                                     </div>
-                                    <div 
-                                        style={{ 
-                                            color: "#6b7280",
-                                            fontFamily: FONT_STACK,
-                                            fontSize: "12px",
-                                            lineHeight: "1.4",
-                                        }}
-                                    >
+                                    <div style={{ 
+                                        fontSize: "12px",
+                                        lineHeight: "1.4",
+                                    }}>
                                         {displayValue}
                                     </div>
                                 </div>
@@ -449,7 +984,7 @@ function ChangelogSearchAndFilterBar({
                     />
                     <input
                         type="text"
-                        placeholder="Search changelog..."
+                        placeholder="Zoek in wijzigingslogboek..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         style={{
@@ -477,12 +1012,12 @@ function ChangelogSearchAndFilterBar({
                             backgroundColor:
                                 selectedTableTags.size > 0
                                     ? "#3b82f6"
-                                    : "#f3f4f6",
+                                    : "#ffffff",
                             color:
                                 selectedTableTags.size > 0
                                     ? "white"
                                     : "#374151",
-                            border: "none",
+                            border: selectedTableTags.size > 0 ? "none" : "1px solid #d1d5db",
                             borderRadius: "8px",
                             fontSize: "14px",
                             fontWeight: "500",
@@ -492,11 +1027,27 @@ function ChangelogSearchAndFilterBar({
                             alignItems: "center",
                             gap: "8px",
                             transition: "all 0.2s",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                        }}
+                        onMouseOver={(e) => {
+                            if (selectedTableTags.size === 0) {
+                                ((e.target as HTMLElement).style.backgroundColor = "#f9fafb")
+                            }
+                        }}
+                        onMouseOut={(e) => {
+                            if (selectedTableTags.size === 0) {
+                                ((e.target as HTMLElement).style.backgroundColor = "#ffffff")
+                            }
                         }}
                     >
-                        <FaDatabase /> Tables ({selectedTableTags.size})
+                        <FaDatabase /> 
+                        {selectedTableTags.size === 0 
+                            ? "Selecteer tabellen" 
+                            : `${selectedTableTags.size} geselecteerd`
+                        }
                     </button>
                 </div>
+
 
                 <div style={{ position: "relative" }}>
                     <button
@@ -551,20 +1102,31 @@ function ChangelogSearchAndFilterBar({
                                 right: `${tableDropdownPosition.right}px`,
                                 backgroundColor: "#fff",
                                 border: "1px solid #d1d5db",
-                                borderRadius: "8px",
-                                boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
+                                borderRadius: "12px",
+                                boxShadow: "0 20px 50px rgba(0,0,0,0.12), 0 4px 6px rgba(0,0,0,0.06)",
                                 zIndex: 1000,
-                                minWidth: "200px",
-                                maxHeight: "300px",
+                                minWidth: "280px",
+                                maxHeight: "400px",
                                 overflowY: "auto",
                             }}
                         >
                             <div
                                 style={{
-                                    padding: "12px",
+                                    padding: "16px 20px",
                                     borderBottom: "1px solid #e5e7eb",
+                                    backgroundColor: "#f8fafc",
+                                    borderRadius: "12px 12px 0 0",
                                 }}
                             >
+                                <h3 style={{
+                                    margin: "0 0 12px 0",
+                                    fontSize: "15px",
+                                    fontWeight: "600",
+                                    color: "#374151",
+                                    fontFamily: FONT_STACK,
+                                }}>
+                                    Filter op tabellen
+                                </h3>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     <button
                                         onClick={() => {
@@ -581,15 +1143,24 @@ function ChangelogSearchAndFilterBar({
                                             )
                                         }}
                                         style={{
-                                            padding: "4px 8px",
+                                            padding: "6px 12px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
+                                            backgroundColor: "#3b82f6",
+                                            color: "white",
                                             border: "none",
-                                            borderRadius: "4px",
+                                            borderRadius: "6px",
                                             cursor: "pointer",
+                                            fontWeight: "500",
+                                            transition: "background-color 0.2s",
                                         }}
+                                        onMouseOver={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor = "#2563eb")
+                                        }
+                                        onMouseOut={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor = "#3b82f6")
+                                        }
                                     >
-                                        Select All
+                                        Alles selecteren
                                     </button>
                                     <button
                                         onClick={() => {
@@ -598,52 +1169,84 @@ function ChangelogSearchAndFilterBar({
                                             )
                                         }}
                                         style={{
-                                            padding: "4px 8px",
+                                            padding: "6px 12px",
                                             fontSize: "12px",
                                             backgroundColor: "#f3f4f6",
-                                            border: "none",
-                                            borderRadius: "4px",
+                                            color: "#374151",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "6px",
                                             cursor: "pointer",
+                                            fontWeight: "500",
+                                            transition: "background-color 0.2s",
                                         }}
+                                        onMouseOver={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
+                                        }
+                                        onMouseOut={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")
+                                        }
                                     >
-                                        Clear All
+                                        Alles wissen
                                     </button>
                                 </div>
                             </div>
-                            {availableTableTags.map((tag) => (
-                                <label
-                                    key={tag}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        padding: "8px 16px",
-                                        cursor: "pointer",
-                                        fontSize: "13px",
-                                        fontFamily: FONT_STACK,
-                                        transition: "background-color 0.2s",
-                                    }}
-                                    onMouseOver={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                            "#f9fafb")
-                                    }
-                                    onMouseOut={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                            "transparent")
-                                    }
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedTableTags.has(tag)}
-                                        onChange={() => onTableTagChange(tag)}
-                                        style={{
-                                            cursor: "pointer",
-                                            accentColor: "#3b82f6",
-                                        }}
-                                    />
-                                    {tag}
-                                </label>
-                            ))}
+                            <div style={{ padding: "8px 0" }}>
+                                {availableTableTags.map((tag) => {
+                                    const isSelected = selectedTableTags.has(tag)
+                                    
+                                    return (
+                                        <label
+                                            key={tag}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "12px",
+                                                padding: "12px 20px",
+                                                cursor: "pointer",
+                                                fontSize: "14px",
+                                                fontFamily: FONT_STACK,
+                                                transition: "background-color 0.2s",
+                                                backgroundColor: isSelected ? "#f0f9ff" : "transparent",
+                                                borderLeft: isSelected ? "3px solid #3b82f6" : "3px solid transparent",
+                                            }}
+                                            onMouseOver={(e) =>
+                                                (e.currentTarget.style.backgroundColor = isSelected ? "#f0f9ff" : "#f9fafb")
+                                            }
+                                            onMouseOut={(e) =>
+                                                (e.currentTarget.style.backgroundColor = isSelected ? "#f0f9ff" : "transparent")
+                                            }
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => onTableTagChange(tag)}
+                                                style={{
+                                                    cursor: "pointer",
+                                                    accentColor: "#3b82f6",
+                                                    width: "16px",
+                                                    height: "16px",
+                                                }}
+                                            />
+                                            <FaDatabase 
+                                                style={{
+                                                    color: isSelected ? "#3b82f6" : "#6b7280",
+                                                    fontSize: "16px",
+                                                    transition: "color 0.2s",
+                                                }} 
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{
+                                                    fontWeight: isSelected ? "600" : "500",
+                                                    color: isSelected ? "#1e40af" : "#374151",
+                                                    marginBottom: "2px",
+                                                }}>
+                                                    {tag}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    )
+                                })}
+                            </div>
                         </div>
                     </>,
                     document.body
@@ -718,7 +1321,7 @@ function ChangelogSearchAndFilterBar({
                                             cursor: "pointer",
                                         }}
                                     >
-                                        Essential Only
+                                        Alleen Essentiële
                                     </button>
                                     <button
                                         onClick={() =>
@@ -738,7 +1341,7 @@ function ChangelogSearchAndFilterBar({
                                             cursor: "pointer",
                                         }}
                                     >
-                                        Show All
+                                        Toon Alles
                                     </button>
                                 </div>
                             </div>
@@ -831,9 +1434,68 @@ function ChangelogSearchAndFilterBar({
 }
 
 // ——— The Main Changelog Override ———
+// ——— User Role Detection Functions ———
+interface UserInfo {
+    sub: string
+    role: "admin" | "user" | "editor"
+    organization?: string
+    organizations?: string[]
+}
+
+function getCurrentUserInfo(): UserInfo | null {
+    try {
+        const token = getIdToken()
+        if (!token) return null
+
+        // Decode JWT to get cognito sub
+        const payload = JSON.parse(atob(token.split(".")[1]))
+
+        return {
+            sub: payload.sub,
+            role: "user", // Temporary default, will be updated by fetchUserInfo
+            organization: undefined,
+            organizations: [],
+        }
+    } catch (error) {
+        console.error("Failed to decode token:", error)
+        return null
+    }
+}
+
+async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const responseData = await res.json()
+
+        const userData = responseData.user || responseData
+        return {
+            sub: cognitoSub,
+            role: userData.role || "user",
+            organization: userData.organization,
+            organizations: userData.organizations || [],
+        }
+    } catch (error) {
+        console.error("Failed to fetch user info:", error)
+        return null
+    }
+}
+
 export function ChangelogPageOverride(): Override {
     const [changelog, setChangelog] = useState<any[] | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
     const [searchTerm, setSearchTerm] = useState("")
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
         new Set(COLUMNS.map((col) => col.key))
@@ -842,6 +1504,9 @@ export function ChangelogPageOverride(): Override {
         new Set()
     )
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+    const [entityInfoCache, setEntityInfoCache] = useState<Map<string, any>>(new Map())
+    const [loadingEntityInfo, setLoadingEntityInfo] = useState<Set<string>>(new Set())
+    const [pendingCount, setPendingCount] = useState<number>(0)
 
     const refresh = useCallback(() => {
         fetchChangelog()
@@ -852,16 +1517,36 @@ export function ChangelogPageOverride(): Override {
             })
     }, [])
 
+    // Initialize user info
+    useEffect(() => {
+        async function initializeUser() {
+            const currentUserInfo = getCurrentUserInfo()
+            if (currentUserInfo) {
+                const detailedUserInfo = await fetchUserInfo(currentUserInfo.sub)
+                setUserInfo(detailedUserInfo)
+            }
+        }
+        initializeUser()
+    }, [])
+
     useEffect(() => {
         refresh()
     }, [refresh])
 
-    // Get available table tags
-    const availableTableTags = Array.from(
-        new Set(
-            changelog?.map((item) => item.sourceTableTag).filter(Boolean) || []
-        )
-    ).sort()
+    // Fetch pending count
+    useEffect(() => {
+        const loadPendingCount = async () => {
+            const count = await fetchPendingCount()
+            setPendingCount(count)
+        }
+        loadPendingCount()
+    }, [])
+
+    // Build entity history for before/after comparisons
+    const entityHistories = React.useMemo(() => {
+        if (!changelog) return new Map()
+        return buildEntityHistory(changelog)
+    }, [changelog])
 
     // Filter changelog
     const filteredChangelog =
@@ -892,6 +1577,80 @@ export function ChangelogPageOverride(): Override {
 
             return true
         }) || []
+
+    // Fetch entity info for visible changelog entries
+    useEffect(() => {
+        if (!changelog || !filteredChangelog) return
+
+        const fetchEntityInfoForEntries = async () => {
+            const entriesToFetch = filteredChangelog
+                .slice(0, 50) // Only fetch for first 50 visible entries to avoid overwhelming the API
+                .filter(item => 
+                    item.entityId && 
+                    item.sourceTableTag && 
+                    !entityInfoCache.has(item.entityId) &&
+                    !loadingEntityInfo.has(item.entityId)
+                )
+
+            if (entriesToFetch.length === 0) return
+
+
+
+            // Mark as loading
+            setLoadingEntityInfo(prev => {
+                const newSet = new Set(prev)
+                entriesToFetch.forEach(item => newSet.add(item.entityId))
+                return newSet
+            })
+
+            // Fetch entity info for each entry
+            const promises = entriesToFetch.map(async (item) => {
+                try {
+                    const entityInfo = await fetchEntityInfo(item.entityId, item.sourceTableTag, item.changes)
+                    return { entityId: item.entityId, entityInfo }
+                } catch (error) {
+                    console.warn(`Failed to fetch entity info for ${item.entityId}:`, error)
+                    return { 
+                        entityId: item.entityId, 
+                        entityInfo: {
+                            displayName: `${item.sourceTableTag} ${item.entityId.slice(-8)}`,
+                            organization: "",
+                            icon: <FaClipboardList />
+                        }
+                    }
+                }
+            })
+
+            const results = await Promise.all(promises)
+            
+            // Update cache
+            setEntityInfoCache(prev => {
+                const newMap = new Map(prev)
+                results.forEach(({ entityId, entityInfo }) => {
+                    if (entityInfo) {
+                        newMap.set(entityId, entityInfo)
+                    }
+                })
+                return newMap
+            })
+
+            // Remove from loading set
+            setLoadingEntityInfo(prev => {
+                const newSet = new Set(prev)
+                entriesToFetch.forEach(item => newSet.delete(item.entityId))
+                return newSet
+            })
+        }
+
+        fetchEntityInfoForEntries()
+    }, [changelog, filteredChangelog, selectedTableTags, searchTerm, entityInfoCache.size]) // Re-run when filters change or cache size changes
+
+    // Get available table tags
+    const availableTableTags = Array.from(
+        new Set(
+            changelog?.map((item) => item.sourceTableTag).filter(Boolean) || []
+        )
+    ).sort()
 
     const toggleColumn = (columnKey: string) => {
         setVisibleColumns((prev) => {
@@ -943,7 +1702,7 @@ export function ChangelogPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Loading changelog...
+                    Wijzigingslogboek laden...
                 </div>
             ),
         }
@@ -962,7 +1721,7 @@ export function ChangelogPageOverride(): Override {
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Error: {error}
+                    Fout: {error}
                 </div>
             ),
         }
@@ -990,23 +1749,31 @@ export function ChangelogPageOverride(): Override {
                         overflow: "hidden",
                     }}
                 >
-                    {/* Navigation Tabs at Top */}
+                    {/* Enhanced Navigation Tabs at Top */}
                     <div
                         style={{
-                            padding: "12px 24px",
+                            padding: "20px 24px",
                             backgroundColor: "#f8fafc",
                             borderBottom: "1px solid #e5e7eb",
                             display: "flex",
-                            gap: "4px",
+                            gap: "8px",
                             overflowX: "auto",
+                            alignItems: "center",
                         }}
                     >
                         {[
                             { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                             { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
+                            { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
                             { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                             { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                        ].map((tab) => {
+                        ].filter((tab) => {
+                            // Hide pending, users, and changelog tabs for regular users
+                            if (userInfo?.role === "user" && (tab.key === "pending" || tab.key === "users" || tab.key === "changelog")) {
+                                return false
+                            }
+                            return true
+                        }).map((tab) => {
                             const isActive = tab.key === "changelog"
                             const Icon = tab.icon
                             
@@ -1014,38 +1781,71 @@ export function ChangelogPageOverride(): Override {
                                 <button
                                     key={tab.key}
                                     onClick={() => {
-                                        window.location.href = tab.href
+                                        if (!isActive) {
+                                            window.location.href = tab.href
+                                        }
                                     }}
                                     style={{
-                                        padding: "8px 16px",
-                                        backgroundColor: isActive ? "#3b82f6" : "transparent",
+                                        padding: "16px 24px",
+                                        backgroundColor: isActive ? "#3b82f6" : "#ffffff",
                                         color: isActive ? "white" : "#6b7280",
-                                        border: isActive ? "none" : "1px solid #d1d5db",
-                                        borderRadius: "6px",
-                                        fontSize: "13px",
-                                        fontWeight: isActive ? "600" : "500",
+                                        border: isActive ? "none" : "2px solid #e5e7eb",
+                                        borderRadius: "12px",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
                                         cursor: isActive ? "default" : "pointer",
                                         fontFamily: FONT_STACK,
                                         display: "flex",
                                         alignItems: "center",
-                                        gap: "6px",
+                                        gap: "8px",
                                         transition: "all 0.2s",
+                                        minHeight: "48px",
+                                        boxShadow: isActive 
+                                            ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
+                                            : "0 2px 4px rgba(0,0,0,0.05)",
+                                        transform: isActive ? "translateY(-1px)" : "none",
                                     }}
                                     onMouseOver={(e) => {
                                         if (!isActive) {
-                                            e.target.style.backgroundColor = "#f3f4f6"
-                                            e.target.style.color = "#374151"
+                                            const target = e.target as HTMLElement
+                                            target.style.backgroundColor = "#f8fafc"
+                                            target.style.borderColor = "#3b82f6"
+                                            target.style.color = "#3b82f6"
+                                            target.style.transform = "translateY(-1px)"
+                                            target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                         }
                                     }}
                                     onMouseOut={(e) => {
                                         if (!isActive) {
-                                            e.target.style.backgroundColor = "transparent"
-                                            e.target.style.color = "#6b7280"
+                                            const target = e.target as HTMLElement
+                                            target.style.backgroundColor = "#ffffff"
+                                            target.style.borderColor = "#e5e7eb"
+                                            target.style.color = "#6b7280"
+                                            target.style.transform = "none"
+                                            target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                         }
                                     }}
                                 >
-                                    <Icon size={12} />
+                                    <Icon size={14} />
                                     {tab.label}
+                                    {/* Pending count badge */}
+                                    {tab.key === "pending" && pendingCount > 0 && (
+                                        <span
+                                            style={{
+                                                backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
+                                                color: "white",
+                                                borderRadius: "10px",
+                                                padding: "2px 6px",
+                                                fontSize: "12px",
+                                                fontWeight: "700",
+                                                minWidth: "18px",
+                                                textAlign: "center",
+                                                marginLeft: "4px",
+                                            }}
+                                        >
+                                            {pendingCount}
+                                        </span>
+                                    )}
                                 </button>
                             )
                         })}
@@ -1155,6 +1955,11 @@ export function ChangelogPageOverride(): Override {
                             <tbody>
                                 {filteredChangelog.map((item, index) => {
                                     const isExpanded = expandedRows.has(item.id)
+                                    
+                                    // Calculate previous state for this entry
+                                    const entityHistory = entityHistories.get(item.entityId) || []
+                                    const entryIndex = entityHistory.findIndex(entry => entry.id === item.id)
+                                    const previousState = getPreviousEntityState(entityHistory, entryIndex, item.changes)
 
                                     return (
                                         <React.Fragment key={item.id}>
@@ -1184,7 +1989,99 @@ export function ChangelogPageOverride(): Override {
                                                             item[col.key]
                                                         let displayValue: React.ReactNode
 
-                                                        if (cellValue == null) {
+                                                        // Debug: Log which condition is being checked for entityInfo column
+                                                        if (col.key === "entityInfo" && index === 0) {
+                                                            console.log("Processing entityInfo column, cellValue:", cellValue)
+                                                            console.log("cellValue == null?", cellValue == null)
+                                                        }
+
+                                                        // Handle entityInfo column first (before null check)
+                                                        if (col.key === "entityInfo") {
+                                                            const entityInfo = entityInfoCache.get(item.entityId)
+                                                            const isLoading = loadingEntityInfo.has(item.entityId)
+                                                            
+                                                            if (isLoading) {
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                            color: "#6b7280",
+                                                                        }}
+                                                                    >
+                                                                        <div
+                                                                            style={{
+                                                                                width: "16px",
+                                                                                height: "16px",
+                                                                                border: "2px solid #e5e7eb",
+                                                                                borderTop: "2px solid #3b82f6",
+                                                                                borderRadius: "50%",
+                                                                                animation: "spin 1s linear infinite",
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: "12px" }}>Laden...</span>
+                                                                    </div>
+                                                                )
+                                                            } else if (entityInfo) {
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                        }}
+                                                                    >
+                                                                        {entityInfo.icon}
+                                                                        <div>
+                                                                            <div
+                                                                                style={{
+                                                                                    fontWeight: "500",
+                                                                                    color: "#374151",
+                                                                                    fontSize: "13px",
+                                                                                }}
+                                                                            >
+                                                                                {entityInfo.displayName}
+                                                                            </div>
+                                                                            {entityInfo.organization && (
+                                                                                <div
+                                                                                    style={{
+                                                                                        fontSize: "11px",
+                                                                                        color: "#6b7280",
+                                                                                        marginTop: "2px",
+                                                                                    }}
+                                                                                >
+                                                                                    <FaBuilding 
+                                                                                        style={{ 
+                                                                                            fontSize: "10px", 
+                                                                                            marginRight: "4px" 
+                                                                                        }} 
+                                                                                    />
+                                                                                    {entityInfo.organization}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            } else {
+                                                                // Fallback display
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                            color: "#6b7280",
+                                                                        }}
+                                                                    >
+                                                                        <FaClipboardList style={{ fontSize: "14px" }} />
+                                                                        <span style={{ fontSize: "12px" }}>
+                                                                            {item.sourceTableTag} {item.entityId.slice(-8)}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                        } else if (cellValue == null) {
                                                             displayValue = (
                                                                 <span
                                                                     style={{
@@ -1242,9 +2139,11 @@ export function ChangelogPageOverride(): Override {
                                                                         }}
                                                                     />
                                                                     <span
-                                                                        title={new Date(
-                                                                            cellValue
-                                                                        ).toLocaleString()}
+                                                                        title={(() => {
+                                                                            const dateValue = new Date(cellValue)
+                                                                            dateValue.setHours(dateValue.getHours() + 2)
+                                                                            return dateValue.toLocaleString('nl-NL')
+                                                                        })()}
                                                                     >
                                                                         {getRelativeTime(
                                                                             cellValue
@@ -1281,76 +2180,148 @@ export function ChangelogPageOverride(): Override {
                                                             "sourceTableName"
                                                         ) {
                                                             displayValue = (
-                                                                <div>
-                                                                    <div
+                                                                <div
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "8px",
+                                                                    }}
+                                                                >
+                                                                    <FaDatabase
                                                                         style={{
-                                                                            fontWeight:
-                                                                                "500",
-                                                                        }}
-                                                                    >
-                                                                        {
-                                                                            cellValue
-                                                                        }
-                                                                    </div>
-                                                                    <div
-                                                                        style={{
-                                                                            fontSize:
-                                                                                "11px",
                                                                             color: "#6b7280",
+                                                                            fontSize: "14px",
                                                                         }}
-                                                                    >
-                                                                        {
-                                                                            item.sourceTableTag
-                                                                        }
+                                                                    />
+                                                                    <div>
+                                                                        <div
+                                                                            style={{
+                                                                                fontWeight: "500",
+                                                                                color: "#374151",
+                                                                            }}
+                                                                        >
+                                                                            {getTableDisplayName(item.sourceTableTag)}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             )
                                                         } else if (
-                                                            col.key ===
-                                                            "entityId"
+                                                            col.key === "entityInfo"
                                                         ) {
-                                                            displayValue = (
-                                                                <code
-                                                                    style={{
-                                                                        fontSize:
-                                                                            "11px",
-                                                                        fontFamily:
-                                                                            "monaco, 'Cascadia Code', 'Roboto Mono', monospace",
-                                                                        backgroundColor:
-                                                                            "#f3f4f6",
-                                                                        padding:
-                                                                            "2px 4px",
-                                                                        borderRadius:
-                                                                            "3px",
-                                                                        color: "#374151",
-                                                                    }}
-                                                                >
-                                                                    {String(
-                                                                        cellValue
-                                                                    ).substring(
-                                                                        0,
-                                                                        8
-                                                                    )}
-                                                                    ...
-                                                                </code>
-                                                            )
+                                                            // Debug: Check if we enter this block
+                                                            if (index === 0) {
+                                                                console.log("Entering entityInfo rendering for first row")
+                                                            }
+                                                            
+                                                            const entityInfo = entityInfoCache.get(item.entityId)
+                                                            const isLoading = loadingEntityInfo.has(item.entityId)
+                                                            
+                                                            // Debug logging
+                                                            if (index < 5) { // Only log first 5 entries to avoid spam
+                                                                console.log(`Render entityInfo for ${item.entityId}:`, {
+                                                                    entityInfo,
+                                                                    isLoading,
+                                                                    cacheHas: entityInfoCache.has(item.entityId),
+                                                                    cacheSize: entityInfoCache.size
+                                                                })
+                                                            }
+                                                            
+                                                            if (isLoading) {
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                            color: "#6b7280",
+                                                                        }}
+                                                                    >
+                                                                        <div
+                                                                            style={{
+                                                                                width: "16px",
+                                                                                height: "16px",
+                                                                                border: "2px solid #e5e7eb",
+                                                                                borderTop: "2px solid #3b82f6",
+                                                                                borderRadius: "50%",
+                                                                                animation: "spin 1s linear infinite",
+                                                                            }}
+                                                                        />
+                                                                        <span style={{ fontSize: "12px" }}>Laden...</span>
+                                                                    </div>
+                                                                )
+                                                            } else if (entityInfo) {
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                        }}
+                                                                    >
+                                                                        {entityInfo.icon}
+                                                                        <div>
+                                                                            <div
+                                                                                style={{
+                                                                                    fontWeight: "500",
+                                                                                    color: "#374151",
+                                                                                    fontSize: "13px",
+                                                                                }}
+                                                                            >
+                                                                                {entityInfo.displayName}
+                                                                            </div>
+                                                                            {entityInfo.organization && (
+                                                                                <div
+                                                                                    style={{
+                                                                                        fontSize: "11px",
+                                                                                        color: "#6b7280",
+                                                                                        marginTop: "2px",
+                                                                                    }}
+                                                                                >
+                                                                                    <FaBuilding 
+                                                                                        style={{ 
+                                                                                            fontSize: "10px", 
+                                                                                            marginRight: "4px" 
+                                                                                        }} 
+                                                                                    />
+                                                                                    {entityInfo.organization}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            } else {
+                                                                // Fallback display
+                                                                displayValue = (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            gap: "8px",
+                                                                            color: "#6b7280",
+                                                                        }}
+                                                                    >
+                                                                        <FaClipboardList style={{ fontSize: "14px" }} />
+                                                                        <span style={{ fontSize: "12px" }}>
+                                                                            {item.sourceTableTag} {item.entityId.slice(-8)}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
                                                         } else if (
                                                             col.key ===
                                                             "changes"
                                                         ) {
                                                             displayValue = (
                                                                 <ExpandableChanges
-                                                                    changes={
-                                                                        item.changes
-                                                                    }
-                                                                    isExpanded={
-                                                                        isExpanded
-                                                                    }
+                                                                    changes={item.changes}
+                                                                    action={item.action}
+                                                                    isExpanded={isExpanded}
                                                                     onToggle={() =>
                                                                         toggleRowExpansion(
                                                                             item.id
                                                                         )
                                                                     }
+                                                                    previousState={previousState}
                                                                 />
                                                             )
                                                         } else {

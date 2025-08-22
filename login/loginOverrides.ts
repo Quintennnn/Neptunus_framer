@@ -141,13 +141,11 @@ export function loginProvider(): Override {
 // --- EMAIL INPUT ---
 export function emailInput(): Override {
     const { email, setEmail } = useLoginContext()
-    console.log("🟢 EMAIL INPUT rendering, context email:", email)
 
     return {
         value: email,
         onChange: (event: any) => {
             const val = event.target.value
-            console.log("🟢 EMAIL onChange:", val)
             setEmail(val)
 
             if (typeof window !== "undefined" && window.debugLogin) {
@@ -160,13 +158,11 @@ export function emailInput(): Override {
 // --- PASSWORD INPUT ---
 export function passwordInput(): Override {
     const { password, setPassword } = useLoginContext()
-    console.log("🟡 PASSWORD INPUT rendering, context password:", password)
 
     return {
         value: password,
         onChange: (event: any) => {
             const val = event.target.value
-            console.log("🟡 PASSWORD onChange:", val)
             setPassword(val)
 
             if (typeof window !== "undefined" && window.debugLogin) {
@@ -190,14 +186,8 @@ export function loginButton(): Override {
     const { email, password, setError } = useLoginContext()
     const [loading, setLoading] = useState(false)
 
-    console.log("🔴 LOGIN BUTTON rendering")
-    if (typeof window !== "undefined") {
-        console.log("Global email:", window.debugLogin?.email)
-        console.log("Global password:", window.debugLogin?.password)
-    }
 
     const handleLogin = async () => {
-        console.log("🔴 LOGIN CLICKED!")
         let finalEmail = email
         let finalPassword = password
 

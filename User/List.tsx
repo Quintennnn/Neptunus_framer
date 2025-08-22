@@ -3,7 +3,7 @@ import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaUsers, FaArrowLeft, FaBuilding, FaFileContract, FaClipboardList, FaPlus, FaClock } from "react-icons/fa"
-import { NewUserButton, EditUserButton, DeleteUserButton } from "../components/InsuranceButtons"
+import { NewUserButton, UserActionButtons } from "../components/InsuranceButtons.tsx"
 import { UserInfoBanner } from "../components/UserInfoBanner"
 import { colors, styles, hover, animations, FONT_STACK } from "../theme"
 import {
@@ -45,7 +45,6 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
 
-        console.log("fetchUserInfo - raw user data from API:", responseData)
 
         // Handle nested response structure
         const userData = responseData.user || responseData
@@ -57,7 +56,6 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
             organizations: userData.organizations || [],
         }
 
-        console.log("fetchUserInfo - processed user info:", processedUserInfo)
 
         return processedUserInfo
     } catch (error) {
@@ -887,7 +885,6 @@ function CreateUserForm({
         setIsSubmitting(true)
 
         try {
-            console.log("Creating user with payload:", form)
             const res = await fetch(API_BASE_URL + API_PATHS.SIGNUP, {
                 method: "POST",
                 headers: {
@@ -1904,27 +1901,11 @@ export function UserPageOverride(): Override {
                                                     whiteSpace: "nowrap",
                                                 }}
                                             >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        gap: "8px",
-                                                    }}
-                                                >
-                                                    <EditUserButton
-                                                        userInfo={userInfo}
-                                                        onClick={() =>
-                                                            handleEdit(user.id)
-                                                        }
-                                                    />
-                                                    <DeleteUserButton
-                                                        userInfo={userInfo}
-                                                        onClick={() =>
-                                                            confirmDelete(
-                                                                user.id
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
+                                                <UserActionButtons
+                                                    userInfo={userInfo}
+                                                    onEdit={() => handleEdit(user.id)}
+                                                    onDelete={() => confirmDelete(user.id)}
+                                                />
                                             </td>
                                             {visibleColumnsList.map((col) => {
                                                 const cellValue = user[col.key]

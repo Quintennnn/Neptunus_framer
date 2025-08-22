@@ -4,7 +4,7 @@ import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { UserInfoBanner } from "../components/UserInfoBanner"
-import { NewOrganizationButton, OrganizationActionButtons } from "../components/InsuranceButtons"
+import { NewOrganizationButton, OrganizationActionButtons } from "../components/InsuranceButtons.tsx"
 import {
     FaEdit,
     FaTrashAlt,
@@ -64,7 +64,6 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
 
-        console.log("fetchUserInfo - raw user data from API:", responseData)
 
         // Handle nested response structure
         const userData = responseData.user || responseData
@@ -76,7 +75,6 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
             organizations: userData.organizations || [],
         }
 
-        console.log("fetchUserInfo - processed user info:", processedUserInfo)
 
         return processedUserInfo
     } catch (error) {
@@ -426,7 +424,6 @@ function AutoApprovalTab({ config, onChange, org }: { config: any, onChange: (co
                     type: field.type
                 }))
             
-            console.log('Available fields for auto-approval (visible only):', visibleFields)
             setAvailableFields(visibleFields)
         } catch (error) {
             console.error("Error extracting visible fields from organization:", error)
@@ -2060,7 +2057,6 @@ export function OrganizationPageOverride(): Override {
                                 <NewOrganizationButton 
                                     userInfo={userInfo} 
                                     onClick={() => {
-                                        console.log('Create organization clicked')
                                         setShowCreateModal(true)
                                     }} 
                                 >
@@ -2262,7 +2258,6 @@ export function OrganizationPageOverride(): Override {
                                                                 <NewOrganizationButton 
                                                                     userInfo={userInfo} 
                                                                     onClick={() => {
-                                                                        console.log('Create first organization clicked')
                                                                         setShowCreateModal(true)
                                                                     }} 
                                                                     style={{
@@ -2322,65 +2317,12 @@ export function OrganizationPageOverride(): Override {
                                                             📋 Bekijk Vloot
                                                         </button>
                                                         
-                                                        {/* Secondary Actions in Dropdown Menu */}
-                                                        <div style={{ position: "relative", display: "inline-block" }}>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.preventDefault()
-                                                                    // Toggle dropdown
-                                                                    const dropdown = e.currentTarget.nextElementSibling as HTMLElement
-                                                                    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block'
-                                                                }}
-                                                                style={{
-                                                                    padding: "8px 10px",
-                                                                    backgroundColor: "#f3f4f6",
-                                                                    color: "#374151",
-                                                                    border: "1px solid #d1d5db",
-                                                                    borderRadius: 6,
-                                                                    fontSize: 12,
-                                                                    cursor: "pointer",
-                                                                    fontFamily: FONT_STACK,
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    gap: "4px",
-                                                                    transition: "all 0.2s",
-                                                                }}
-                                                                onMouseOver={(e) => {
-                                                                    e.target.style.backgroundColor = "#e5e7eb"
-                                                                }}
-                                                                onMouseOut={(e) => {
-                                                                    e.target.style.backgroundColor = "#f3f4f6"
-                                                                }}
-                                                            >
-                                                                ⋮
-                                                            </button>
-                                                            <div
-                                                                style={{
-                                                                    display: "none",
-                                                                    position: "absolute",
-                                                                    left: "-70px", // Position it to the left of center to better align
-                                                                    bottom: "100%", // Keep it above the button
-                                                                    marginBottom: 4,
-                                                                    backgroundColor: "white",
-                                                                    border: "1px solid #d1d5db",
-                                                                    borderRadius: 6,
-                                                                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                                                                    zIndex: 1000,
-                                                                    minWidth: 160,
-                                                                    overflow: "hidden",
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                    e.currentTarget.style.display = 'none'
-                                                                }}
-                                                            >
-                                                                <OrganizationActionButtons 
-                                                                    userInfo={userInfo}
-                                                                    onEdit={() => setEditingOrg(org)}
-                                                                    onDelete={() => setDeletingOrgId(org.id)}
-                                                                    resourceOrganization={org.name}
-                                                                />
-                                                            </div>
-                                                        </div>
+                                                        <OrganizationActionButtons 
+                                                            userInfo={userInfo}
+                                                            onEdit={() => setEditingOrg(org)}
+                                                            onDelete={() => setDeletingOrgId(org.id)}
+                                                            resourceOrganization={org.name}
+                                                        />
                                                     </div>
                                                 </td>
                                                 {visible.map((col) => (
@@ -2482,7 +2424,6 @@ export function OrganizationPageOverride(): Override {
                                 onClose={() => setShowCreateModal(false)}
                                 onSuccess={() => {
                                     refresh() // Refresh the organization list
-                                    console.log("Organization created successfully!")
                                 }}
                             />
                         </div>,

@@ -184,9 +184,9 @@ export function RoleBasedButton({
                 boxShadow: isDisabled ? "none" : "0 2px 4px rgba(220, 38, 38, 0.2)"
             },
             success: {
-                backgroundColor: isDisabled ? "#9ca3af" : "#059669",
+                backgroundColor: isDisabled ? "#9ca3af" : "#10b981",
                 color: "#ffffff", 
-                boxShadow: isDisabled ? "none" : "0 2px 4px rgba(5, 150, 105, 0.2)"
+                boxShadow: isDisabled ? "none" : "0 2px 4px rgba(16, 185, 129, 0.3)"
             },
             blue: {
                 backgroundColor: isDisabled ? "#9ca3af" : "#3b82f6",
@@ -217,6 +217,10 @@ export function RoleBasedButton({
         } else if (variant === "danger") {
             button.style.backgroundColor = "#b91c1c"
             button.style.transform = "translateY(-1px)"
+        } else if (variant === "success") {
+            button.style.backgroundColor = "#10b981dd"
+            button.style.transform = "translateY(-1px)"
+            button.style.boxShadow = "0 4px 8px rgba(16, 185, 129, 0.4)"
         } else if (variant === "blue") {
             button.style.backgroundColor = "#2563eb"
             button.style.transform = "translateY(-1px)"
@@ -237,6 +241,10 @@ export function RoleBasedButton({
         } else if (variant === "danger") {
             button.style.backgroundColor = "#dc2626"
             button.style.transform = "translateY(0)"
+        } else if (variant === "success") {
+            button.style.backgroundColor = "#10b981"
+            button.style.transform = "translateY(0)"
+            button.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.3)"
         } else if (variant === "blue") {
             button.style.backgroundColor = "#3b82f6"
             button.style.transform = "translateY(0)"

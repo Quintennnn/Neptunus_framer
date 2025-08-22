@@ -4,7 +4,7 @@ import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus, FaClock } from "react-icons/fa"
-import { NewPolicyButton, PolicyActionButtons } from "../components/InsuranceButtons"
+import { NewPolicyButton, PolicyActionButtons } from "../components/InsuranceButtons.tsx"
 import { UserInfoBanner } from "../components/UserInfoBanner"
 
 // ——— Constants & Helpers ———

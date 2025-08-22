@@ -2188,13 +2188,30 @@ function ActionDropdownMenu({
     const canEdit = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : false
     const canDelete = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_DELETE') : false
 
+    console.log('ActionDropdownMenu permissions:', { 
+        userInfo: !!userInfo, 
+        canEdit, 
+        canDelete,
+        userRole: userInfo?.role,
+        objectId: object?.id,
+        hasUserInfo: !!userInfo
+    })
+
+    console.log('ActionDropdownMenu detailed permissions:', {
+        'INSURED_OBJECT_UPDATE': userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : 'no user',
+        'INSURED_OBJECT_DELETE': userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_DELETE') : 'no user',
+        userRole: userInfo?.role
+    })
+
     // Don't render if user has no permissions
     if (!canEdit && !canDelete) {
+        console.log('ActionDropdownMenu: No permissions, returning null')
         return null
     }
 
     // Calculate dropdown position when opening
     const handleToggle = () => {
+        console.log('ActionDropdownMenu handleToggle clicked, isOpen:', isOpen)
         if (!isOpen && buttonRef.current) {
             const rect = buttonRef.current.getBoundingClientRect()
             const dropdownWidth = 120 // minWidth from the dropdown
@@ -2211,6 +2228,7 @@ function ActionDropdownMenu({
             })
         }
         setIsOpen(!isOpen)
+        console.log('ActionDropdownMenu setIsOpen to:', !isOpen)
     }
 
     // Close dropdown when clicking outside
@@ -2227,12 +2245,18 @@ function ActionDropdownMenu({
         }
     }, [])
 
-    const handleEdit = () => {
+    const handleEdit = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        console.log('ActionDropdownMenu handleEdit called with object:', object)
         onEdit(object)
         setIsOpen(false)
     }
 
-    const handleDelete = () => {
+    const handleDelete = (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        console.log('ActionDropdownMenu handleDelete called with object:', object)
         onDelete(object)
         setIsOpen(false)
     }
@@ -2294,6 +2318,8 @@ function ActionDropdownMenu({
                         }}
                     >
                     {canEdit && (
+                        <>
+                        {console.log('Rendering edit button for object:', object?.id)}
                         <button
                             onClick={handleEdit}
                             style={{
@@ -2303,32 +2329,40 @@ function ActionDropdownMenu({
                                 backgroundColor: "transparent",
                                 cursor: "pointer",
                                 fontSize: "14px",
-                                fontWeight: "500",
+                                fontWeight: "600",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "8px",
-                                color: colors.gray700,
+                                color: "#3b82f6",
                                 textAlign: "left",
-                                transition: "all 0.2s",
+                                transition: "all 0.2s ease",
                                 fontFamily: FONT_STACK,
                                 borderRadius: "6px",
+                                boxShadow: "none",
                             }}
                             onMouseOver={(e) => {
                                 const target = e.target as HTMLElement
-                                target.style.backgroundColor = colors.gray100
-                                target.style.color = colors.primary
+                                target.style.backgroundColor = "#f3f4f6"
+                                target.style.color = "#2563eb"
+                                target.style.transform = "translateX(2px)"
+                                target.style.boxShadow = "0 4px 8px rgba(59, 130, 246, 0.15)"
                             }}
                             onMouseOut={(e) => {
                                 const target = e.target as HTMLElement
                                 target.style.backgroundColor = "transparent"
-                                target.style.color = colors.gray700
+                                target.style.color = "#3b82f6"
+                                target.style.transform = "translateX(0)"
+                                target.style.boxShadow = "none"
                             }}
                         >
-                            <FaEdit size={12} color={colors.primary} />
+                            <FaEdit size={14} color="currentColor" />
                             Bewerken
                         </button>
+                        </>
                     )}
                     {canDelete && (
+                        <>
+                        {console.log('Rendering delete button for object:', object?.id)}
                         <button
                             onClick={handleDelete}
                             style={{
@@ -2338,30 +2372,36 @@ function ActionDropdownMenu({
                                 backgroundColor: "transparent",
                                 cursor: "pointer",
                                 fontSize: "14px",
-                                fontWeight: "500",
+                                fontWeight: "600",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "8px",
-                                color: colors.gray700,
+                                color: "#dc2626",
                                 textAlign: "left",
-                                transition: "all 0.2s",
+                                transition: "all 0.2s ease",
                                 fontFamily: FONT_STACK,
                                 borderRadius: "6px",
+                                boxShadow: "none",
                             }}
                             onMouseOver={(e) => {
                                 const target = e.target as HTMLElement
-                                target.style.backgroundColor = colors.errorBg
-                                target.style.color = colors.error
+                                target.style.backgroundColor = "#fef2f2"
+                                target.style.color = "#b91c1c"
+                                target.style.transform = "translateX(2px)"
+                                target.style.boxShadow = "0 4px 8px rgba(220, 38, 38, 0.15)"
                             }}
                             onMouseOut={(e) => {
                                 const target = e.target as HTMLElement
                                 target.style.backgroundColor = "transparent"
-                                target.style.color = colors.gray700
+                                target.style.color = "#dc2626"
+                                target.style.transform = "translateX(0)"
+                                target.style.boxShadow = "none"
                             }}
                         >
-                            <FaTrashAlt size={12} color={colors.error} />
+                            <FaTrashAlt size={14} color="currentColor" />
                             Verwijderen
                         </button>
+                        </>
                     )}
                     </div>
                 </>,
@@ -3571,10 +3611,12 @@ function InsuredObjectList() {
 
     // Action handlers
     const handleEdit = useCallback((object: InsuredObject) => {
+        console.log('handleEdit called with object:', object)
         setEditingObject(object)
     }, [])
 
     const handleDelete = useCallback((object: InsuredObject) => {
+        console.log('handleDelete called with object:', object)
         setDeletingObject(object)
     }, [])
 

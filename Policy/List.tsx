@@ -701,8 +701,40 @@ function EditPolicyForm({
     })
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [loadingOrganizations, setLoadingOrganizations] = useState(true)
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Fetch organizations for dropdown
+    useEffect(() => {
+        async function fetchOrganizations() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/neptunus/organization`, {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getIdToken()}`,
+                    },
+                })
+                
+                if (res.ok) {
+                    const data = await res.json()
+                    setOrganizations(data.organizations || [])
+                } else {
+                    console.error("Failed to fetch organizations")
+                    setError("Kon organisaties niet ophalen")
+                }
+            } catch (err) {
+                console.error("Error fetching organizations:", err)
+                setError("Kon organisaties niet ophalen")
+            } finally {
+                setLoadingOrganizations(false)
+            }
+        }
+        
+        fetchOrganizations()
+    }, [])
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         setError(null)
         setSuccess(null)
@@ -834,29 +866,63 @@ function EditPolicyForm({
                                     color: "#374151",
                                 }}
                             >
-                                {label}
+                                {label} {key === "organization" && <span style={{ color: "#ef4444" }}>*</span>}
                             </label>
-                            <input
-                                id={key}
-                                name={key}
-                                type="text"
-                                value={val}
-                                onChange={handleChange}
-                                style={{
-                                    padding: "12px",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "8px",
-                                    fontSize: "14px",
-                                    fontFamily: FONT_STACK,
-                                    transition: "border-color 0.2s",
-                                }}
-                                onFocus={(e) =>
-                                    (e.target.style.borderColor = "#3b82f6")
-                                }
-                                onBlur={(e) =>
-                                    (e.target.style.borderColor = "#d1d5db")
-                                }
-                            />
+                            {key === "organization" ? (
+                                <select
+                                    id={key}
+                                    name={key}
+                                    value={val}
+                                    onChange={handleChange}
+                                    disabled={loadingOrganizations}
+                                    required
+                                    style={{
+                                        padding: "12px",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "8px",
+                                        fontSize: "14px",
+                                        fontFamily: FONT_STACK,
+                                        transition: "border-color 0.2s",
+                                        backgroundColor: loadingOrganizations ? "#f9fafb" : "#fff",
+                                        cursor: loadingOrganizations ? "wait" : "pointer",
+                                    }}
+                                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
+                                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                                >
+                                    <option value="">
+                                        {loadingOrganizations 
+                                            ? "Organisaties laden..." 
+                                            : "Selecteer een organisatie"}
+                                    </option>
+                                    {organizations.map((org) => (
+                                        <option key={org.id} value={org.name}>
+                                            {org.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    id={key}
+                                    name={key}
+                                    type="text"
+                                    value={val}
+                                    onChange={handleChange}
+                                    style={{
+                                        padding: "12px",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "8px",
+                                        fontSize: "14px",
+                                        fontFamily: FONT_STACK,
+                                        transition: "border-color 0.2s",
+                                    }}
+                                    onFocus={(e) =>
+                                        (e.target.style.borderColor = "#3b82f6")
+                                    }
+                                    onBlur={(e) =>
+                                        (e.target.style.borderColor = "#d1d5db")
+                                    }
+                                />
+                            )}
                         </div>
                     )
                 })}
@@ -1508,7 +1574,7 @@ export function PolicyPageOverride(): Override {
                             {[
                                 { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                                 { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
-                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
+                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending_overview" },
                                 { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                 { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
                             ].filter((tab) => {

@@ -76,9 +76,9 @@ const greenScheme: ColorScheme = {
 }
 
 const blueScheme: ColorScheme = {
-  primary: "#2563eb",
+  primary: "#3b82f6",
   primaryHover: "#1d4ed8",
-  primaryLight: "#3b82f6",
+  primaryLight: "#60a5fa",
   
   success: "#059669",
   successHover: "#047857",
@@ -151,7 +151,7 @@ export const themes = {
 } as const
 
 // Current theme - Change this line to switch themes instantly!
-export const colors = themes.green
+export const colors = themes.blue
 
 // Common Style Objects
 export const styles = {
@@ -357,7 +357,7 @@ export const hover = {
   },
   
   dangerButton: (element: HTMLElement) => {
-    element.style.backgroundColor = "#dc2626"
+    element.style.backgroundColor = "#b91c1c"
   },
   
   input: (element: HTMLElement) => {

@@ -1,12 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "bash",
-      "read",
-      "write",
-      "edit",
-      "glob",
-      "grep"
+      "Task",
+      "Bash(git:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx:*)",
+      "Bash(npm:*)",
+      "Bash(python:*)",
+      "Bash(pip:*)",
+      "Bash(node:*)",
+      "Bash(yarn:*)",
+      "Glob",
+      "Grep",
+      "LS",
+      "Read",
+      "Edit",
+      "MultiEdit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "Read(C:\\Users\\Quinten\\Desktop\\development_local\\**)",
+      "Write(C:\\Users\\Quinten\\Desktop\\development_local\\**)",
+      "Edit(C:\\Users\\Quinten\\Desktop\\development_local\\**)"
+    ],
+    "deny": [],
+    "additionalDirectories": [
+      "C:\\Users\\Quinten\\Desktop\\development_local"
     ]
   }
 }

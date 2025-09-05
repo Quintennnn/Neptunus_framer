@@ -5,6 +5,8 @@ export const API_BASE_URL = "https://dev.api.hienfeld.io"
 export const API_PATHS = {
   USER: "/neptunus/user",
   SIGNUP: "/neptunus/signup", 
+  LOGIN: "/neptunus/login",
+  EXCHANGE_CODE: "/neptunus/exchange-code",
   ORGANIZATION: "/neptunus/organization",
   POLICY: "/neptunus/policy",
   BOAT: "/neptunus/boat",

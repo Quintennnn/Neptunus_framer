@@ -69,7 +69,7 @@ function isValidPhone(phone: string): boolean {
 type Organization = {
     id: string
     name: string
-    is_superorg: boolean
+    type_organisatie: string
     createdAt: string
     updatedAt: string
     lastUpdatedBy: string

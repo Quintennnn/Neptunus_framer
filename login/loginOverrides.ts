@@ -2,7 +2,7 @@ import React, { useState, createContext, useContext } from "react"
 import { Override } from "framer"
 
 // --- AWS Cognito constants ---
-const COGNITO_CLIENT_ID = "68adagbjt8cfm45h5n2bge17p0"
+const COGNITO_CLIENT_ID = "di3vf3gteg48eqk0fdpu1b75a"
 const REGION = "eu-central-1"
 const COGNITO_ENDPOINT = `https://cognito-idp.${REGION}.amazonaws.com/`
 
@@ -181,82 +181,20 @@ export function loginErrorLabel(): Override {
     }
 }
 
-// --- LOGIN BUTTON ---
+// --- LOGIN BUTTON (Updated for Hosted UI) ---
 export function loginButton(): Override {
-    const { email, password, setError } = useLoginContext()
-    const [loading, setLoading] = useState(false)
-
-
-    const handleLogin = async () => {
-        let finalEmail = email
-        let finalPassword = password
-
-        if (typeof window !== "undefined") {
-            finalEmail = email || window.debugLogin?.email || ""
-            finalPassword = password || window.debugLogin?.password || ""
-        }
-
-        if (!finalEmail || !finalPassword) {
-            setError("Please enter both email and password.")
-            return
-        }
-
-        setError("")
-        setLoading(true)
-
-        try {
-            const res = await fetch(COGNITO_ENDPOINT, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-amz-json-1.1",
-                    "X-Amz-Target":
-                        "AWSCognitoIdentityProviderService.InitiateAuth",
-                },
-                body: JSON.stringify({
-                    AuthParameters: {
-                        USERNAME: finalEmail,
-                        PASSWORD: finalPassword,
-                    },
-                    AuthFlow: "USER_PASSWORD_AUTH",
-                    ClientId: COGNITO_CLIENT_ID,
-                }),
-            })
-
-            const data = await res.json()
-            console.log("AWS Cognito Response:", data)
-
-            if (data.AuthenticationResult) {
-                const { IdToken, AccessToken, RefreshToken } =
-                    data.AuthenticationResult
-
-                if (typeof window !== "undefined") {
-                    sessionStorage.setItem("idToken", IdToken)
-                    sessionStorage.setItem("accessToken", AccessToken)
-                    sessionStorage.setItem("refreshToken", RefreshToken)
-
-                    const decoded = decodeJWT(IdToken)
-                    if (decoded && decoded.sub) {
-                        sessionStorage.setItem("userId", decoded.sub)
-                        console.log("→ [sessionStorage] userId:", decoded.sub)
-                    }
-
-                    // Navigate after login
-                    window.location.href =
-                        "https://neptunus.framer.website/organizations"
-                }
-            } else {
-                setError(data.message || "Login failed")
-            }
-        } catch (err: any) {
-            console.log("Network error:", err.message)
-            setError("Network error: " + err.message)
-        } finally {
-            setLoading(false)
-        }
+    const handleLogin = () => {
+        // Construct the hosted UI URL
+        const hostedUIUrl = `https://dev-neptunus-auth.auth.eu-central-1.amazoncognito.com/login?client_id=${COGNITO_CLIENT_ID}&response_type=code&scope=email+openid+profile&redirect_uri=https://neptunus.framer.website/callback`;
+        
+        console.log('Redirecting to Cognito Hosted UI:', hostedUIUrl);
+        
+        // Redirect to Cognito Hosted UI
+        window.location.href = hostedUIUrl;
     }
 
     return {
-        text: loading ? "Logging in..." : "Login",
+        text: "Inloggen via Neptunus",
         onTap: handleLogin,
         whileHover: {
             backgroundColor: "#0A0466",
@@ -269,8 +207,7 @@ export function loginButton(): Override {
             textAlign: "center",
             fontWeight: "bold",
             transition: "all 0.2s ease",
-            cursor: loading ? "wait" : "pointer",
-            opacity: loading ? 0.6 : 1,
+            cursor: "pointer",
         },
     }
 }

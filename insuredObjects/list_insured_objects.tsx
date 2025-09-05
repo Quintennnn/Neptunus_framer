@@ -4,7 +4,8 @@ import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
 import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
-import { UserInfo as RBACUserInfo, hasPermission } from "../rbac"
+import { UserInfo as RBACUserInfo, hasPermission } from "../Rbac"
+import { colors, styles, hover, FONT_STACK } from "../theme"
 import {
     FaEdit,
     FaTrashAlt,
@@ -24,61 +25,16 @@ import {
     FaArrowLeft,
     FaPlus,
     FaEllipsisV,
+    FaInfoCircle,
+    FaPrint,
 } from "react-icons/fa"
-import { colors, styles, hover, FONT_STACK } from "../theme"
-import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
-import { ObjectType, OBJECT_TYPE_CONFIG } from "./create_insured_object"
-import { useDynamicSchema, DEFAULT_SCHEMA, FieldSchema, getFieldsForObjectType as getSchemaFieldsForObjectType, getFieldKeysForObjectType, getUnifiedFieldValue } from "../hooks/useDynamicSchema"
-import { formatErrorMessage, formatSuccessMessage } from "../utils"
+import { colors, styles, hover, FONT_STACK } from "../Theme"
+import { API_BASE_URL, API_PATHS, getIdToken, formatErrorMessage, formatSuccessMessage } from "../Utils"
+import { ObjectType, OBJECT_TYPE_CONFIG, OrganizationSelector, ObjectTypeSelector, CreateObjectModal } from "./create_insured_object"
+import { useDynamicSchema, FieldSchema, getFieldsForObjectType as getSchemaFieldsForObjectType, getFieldKeysForObjectType, getUserInputFieldsForObjectType } from "../hooks/UseDynamicSchema"
 
-// Local fallback mapping to prevent runtime errors
-const FALLBACK_FIELD_MAPPING = {
-    brand: {
-        boat: 'merkBoot',
-        trailer: 'trailerMerk', 
-        motor: 'motorMerk'
-    },
-    type: {
-        boat: 'typeBoot',
-        trailer: 'trailerType',
-        motor: 'motorModel'
-    }
-} as const
 
-// Fallback helper for getUnifiedFieldValue to prevent runtime errors
-function safeGetUnifiedFieldValue(object: any, unifiedKey: string): string {
-    try {
-        // First try the imported function
-        if (typeof getUnifiedFieldValue === 'function') {
-            try {
-                return getUnifiedFieldValue(object, unifiedKey)
-            } catch (error) {
-                console.warn('Error calling getUnifiedFieldValue:', error)
-            }
-        }
-        
-        // Fallback implementation using local mapping
-        const fieldMapping = FALLBACK_FIELD_MAPPING
-        
-        if (!(unifiedKey in fieldMapping)) {
-            return object[unifiedKey] || ''
-        }
-        
-        const mapping = fieldMapping[unifiedKey as keyof typeof fieldMapping]
-        const objectType = object.objectType
-        
-        if (objectType && objectType in mapping) {
-            const actualField = mapping[objectType as keyof typeof mapping]
-            return object[actualField] || ''
-        }
-        
-        return ''
-    } catch (error) {
-        console.error('Critical error in safeGetUnifiedFieldValue:', error)
-        // Ultimate fallback - just return the direct property or empty string
-        return object[unifiedKey] || ''
-    }
-}
+// Note: Unified field system removed - using direct field names from registry
 
 // ——— Simple Create Button Component ———
 function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
@@ -120,242 +76,54 @@ function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
     )
 }
 
-// ——— Object Type Selector Component ———
-function ObjectTypeSelector({
-    onSelect,
-    onClose,
-    onBack,
-}: {
-    onSelect: (type: ObjectType) => void
-    onClose: () => void
-    onBack?: () => void
-}) {
+// ——— Print Overview Button Component ———
+function PrintOverviewButton({ onPrintClick }: { onPrintClick: () => void }) {
     return (
-        <div
+        <button
+            onClick={onPrintClick}
             style={{
-                ...styles.modal,
-                width: "min(90vw, 600px)",
-                padding: "32px",
+                ...styles.secondaryButton,
+                padding: "8px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "14px",
+                fontWeight: "500",
+                backgroundColor: colors.gray100,
+                color: colors.gray700,
+                border: `1px solid ${colors.gray200}`,
+                borderRadius: "6px",
+                cursor: "pointer",
+                boxShadow: `0 1px 2px ${colors.gray400}20`,
+                transition: "all 0.2s ease",
+            }}
+            onMouseOver={(e) => {
+                const target = e.target as HTMLElement
+                target.style.backgroundColor = colors.gray200
+                target.style.transform = "translateY(-1px)"
+                target.style.boxShadow = `0 2px 4px ${colors.gray400}30`
+            }}
+            onMouseOut={(e) => {
+                const target = e.target as HTMLElement
+                target.style.backgroundColor = colors.gray100
+                target.style.transform = "translateY(0)"
+                target.style.boxShadow = `0 1px 2px ${colors.gray400}20`
             }}
         >
-            {/* Header */}
-            <div style={styles.header}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                    {onBack && (
-                        <button
-                            onClick={onBack}
-                            style={{
-                                ...styles.iconButton,
-                                marginRight: "12px",
-                            }}
-                            onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                            onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                        >
-                            <FaArrowLeft size={16} />
-                        </button>
-                    )}
-                    <div style={styles.title}>
-                        Choose Object Type
-                    </div>
-                </div>
-                <button
-                    onClick={onClose}
-                    style={styles.iconButton}
-                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                >
-                    <FaTimes size={16} />
-                </button>
-            </div>
-
-            <div style={{ marginBottom: "24px", color: colors.gray600 }}>
-                Selecteer het type object dat je wilt verzekeren:
-            </div>
-
-            {/* Object Type Grid */}
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "16px",
-                }}
-            >
-                {Object.entries(OBJECT_TYPE_CONFIG).map(([type, config]) => {
-                    const IconComponent = config.icon
-                    return (
-                        <button
-                            key={type}
-                            onClick={() => onSelect(type as ObjectType)}
-                            style={{
-                                ...styles.card,
-                                padding: "24px",
-                                border: `2px solid ${colors.gray200}`,
-                                cursor: "pointer",
-                                transition: "all 0.2s ease",
-                                textAlign: "left",
-                            }}
-                            onMouseOver={(e) => {
-                                const element = e.target as HTMLElement
-                                element.style.borderColor = config.color
-                                element.style.backgroundColor = `${config.color}10`
-                                element.style.transform = "translateY(-2px)"
-                                element.style.boxShadow = `0 8px 25px ${config.color}20`
-                            }}
-                            onMouseOut={(e) => {
-                                const element = e.target as HTMLElement
-                                element.style.borderColor = colors.gray200
-                                element.style.backgroundColor = colors.white
-                                element.style.transform = "translateY(0)"
-                                element.style.boxShadow = styles.card.boxShadow
-                            }}
-                        >
-                            <div style={{ display: "flex", alignItems: "center", marginBottom: "12px" }}>
-                                <IconComponent size={24} color={config.color} />
-                                <div
-                                    style={{
-                                        marginLeft: "12px",
-                                        fontSize: "18px",
-                                        fontWeight: "600",
-                                        color: colors.gray900,
-                                    }}
-                                >
-                                    {config.label}
-                                </div>
-                            </div>
-                            <div
-                                style={{
-                                    fontSize: "14px",
-                                    color: colors.gray600,
-                                    lineHeight: "1.4",
-                                }}
-                            >
-                                {config.description}
-                            </div>
-                        </button>
-                    )
-                })}
-            </div>
-        </div>
+            <FaPrint size={12} />
+            Print overzicht
+        </button>
     )
 }
 
-// ——— Organization Selector Component ———
-function OrganizationSelector({
-    userInfo,
-    availableOrganizations,
-    onSelect,
-    onClose,
-    onBack,
-}: {
-    userInfo: UserInfo
-    availableOrganizations: string[]
-    onSelect: (organization: string) => void
-    onClose: () => void
-    onBack: () => void
-}) {
-    return (
-        <div
-            style={{
-                ...styles.modal,
-                width: "min(90vw, 500px)",
-                padding: "32px",
-            }}
-        >
-            {/* Header */}
-            <div style={styles.header}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                    <button
-                        onClick={onBack}
-                        style={{
-                            ...styles.iconButton,
-                            marginRight: "12px",
-                        }}
-                        onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                        onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                    >
-                        <FaArrowLeft size={16} />
-                    </button>
-                    <div style={styles.title}>
-                        Choose Organization
-                    </div>
-                </div>
-                <button
-                    onClick={onClose}
-                    style={styles.iconButton}
-                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                >
-                    <FaTimes size={16} />
-                </button>
-            </div>
 
-            <div style={{ marginBottom: "24px", color: colors.gray600 }}>
-                {userInfo.role === "admin" 
-                    ? "Selecteer de organisatie waarvoor je het verzekerde object wilt aanmaken:"
-                    : "Selecteer een van je organisaties:"}
-            </div>
 
-            {availableOrganizations.length === 0 ? (
-                <div style={{
-                    padding: "24px",
-                    textAlign: "center",
-                    color: colors.gray500,
-                    backgroundColor: colors.gray50,
-                    borderRadius: "8px",
-                    border: `1px solid ${colors.gray200}`,
-                }}>
-                    Geen organisaties beschikbaar. Neem contact op met je beheerder.
-                </div>
-            ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {availableOrganizations.map((orgName) => (
-                        <button
-                            key={orgName}
-                            onClick={() => onSelect(orgName)}
-                            style={{
-                                ...styles.card,
-                                padding: "16px",
-                                border: `2px solid ${colors.gray200}`,
-                                cursor: "pointer",
-                                transition: "all 0.2s ease",
-                                textAlign: "left",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "12px",
-                            }}
-                            onMouseOver={(e) => {
-                                const element = e.target as HTMLElement
-                                element.style.borderColor = colors.primary
-                                element.style.backgroundColor = `${colors.primary}10`
-                                element.style.transform = "translateY(-1px)"
-                                element.style.boxShadow = `0 4px 12px ${colors.primary}20`
-                            }}
-                            onMouseOut={(e) => {
-                                const element = e.target as HTMLElement
-                                element.style.borderColor = colors.gray200
-                                element.style.backgroundColor = colors.white
-                                element.style.transform = "translateY(0)"
-                                element.style.boxShadow = styles.card.boxShadow
-                            }}
-                        >
-                            <FaUser size={20} color={colors.primary} />
-                            <div style={{
-                                fontSize: "16px",
-                                fontWeight: "500",
-                                color: colors.gray900,
-                            }}>
-                                {orgName}
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
 
-// ——— Main form component for creating insured objects ———
-function InsuredObjectForm({
+
+// Note: InsuredObjectForm is now imported from create_insured_object.tsx
+
+// Legacy function - kept for backward compatibility but should be removed
+function InsuredObjectForm_LEGACY({
     objectType,
     selectedOrganization,
     onClose,
@@ -369,8 +137,8 @@ function InsuredObjectForm({
     onSuccess?: () => void
 }) {
     const config = OBJECT_TYPE_CONFIG[objectType]
-    const [form, setForm] = React.useState<InsuredObjectFormState>(() => {
-        const defaultState = getDefaultFormState(objectType)
+    const [form, setForm] = React.useState<InsuredObjectFormState_LEGACY>(() => {
+        const defaultState = getDefaultFormState_LEGACY(objectType)
         return {
             ...defaultState,
             organization: selectedOrganization,
@@ -393,7 +161,9 @@ function InsuredObjectForm({
         }
     }, [schemaLoading, schemaError])
 
-    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    // Note: Organization defaults (premiepromillage, eigenRisico) are now applied by backend automatically
+
+    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
         const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
@@ -442,7 +212,7 @@ function InsuredObjectForm({
     }
 
     const renderInput = (field: FieldSchema) => {
-        const val = form[field.key as keyof InsuredObjectFormState]
+        const val = form[field.key as keyof InsuredObjectFormState_LEGACY]
 
         // Skip objectType, organization, and status fields (handled automatically)
         if (field.key === "objectType" || field.key === "organization" || field.key === "status") return null
@@ -450,12 +220,13 @@ function InsuredObjectForm({
         const isNumber = field.type === "number" || field.type === "currency"
         const isTextArea = field.type === "textarea"
         const isDateField = field.type === "date"
+        const isDropdown = field.type === "dropdown"
         const inputType = field.type === "currency" ? "number" : 
                          field.type === "number" ? "number" :
                          isDateField ? "date" : "text"
 
         const label = field.label
-        const Component = isTextArea ? "textarea" : "input"
+        const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
 
         return (
             <div key={field.key} style={{ marginBottom: "16px", width: "100%" }}>
@@ -467,34 +238,66 @@ function InsuredObjectForm({
                     {label}
                     {field.required && <span style={{ color: colors.error, marginLeft: "4px" }}>*</span>}
                 </label>
-                <Component
-                    id={field.key}
-                    name={field.key}
-                    value={val === null || val === undefined ? "" : val}
-                    onChange={handleChange}
-                    disabled={isSubmitting}
-                    required={field.required}
-                    {...(Component === "input" ? { 
-                        type: inputType,
-                        ...(field.type === "currency" && { step: "0.01", min: "0" }),
-                        ...(field.type === "number" && { step: "1", min: "0" })
-                    } : { rows: 3 })}
-                    placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
-                    style={{
-                        ...styles.input,
-                        backgroundColor: isSubmitting ? colors.gray50 : colors.white,
-                        cursor: isSubmitting ? "not-allowed" : "text",
-                        borderColor: field.required ? colors.gray300 : colors.gray200,
-                    }}
-                    onFocus={(e) => {
-                        if (!isSubmitting) {
-                            hover.input(e.target as HTMLElement)
-                        }
-                    }}
-                    onBlur={(e) => {
-                        hover.resetInput(e.target as HTMLElement)
-                    }}
-                />
+                {isDropdown ? (
+                    <select
+                        id={field.key}
+                        name={field.key}
+                        value={val === null || val === undefined ? "" : val}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        required={field.required}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            borderColor: field.required ? colors.gray300 : colors.gray200,
+                        }}
+                        onFocus={(e) => {
+                            if (!isSubmitting) {
+                                hover.input(e.target as HTMLElement)
+                            }
+                        }}
+                        onBlur={(e) => {
+                            hover.resetInput(e.target as HTMLElement)
+                        }}
+                    >
+                        <option value="">Selecteer {label.toLowerCase()}</option>
+                        {field.options?.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <Component
+                        id={field.key}
+                        name={field.key}
+                        value={val === null || val === undefined ? "" : val}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        required={field.required}
+                        {...(Component === "input" ? { 
+                            type: inputType,
+                            ...(field.type === "currency" && { step: "0.01", min: "0" }),
+                            ...(field.type === "number" && { step: "1", min: "0" })
+                        } : { rows: 3 })}
+                        placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                            borderColor: field.required ? colors.gray300 : colors.gray200,
+                        }}
+                        onFocus={(e) => {
+                            if (!isSubmitting) {
+                                hover.input(e.target as HTMLElement)
+                            }
+                        }}
+                        onBlur={(e) => {
+                            hover.resetInput(e.target as HTMLElement)
+                        }}
+                    />
+                )}
             </div>
         )
     }
@@ -650,8 +453,10 @@ function InsuredObjectForm({
     )
 }
 
-// ——— Main modal that orchestrates the entire create flow ———
-function CreateObjectModal({ onClose, onOrganizationSelect }: { onClose: () => void; onOrganizationSelect?: (org: string) => void }) {
+// Note: CreateObjectModal is now imported from create_insured_object.tsx
+
+// Legacy function - kept for backward compatibility but should be removed  
+function CreateObjectModal_LEGACY({ onClose, onOrganizationSelect }: { onClose: () => void; onOrganizationSelect?: (org: string) => void }) {
     const [currentStep, setCurrentStep] = React.useState<'organization' | 'objectType' | 'form'>('organization')
     const [selectedOrganization, setSelectedOrganization] = React.useState<string>("")
     const [selectedObjectType, setSelectedObjectType] = React.useState<ObjectType | null>(null)
@@ -664,7 +469,7 @@ function CreateObjectModal({ onClose, onOrganizationSelect }: { onClose: () => v
         const loadUserData = async () => {
             try {
                 setIsLoading(true)
-                const currentUser = getCurrentUserInfoForCreate()
+                const currentUser = getCurrentUserInfoForCreate_LEGACY()
                 if (!currentUser) throw new Error("No user info available")
 
                 // Fetch complete user info from backend
@@ -674,7 +479,7 @@ function CreateObjectModal({ onClose, onOrganizationSelect }: { onClose: () => v
                 setUserInfo(completeUserInfo)
 
                 // Fetch available organizations for this user
-                const orgs = await fetchUserOrganizationsForCreate(completeUserInfo)
+                const orgs = await fetchUserOrganizationsForCreate_LEGACY(completeUserInfo)
                 setAvailableOrganizations(orgs)
 
                 // If user has only one organization, auto-select it
@@ -754,7 +559,7 @@ function CreateObjectModal({ onClose, onOrganizationSelect }: { onClose: () => v
             )}
 
             {currentStep === 'form' && selectedObjectType && (
-                <InsuredObjectForm
+                <InsuredObjectForm_LEGACY
                     objectType={selectedObjectType}
                     selectedOrganization={selectedOrganization}
                     onClose={onClose}
@@ -771,56 +576,107 @@ const STATUS_COLORS = {
     Insured: { bg: "#dcfce7", text: "#166534" },
     Pending: { bg: "#fef3c7", text: "#92400e" },
     Rejected: { bg: "#fee2e2", text: "#991b1b" },
+    OutOfPolicy: { bg: "#f3f4f6", text: "#6b7280" }, // Grey/faded for sold boats
     "Not Insured": { bg: "#f3f4f6", text: "#374151" },
+}
+
+// ——— Status translation mapping ———
+const STATUS_TRANSLATIONS = {
+    Insured: "Verzekerd",
+    Pending: "In behandeling",
+    Rejected: "Afgewezen",
+    OutOfPolicy: "Buiten polis",
+    "Not Insured": "Niet verzekerd",
+}
+
+// ——— Simple Tooltip Component ———
+function StatusTooltip({ 
+    children, 
+    tooltip, 
+    show 
+}: { 
+    children: React.ReactNode
+    tooltip: string
+    show: boolean 
+}) {
+    const [isVisible, setIsVisible] = useState(false)
+
+    if (!show) return <>{children}</>
+
+    return (
+        <div 
+            style={{ position: "relative", display: "inline-block" }}
+            onMouseEnter={() => setIsVisible(true)}
+            onMouseLeave={() => setIsVisible(false)}
+        >
+            {children}
+            {isVisible && (
+                <div
+                    style={{
+                        position: "absolute",
+                        bottom: "calc(100% + 8px)",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        backgroundColor: "#1f2937",
+                        color: "white",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        lineHeight: "1.4",
+                        whiteSpace: "nowrap",
+                        maxWidth: "250px",
+                        whiteSpace: "normal",
+                        zIndex: 1000,
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                        pointerEvents: "none",
+                        animation: "fadeIn 0.2s ease-out",
+                    }}
+                >
+                    {tooltip}
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: "100%",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            width: 0,
+                            height: 0,
+                            borderLeft: "6px solid transparent",
+                            borderRight: "6px solid transparent",
+                            borderTop: "6px solid #1f2937",
+                        }}
+                    />
+                </div>
+            )}
+        </div>
+    )
 }
 
 // ——— Unified Status Component ———
 function UnifiedStatusCell({
     object,
     userInfo,
-    onApprove,
-    onDecline,
 }: {
     object: InsuredObject
     userInfo: UserInfo | null
-    onApprove: (object: InsuredObject) => void
-    onDecline: (object: InsuredObject) => void
 }) {
-    const [isHovered, setIsHovered] = useState(false)
-    const [showDeclineModal, setShowDeclineModal] = useState(false)
-    const [declineReason, setDeclineReason] = useState("")
-
     const statusColor = STATUS_COLORS[object.status] || STATUS_COLORS["Not Insured"]
-    const isAdmin = userInfo?.role === "admin"
-    const canTakeAction = isAdmin && object.status === "Pending"
-
-    const handleDeclineClick = () => {
-        setShowDeclineModal(true)
-    }
-
-    const handleDeclineSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (declineReason.trim()) {
-            onDecline(object)
-            setShowDeclineModal(false)
-            setDeclineReason("")
-        }
-    }
 
     return (
-        <>
-            <div
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    position: "relative",
-                    minWidth: canTakeAction ? "140px" : "80px",
-                }}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                position: "relative",
+                minWidth: "80px",
+            }}
+        >
+            {/* Status Badge with Decline Reason */}
+            <StatusTooltip
+                show={object.status === "Rejected" && !!object.declineReason}
+                tooltip={object.declineReason || ""}
             >
-                {/* Status Badge */}
                 <div
                     style={{
                         padding: "4px 8px",
@@ -830,183 +686,25 @@ function UnifiedStatusCell({
                         fontSize: "12px",
                         fontWeight: "500",
                         whiteSpace: "nowrap",
-                        transition: "all 0.2s ease",
-                        transform: isHovered && canTakeAction ? "scale(0.95)" : "scale(1)",
-                    }}
-                >
-                    {object.status}
-                </div>
-
-                {/* Admin Actions (visible on hover for pending items) */}
-                {canTakeAction && (
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: "4px",
-                            opacity: isHovered ? 1 : 0,
-                            transition: "opacity 0.2s ease",
-                            position: isHovered ? "static" : "absolute",
-                            right: isHovered ? "auto" : "0",
-                        }}
-                    >
-                        <button
-                            onClick={() => onApprove(object)}
-                            style={{
-                                padding: "4px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: colors.success,
-                                color: "white",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: "11px",
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                transition: "background-color 0.2s ease",
-                            }}
-                            onMouseOver={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = `${colors.success}dd`
-                            }}
-                            onMouseOut={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = colors.success
-                            }}
-                            title="Approve"
-                        >
-                            <FaCheck size={10} />
-                            Approve
-                        </button>
-                        <button
-                            onClick={handleDeclineClick}
-                            style={{
-                                padding: "4px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: colors.error,
-                                color: "white",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: "11px",
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "2px",
-                                transition: "background-color 0.2s ease",
-                            }}
-                            onMouseOver={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = `${colors.error}dd`
-                            }}
-                            onMouseOut={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = colors.error
-                            }}
-                            title="Decline"
-                        >
-                            <FaTimes size={10} />
-                            Decline
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Decline Reason Modal */}
-            {showDeclineModal && (
-                <div
-                    style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: "rgba(0, 0, 0, 0.5)",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 1000,
+                        gap: "4px",
+                        border: object.status === "OutOfPolicy" ? "1px solid #9ca3af" : "none",
                     }}
                 >
-                    <div
-                        style={{
-                            backgroundColor: "white",
-                            borderRadius: "8px",
-                            padding: "24px",
-                            maxWidth: "400px",
-                            width: "90%",
-                            maxHeight: "90vh",
-                            overflow: "auto",
-                        }}
-                    >
-                        <h3 style={{ margin: "0 0 16px", color: colors.gray900 }}>
-                            Decline Object
-                        </h3>
-                        <form onSubmit={handleDeclineSubmit}>
-                            <div style={{ marginBottom: "16px" }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                        marginBottom: "6px",
-                                        color: colors.gray700,
-                                    }}
-                                >
-                                    Reason for declining:
-                                </label>
-                                <textarea
-                                    value={declineReason}
-                                    onChange={(e) => setDeclineReason(e.target.value)}
-                                    placeholder="Enter decline reason..."
-                                    required
-                                    style={{
-                                        width: "100%",
-                                        minHeight: "80px",
-                                        padding: "8px",
-                                        border: `1px solid ${colors.gray300}`,
-                                        borderRadius: "4px",
-                                        fontSize: "14px",
-                                        resize: "vertical",
-                                    }}
-                                />
-                            </div>
-                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowDeclineModal(false)
-                                        setDeclineReason("")
-                                    }}
-                                    style={{
-                                        padding: "8px 16px",
-                                        border: `1px solid ${colors.gray300}`,
-                                        backgroundColor: "white",
-                                        color: colors.gray700,
-                                        borderRadius: "4px",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: "8px 16px",
-                                        border: "none",
-                                        backgroundColor: colors.error,
-                                        color: "white",
-                                        borderRadius: "4px",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Decline
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                    {STATUS_TRANSLATIONS[object.status] || object.status}
+                    {object.status === "Rejected" && object.declineReason && (
+                        <FaInfoCircle 
+                            size={10} 
+                            style={{ 
+                                opacity: 0.8,
+                                cursor: "help"
+                            }} 
+                        />
+                    )}
                 </div>
-            )}
-        </>
+            </StatusTooltip>
+        </div>
     )
 }
 
@@ -1018,8 +716,9 @@ interface UserInfo {
     organizations?: string[]
 }
 
-// Form state for creating insured objects (Dutch field names)
-type InsuredObjectFormState = {
+// Note: InsuredObjectFormState type is now imported from create_insured_object.tsx
+// Legacy type definition - should be removed
+type InsuredObjectFormState_LEGACY = {
     objectType: ObjectType
     waarde: number
     organization: string
@@ -1029,10 +728,11 @@ type InsuredObjectFormState = {
     uitgangsdatum?: string
     notitie?: string
     
-    // Boat-specific fields
+    // Boat-specific fields (registry field names)
     ligplaats?: string
     aantalMotoren?: number
-    typeMerkMotor?: string
+    typeMotor?: string // Updated from typeMerkMotor
+    merkMotor?: string // New field
     merkBoot?: string
     typeBoot?: string
     bouwjaar?: number
@@ -1043,12 +743,10 @@ type InsuredObjectFormState = {
     motornummer?: string
     cinNummer?: string
     
-    // Trailer-specific fields
-    trailerRegistratienummer?: string
+    // Trailer-specific fields (registry field names)
+    chassisnummer?: string // Updated from trailerRegistratienummer
     
-    // Motor-specific fields
-    motorMerk?: string
-    motorSerienummer?: string
+    // Motor fields shared with boats
 }
 
 // Fetch user info from backend API
@@ -1143,7 +841,7 @@ async function fetchBrokerInfoForOrganization(organizationName: string): Promise
 }
 
 // Helper functions for create form
-function getCurrentUserInfoForCreate(): UserInfo | null {
+function getCurrentUserInfoForCreate_LEGACY(): UserInfo | null {
     try {
         const token = getIdToken()
         if (!token) return null
@@ -1161,7 +859,7 @@ function getCurrentUserInfoForCreate(): UserInfo | null {
     }
 }
 
-async function fetchUserOrganizationsForCreate(userInfo: UserInfo): Promise<string[]> {
+async function fetchUserOrganizationsForCreate_LEGACY(userInfo: UserInfo): Promise<string[]> {
     try {
         const token = getIdToken()
         if (!token) return []
@@ -1191,8 +889,10 @@ async function fetchUserOrganizationsForCreate(userInfo: UserInfo): Promise<stri
     }
 }
 
-function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
-    const baseState: InsuredObjectFormState = {
+// Note: getDefaultFormState function is now imported from create_insured_object.tsx
+// Legacy function - should be removed
+function getDefaultFormState_LEGACY(objectType: ObjectType): InsuredObjectFormState_LEGACY {
+    const baseState: InsuredObjectFormState_LEGACY = {
         objectType,
         waarde: 0,
         organization: "",
@@ -1210,7 +910,8 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
                 ...baseState,
                 ligplaats: "",
                 aantalMotoren: 1,
-                typeMerkMotor: "",
+                typeMotor: "",
+                merkMotor: "",
                 merkBoot: "",
                 typeBoot: "",
                 bouwjaar: new Date().getFullYear(),
@@ -1224,21 +925,28 @@ function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
         case "trailer":
             return {
                 ...baseState,
-                trailerRegistratienummer: "",
+                chassisnummer: "",
             }
         case "motor":
             return {
                 ...baseState,
-                motorMerk: "",
-                motorSerienummer: "",
+                typeMotor: "",
+                merkMotor: "",
+                motornummer: "",
             }
         default:
             return baseState
     }
 }
 
+
 function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+    console.log("🔍 LIST getFieldsFromSchema DEBUG START")
+    console.log("Schema received:", schema)
+    console.log("Object type:", objectType)
+    
     if (!schema) {
+        console.log("❌ No schema provided, using fallback hardcoded fields")
         // Fallback to minimal required fields
         const commonFields: FieldSchema[] = [
             { key: "waarde", label: "Waarde", type: "currency", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
@@ -1256,29 +964,55 @@ function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectTyp
                 break
             case "trailer":
                 typeSpecificFields = [
-                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "130px" },
+                    { key: "chassisnummer", label: "Chassisnummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "130px" },
                 ]
                 break
             case "motor":
                 typeSpecificFields = [
-                    { key: "motorMerk", label: "Motor Merk", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "motorSerienummer", label: "Motor Nummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "merkMotor", label: "Merk Motor", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "typeMotor", label: "Type Motor", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    { key: "motornummer", label: "Motor Nummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
                 ]
                 break
         }
 
-        return [...typeSpecificFields, ...commonFields]
+        const fallbackResult = [...typeSpecificFields, ...commonFields]
+        console.log("✅ Using fallback fields:", fallbackResult.map(f => ({ key: f.key, label: f.label })))
+        console.log("🔍 LIST getFieldsFromSchema DEBUG END")
+        return fallbackResult
     }
 
-    // Filter fields for the specific object type and only show visible ones
-    return schema.filter(field => {
-        // Always show common fields (no objectTypes specified)
-        if (!field.objectTypes || field.objectTypes.length === 0) {
-            return field.visible
-        }
-        // Show fields specific to this object type
-        return field.objectTypes.includes(objectType) && field.visible
+    console.log("📊 Total fields in schema:", schema.length)
+    console.log("📋 All schema fields:", schema.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
+    
+    // Debug: Check if any fields have inputType
+    const fieldsWithInputType = schema.filter(f => f.inputType)
+    const fieldsWithoutInputType = schema.filter(f => !f.inputType)
+    console.log(`🔍 Fields WITH inputType: ${fieldsWithInputType.length}`, fieldsWithInputType.map(f => ({ key: f.key, inputType: f.inputType })))
+    console.log(`🔍 Fields WITHOUT inputType: ${fieldsWithoutInputType.length}`, fieldsWithoutInputType.map(f => f.key))
+    
+    // For CREATE FORMS: Show ALL user input fields regardless of visible setting
+    const filteredFields = schema.filter(field => {
+        // Filter by object type
+        const matchesObjectType = !field.objectTypes || field.objectTypes.length === 0 || field.objectTypes.includes(objectType)
+        
+        // Only show user input fields (exclude system/auto fields)
+        const isUserField = field.inputType === 'user'
+        
+        // Exclude organization-specific fields from insured object forms
+        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+        
+        console.log(`🔎 Field ${field.key}: matchesObjectType=${matchesObjectType}, isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}, visible=${field.visible}`)
+        
+        // IMPORTANT: Do NOT check field.visible here - create forms show all user input fields
+        return matchesObjectType && isUserField && isNotOrganizationField
     })
+    
+    console.log("✅ Final filtered fields:", filteredFields.length)
+    console.log("✅ Final fields:", filteredFields.map(f => ({ key: f.key, label: f.label, visible: f.visible, required: f.required })))
+    console.log("🔍 LIST getFieldsFromSchema DEBUG END")
+    
+    return filteredFields
 }
 
 function getUserInfo(): UserInfo | null {
@@ -1305,7 +1039,7 @@ function getUserInfo(): UserInfo | null {
 interface BaseInsuredObject {
     id: string
     objectType: ObjectType
-    status: "Insured" | "Pending" | "Rejected"
+    status: "Insured" | "Pending" | "Rejected" | "OutOfPolicy"
     waarde: number // value
     organization: string
     ingangsdatum: string // insuranceStartDate
@@ -1313,6 +1047,7 @@ interface BaseInsuredObject {
     premiepromillage: number // premiumPerMille
     eigenRisico: number // deductible
     notitie?: string // notes
+    declineReason?: string // reason for rejection
     createdAt: string
     updatedAt: string
     lastUpdatedBy?: string
@@ -1324,29 +1059,22 @@ interface InsuredObject extends BaseInsuredObject {
     [key: string]: any
     
     // Common optional fields (for backwards compatibility)
-    // Boat-specific fields (Dutch names)
-    ligplaats?: string // mooringLocation
-    merkBoot?: string // boatBrand
-    typeBoot?: string // boatType
-    aantalMotoren?: number // numberOfEngines
-    typeMerkMotor?: string // engineType
-    bouwjaar?: number // yearOfConstruction
-    bootnummer?: string // boatNumber
-    motornummer?: string // engineNumber
-    cinNummer?: string // cinNumber
+    // Boat-specific fields (Registry field names - camelCase Dutch)
+    ligplaats?: string
+    merkBoot?: string
+    typeBoot?: string
+    aantalMotoren?: number
+    typeMotor?: string // Updated from typeMerkMotor
+    merkMotor?: string // New field from registry
+    bouwjaar?: number
+    bootnummer?: string
+    motornummer?: string
+    cinNummer?: string
 
-    // Trailer-specific fields (Dutch names)
-    trailerMerk?: string
-    trailerType?: string
-    trailerGewicht?: number
-    trailerCapaciteit?: number
-    trailerAssen?: number
-    trailerKenteken?: string
-    trailerRegistratienummer?: string
+    // Trailer-specific fields (Registry field names)
+    chassisnummer?: string // Updated from trailerRegistratienummer
 
-    // Motor-specific fields (Dutch names)
-    motorMerk?: string
-    motorModel?: string
+    // Motor-specific fields share with boats - no separate fields needed
     motorVermogen?: number
     motorSerienummer?: string
     motorBrandstoftype?: string
@@ -1360,10 +1088,7 @@ interface InsuredObject extends BaseInsuredObject {
 }
 
 // ——— Column Groups and Definitions ———
-const COLUMN_GROUPS = {
-    basic: { label: "Standaard Velden", color: "#059669" },
-    metadata: { label: "Metadata", color: "#6b7280" },
-}
+// Removed COLUMN_GROUPS - no more basic/metadata separation
 
 // Dynamic schema system now handles column definitions
 
@@ -1425,7 +1150,7 @@ function renderObjectCellValue(
 
 // Filter function for objects
 function filterObjects(
-    objects: InsuredObject[],
+    objects: InsuredObject[] | null,
     searchTerm: string,
     selectedOrganizations: Set<string>,
     organizations: string[],
@@ -1433,6 +1158,11 @@ function filterObjects(
     isAdminUser: boolean = false,
     currentOrganization?: string | null
 ): InsuredObject[] {
+    // Add null safety check
+    if (!objects || !Array.isArray(objects)) {
+        return []
+    }
+    
     return objects.filter((object) => {
         // Organization-specific filter (when coming from organization page)
         if (currentOrganization) {
@@ -1586,20 +1316,7 @@ function SearchAndFilterBar({
         }
     }, [objectTypeButtonRef, showObjectTypeFilterDropdown])
 
-    const toggleGroup = (groupKey: keyof typeof COLUMN_GROUPS) => {
-        const groupColumns = columns.filter((col) => col.group === groupKey)
-        const allVisible = groupColumns.every((col) =>
-            visibleColumns.has(col.key)
-        )
-
-        groupColumns.forEach((col) => {
-            if (allVisible) {
-                onToggleColumn(col.key) // Hide all
-            } else if (!visibleColumns.has(col.key)) {
-                onToggleColumn(col.key) // Show missing ones
-            }
-        })
-    }
+    // Removed toggleGroup function - no more basic/metadata grouping
 
     return (
         <>
@@ -2027,18 +1744,31 @@ function SearchAndFilterBar({
                             <div style={{ marginBottom: "12px" }}>
                                 <button
                                     onClick={() => {
-                                        columns.filter(
-                                            (col) => col.group !== "basic"
-                                        ).forEach((col) => {
-                                            if (visibleColumns.has(col.key)) {
-                                                onToggleColumn(col.key)
-                                            }
+                                        // Reset to organization's default visible columns
+                                        // Only consider non-organization columns
+                                        const availableColumns = columns.filter(col => {
+                                            return !col.objectTypes || !col.objectTypes.includes('organization')
                                         })
-                                        columns.filter(
-                                            (col) => col.group === "basic"
-                                        ).forEach((col) => {
-                                            if (!visibleColumns.has(col.key)) {
-                                                onToggleColumn(col.key)
+                                        
+                                        // Get columns that should be visible from organization schema
+                                        const visibleColumnsFromSchema = availableColumns
+                                            .filter(col => col.visible)
+                                            .map(col => col.key)
+                                        
+                                        // Fallback to essential columns if nothing is marked visible
+                                        const defaultColumns = visibleColumnsFromSchema.length > 0 
+                                            ? visibleColumnsFromSchema 
+                                            : ['objectType', 'status', 'waarde']
+                                        
+                                        availableColumns.forEach((col) => {
+                                            if (defaultColumns.includes(col.key)) {
+                                                if (!visibleColumns.has(col.key)) {
+                                                    onToggleColumn(col.key)
+                                                }
+                                            } else {
+                                                if (visibleColumns.has(col.key)) {
+                                                    onToggleColumn(col.key)
+                                                }
                                             }
                                         })
                                     }}
@@ -2053,106 +1783,44 @@ function SearchAndFilterBar({
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    Reset naar Essentieel
+                                    Reset naar Standaard
                                 </button>
                             </div>
 
-                            {Object.entries(COLUMN_GROUPS).map(
-                                ([groupKey, group]) => {
-                                    const groupColumns = columns.filter(
-                                        (col) => col.group === groupKey
-                                    )
-                                    if (groupColumns.length === 0) return null
-
-                                    const visibleInGroup = groupColumns.filter(
-                                        (col) => visibleColumns.has(col.key)
-                                    ).length
-
-                                    return (
-                                        <div key={groupKey}>
-                                            <div
-                                                style={{
-                                                    padding: "8px 12px",
-                                                    backgroundColor: "#f8fafc",
-                                                    fontSize: "12px",
-                                                    fontWeight: "600",
-                                                    color: group.color,
-                                                    borderRadius: "6px",
-                                                    marginBottom: "8px",
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    alignItems: "center",
-                                                }}
-                                            >
-                                                <span>{group.label}</span>
-                                                <button
-                                                    onClick={() =>
-                                                        toggleGroup(
-                                                            groupKey as keyof typeof COLUMN_GROUPS
-                                                        )
-                                                    }
-                                                    style={{
-                                                        fontSize: "10px",
-                                                        padding: "2px 6px",
-                                                        backgroundColor:
-                                                            group.color,
-                                                        color: "white",
-                                                        border: "none",
-                                                        borderRadius: "4px",
-                                                        cursor: "pointer",
-                                                    }}
-                                                >
-                                                    {visibleInGroup}/
-                                                    {groupColumns.length}
-                                                </button>
-                                            </div>
-                                            <div
-                                                style={{ marginBottom: "16px" }}
-                                            >
-                                                {groupColumns.map((col) => (
-                                                    <label
-                                                        key={col.key}
-                                                        style={{
-                                                            display: "flex",
-                                                            alignItems:
-                                                                "center",
-                                                            padding: "4px 12px",
-                                                            cursor: "pointer",
-                                                            fontSize: "13px",
-                                                        }}
-                                                        onMouseOver={(e) =>
-                                                            (e.currentTarget.style.backgroundColor =
-                                                                "#f3f4f6")
-                                                        }
-                                                        onMouseOut={(e) =>
-                                                            (e.currentTarget.style.backgroundColor =
-                                                                "transparent")
-                                                        }
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={visibleColumns.has(
-                                                                col.key
-                                                            )}
-                                                            onChange={() =>
-                                                                onToggleColumn(
-                                                                    col.key
-                                                                )
-                                                            }
-                                                            style={{
-                                                                marginRight:
-                                                                    "8px",
-                                                            }}
-                                                        />
-                                                        {col.label}
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )
-                                }
-                            )}
+                            {/* Simple list of all columns - filter out organization fields */}
+                            {columns
+                                .filter(col => {
+                                    // Filter out organization-specific fields
+                                    return !col.objectTypes || !col.objectTypes.includes('organization')
+                                })
+                                .map((col) => (
+                                <label
+                                    key={col.key}
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        padding: "4px 12px",
+                                        cursor: "pointer",
+                                        fontSize: "13px",
+                                    }}
+                                    onMouseOver={(e) =>
+                                        (e.currentTarget.style.backgroundColor = "#f3f4f6")
+                                    }
+                                    onMouseOut={(e) =>
+                                        (e.currentTarget.style.backgroundColor = "transparent")
+                                    }
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={visibleColumns.has(col.key)}
+                                        onChange={() => onToggleColumn(col.key)}
+                                        style={{
+                                            marginRight: "8px",
+                                        }}
+                                    />
+                                    {col.label}
+                                </label>
+                            ))}
                         </div>
                     </>,
                     document.body
@@ -2183,6 +1851,7 @@ function ActionDropdownMenu({
     })
     const dropdownRef = React.useRef<HTMLDivElement>(null)
     const buttonRef = React.useRef<HTMLButtonElement>(null)
+    const menuRef = React.useRef<HTMLDivElement>(null)
 
     // Check permissions
     const canEdit = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : false
@@ -2234,16 +1903,26 @@ function ActionDropdownMenu({
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            const target = event.target as Node
+            if (
+                isOpen &&
+                buttonRef.current && 
+                !buttonRef.current.contains(target) &&
+                menuRef.current && 
+                !menuRef.current.contains(target)
+            ) {
                 setIsOpen(false)
             }
         }
 
-        document.addEventListener('mousedown', handleClickOutside)
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        
         return () => {
             document.removeEventListener('mousedown', handleClickOutside)
         }
-    }, [])
+    }, [isOpen])
 
     const handleEdit = (e: React.MouseEvent) => {
         e.preventDefault()
@@ -2290,38 +1969,30 @@ function ActionDropdownMenu({
             </button>
             
             {isOpen && ReactDOM.createPortal(
-                <>
-                    <div
-                        style={{
-                            position: "fixed",
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 999,
-                        }}
-                        onClick={() => setIsOpen(false)}
-                    />
-                    <div
-                        style={{
-                            position: "fixed",
-                            top: `${dropdownPosition.top}px`,
-                            left: `${dropdownPosition.left}px`,
-                            backgroundColor: colors.white,
-                            border: `1px solid ${colors.gray200}`,
-                            borderRadius: "8px",
-                            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-                            zIndex: 1000,
-                            minWidth: "140px",
-                            padding: "8px 0",
-                            fontFamily: FONT_STACK,
-                        }}
-                    >
+                <div
+                    ref={menuRef}
+                    style={{
+                        position: "fixed",
+                        top: `${dropdownPosition.top}px`,
+                        left: `${dropdownPosition.left}px`,
+                        backgroundColor: colors.white,
+                        border: `1px solid ${colors.gray200}`,
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                        zIndex: 1000,
+                        minWidth: "140px",
+                        padding: "8px 0",
+                        fontFamily: FONT_STACK,
+                    }}
+                >
                     {canEdit && (
                         <>
                         {console.log('Rendering edit button for object:', object?.id)}
                         <button
-                            onClick={handleEdit}
+                            onClick={(e) => {
+                                console.log('Edit button clicked!', object?.id)
+                                handleEdit(e)
+                            }}
                             style={{
                                 width: "100%",
                                 padding: "12px 16px",
@@ -2364,7 +2035,10 @@ function ActionDropdownMenu({
                         <>
                         {console.log('Rendering delete button for object:', object?.id)}
                         <button
-                            onClick={handleDelete}
+                            onClick={(e) => {
+                                console.log('Delete button clicked!', object?.id)
+                                handleDelete(e)
+                            }}
                             style={{
                                 width: "100%",
                                 padding: "12px 16px",
@@ -2403,8 +2077,7 @@ function ActionDropdownMenu({
                         </button>
                         </>
                     )}
-                    </div>
-                </>,
+                    </div>,
                 document.body
             )}
         </div>
@@ -2742,8 +2415,8 @@ function EditInsuredObjectDialog({
                 "eigenRisico",
             ]
             const typeSpecificRequired = {
-                trailer: ["trailerBrand", "trailerType"],
-                motor: ["motorBrand", "motorModel"],
+                trailer: ["chassisnummer"],
+                motor: ["merkMotor", "typeMotor"],
                 boat: [],
             }
             isRequired =
@@ -2827,8 +2500,7 @@ function EditInsuredObjectDialog({
     }
 
     const IconComponent = config.icon
-    const fieldsToRender = getSchemaFieldsForObjectType(schema, object.objectType)
-        .filter(field => field.visible) // Only show visible fields
+    const fieldsToRender = getUserInputFieldsForObjectType(schema, object.objectType)
         .map(field => field.key)
 
     return (
@@ -3025,59 +2697,43 @@ function SuccessNotification({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "400px",
                 padding: "24px",
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
             }}
         >
             <div
                 style={{
                     fontSize: "18px",
                     fontWeight: "600",
-                    color: "#059669",
+                    color: colors.success,
                     marginBottom: "16px",
+                    fontFamily: FONT_STACK,
                 }}
             >
                 Gelukt
             </div>
             <div
                 style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
+                    ...styles.description,
                     marginBottom: "24px",
-                    lineHeight: "1.5",
                 }}
             >
                 {message}
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={styles.buttonGroup}>
                 <button
                     onClick={onClose}
                     style={{
+                        ...styles.primaryButton,
+                        backgroundColor: colors.success,
                         padding: "10px 20px",
-                        backgroundColor: "#059669",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
                     }}
                     onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#047857")
+                        (e.currentTarget.style.backgroundColor = colors.successHover)
                     }
                     onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#059669")
+                        (e.currentTarget.style.backgroundColor = colors.success)
                     }
                 >
                     OK
@@ -3097,60 +2753,39 @@ function ErrorNotification({
     return (
         <div
             style={{
-                position: "fixed",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
+                ...styles.modal,
                 width: "400px",
                 padding: "24px",
-                background: "#fff",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-                fontFamily: FONT_STACK,
-                zIndex: 1001,
             }}
         >
             <div
                 style={{
                     fontSize: "18px",
                     fontWeight: "600",
-                    color: "#dc2626",
+                    color: colors.error,
                     marginBottom: "16px",
+                    fontFamily: FONT_STACK,
                 }}
             >
                 Fout
             </div>
             <div
                 style={{
-                    fontSize: "14px",
-                    color: "#6b7280",
+                    ...styles.description,
                     marginBottom: "24px",
-                    lineHeight: "1.5",
                 }}
             >
                 {message}
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={styles.buttonGroup}>
                 <button
                     onClick={onClose}
                     style={{
+                        ...styles.primaryButton,
                         padding: "10px 20px",
-                        backgroundColor: "#3b82f6",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        fontFamily: FONT_STACK,
-                        transition: "all 0.2s",
                     }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#2563eb")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = "#3b82f6")
-                    }
+                    onMouseOver={(e) => hover.primaryButton(e.currentTarget)}
+                    onMouseOut={(e) => hover.resetPrimaryButton(e.currentTarget)}
                 >
                     OK
                 </button>
@@ -3315,6 +2950,353 @@ async function fetchOrganizations(): Promise<string[]> {
     }
 }
 
+// ——— Auto Accept Rules Display Component ———
+interface AutoApprovalRule {
+    name: string
+    conditions: Record<string, any>
+    logic: "AND" | "OR"
+}
+
+interface AutoApprovalConfig {
+    enabled: boolean
+    rules: AutoApprovalRule[]
+    default_action: "pending" | "auto_approve"
+}
+
+async function fetchOrganizationAutoApprovalConfig(organizationName: string): Promise<AutoApprovalConfig | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${encodeURIComponent(organizationName)}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) {
+            console.warn(`Failed to fetch organization config: ${res.status} ${res.statusText}`)
+            return null
+        }
+
+        const data = await res.json()
+        return data.organization?.auto_approval_config || null
+    } catch (error) {
+        console.error("Error fetching organization auto approval config:", error)
+        return null
+    }
+}
+
+function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string }) {
+    const [isExpanded, setIsExpanded] = useState(false)
+    const [config, setConfig] = useState<AutoApprovalConfig | null>(null)
+    const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        async function loadConfig() {
+            setIsLoading(true)
+            const autoApprovalConfig = await fetchOrganizationAutoApprovalConfig(organizationName)
+            setConfig(autoApprovalConfig)
+            setIsLoading(false)
+        }
+        loadConfig()
+    }, [organizationName])
+
+    if (isLoading) {
+        return (
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px",
+                fontSize: "12px",
+                color: colors.gray500,
+            }}>
+                <div style={{
+                    width: "16px",
+                    height: "16px",
+                    border: `2px solid ${colors.gray300}`,
+                    borderTop: `2px solid ${colors.primary}`,
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                }} />
+                <style>
+                    {`
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                        @keyframes fadeIn {
+                            0% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+                            100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                        }
+                    `}
+                </style>
+                Loading acceptance rules...
+            </div>
+        )
+    }
+
+    if (!config) {
+        return null // Don't show anything if no config is found
+    }
+
+    const getOperatorLabel = (operator: string) => {
+        const operatorMap: Record<string, string> = {
+            eq: "gelijk aan",
+            ne: "niet gelijk aan", 
+            lt: "kleiner dan",
+            le: "kleiner dan of gelijk aan",
+            gt: "groter dan",
+            ge: "groter dan of gelijk aan",
+            between: "tussen",
+            in: "in lijst",
+            not_in: "niet in lijst",
+            contains: "bevat",
+            starts_with: "begint met",
+            ends_with: "eindigt met",
+            regex: "reguliere expressie"
+        }
+        return operatorMap[operator] || operator
+    }
+
+    const formatConditionValue = (condition: any): string => {
+        // Handle multi-value conditions (e.g., 'in', 'between')
+        if (Array.isArray(condition.values) && condition.values.length > 0) {
+            if (condition.operator === 'between' && condition.values.length === 2) {
+                return `${condition.values[0]} en ${condition.values[1]}`;
+            }
+            return condition.values.join(', ');
+        }
+
+        // Handle single-value conditions from 'value' property
+        if (condition.value !== null && condition.value !== undefined && condition.value !== '') {
+            return String(condition.value);
+        }
+
+        // Check if the condition has the value directly as a property with the field name
+        // This handles cases where the backend might structure data differently
+        const knownKeys = ['operator', 'values', 'value'];
+        const otherKeys = Object.keys(condition).filter(k => !knownKeys.includes(k));
+        
+        for (const valueKey of otherKeys) {
+            const value = condition[valueKey];
+            if (value !== null && value !== undefined && value !== '') {
+                // Handle arrays
+                if (Array.isArray(value)) {
+                    if (condition.operator === 'between' && value.length === 2) {
+                        return `${value[0]} en ${value[1]}`;
+                    }
+                    return value.join(', ');
+                }
+                // Handle single values (string or number)
+                return String(value);
+            }
+        }
+
+        // Return debug info if no value found
+        console.warn('No value found for condition:', condition);
+        return '<geen waarde>';
+    };
+
+    const renderRule = (rule: AutoApprovalRule, index: number) => {
+        const conditionCount = Object.keys(rule.conditions).length
+        
+        return (
+            <div key={index} style={{
+                padding: "12px",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                marginBottom: "8px",
+            }}>
+                <div style={{
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    color: colors.gray800,
+                    marginBottom: "6px",
+                }}>
+                    {rule.name}
+                </div>
+                <div style={{
+                    fontSize: "11px",
+                    color: colors.gray600,
+                    marginBottom: "8px",
+                }}>
+                    {conditionCount} voorwaarde{conditionCount !== 1 ? 'n' : ''} 
+                    {conditionCount > 1 && ` (${rule.logic === 'AND' ? 'alle moeten waar zijn' : 'één moet waar zijn'})`}
+                </div>
+                {Object.entries(rule.conditions).map(([fieldKey, condition], condIndex) => (
+                    <div key={condIndex} style={{
+                        fontSize: "11px",
+                        color: colors.gray700,
+                        padding: "4px 8px",
+                        backgroundColor: colors.white,
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "4px",
+                        marginBottom: "4px",
+                        fontFamily: "monospace",
+                    }}>
+                        <strong>{fieldKey}</strong> {getOperatorLabel(condition.operator)} <strong>{formatConditionValue(condition)}</strong>
+                    </div>
+                ))}
+            </div>
+        )
+    }
+
+    return (
+        <div style={{
+            display: "inline-block",
+            position: "relative",
+        }}>
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 12px",
+                    backgroundColor: config.enabled ? "#ecfdf5" : "#f3f4f6",
+                    color: config.enabled ? "#059669" : "#6b7280",
+                    border: `1px solid ${config.enabled ? "#a7f3d0" : "#d1d5db"}`,
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    fontFamily: FONT_STACK,
+                }}
+                onMouseOver={(e) => {
+                    const target = e.currentTarget
+                    if (config.enabled) {
+                        target.style.backgroundColor = "#d1fae5"
+                        target.style.borderColor = "#6ee7b7"
+                    } else {
+                        target.style.backgroundColor = "#e5e7eb"
+                    }
+                }}
+                onMouseOut={(e) => {
+                    const target = e.currentTarget
+                    if (config.enabled) {
+                        target.style.backgroundColor = "#ecfdf5"
+                        target.style.borderColor = "#a7f3d0"
+                    } else {
+                        target.style.backgroundColor = "#f3f4f6"
+                        target.style.borderColor = "#d1d5db"
+                    }
+                }}
+            >
+                <span style={{
+                    display: "inline-block",
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "50%",
+                    backgroundColor: config.enabled ? "#059669" : "#6b7280",
+                }} />
+                Goedkeuringsregels {config.enabled ? "actief" : "inactief"}
+                <span style={{
+                    fontSize: "10px",
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                }}>
+                    ▼
+                </span>
+            </button>
+
+            {isExpanded && (
+                <div style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    minWidth: "320px",
+                    maxWidth: "500px",
+                    backgroundColor: colors.white,
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                    zIndex: 1000,
+                    marginTop: "4px",
+                    padding: "16px",
+                }}>
+                    <div style={{
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        color: colors.gray800,
+                        marginBottom: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                    }}>
+                        Auto-Goedkeuringsregels voor {organizationName}
+                        <div style={{
+                            fontSize: "10px",
+                            padding: "2px 6px",
+                            borderRadius: "10px",
+                            backgroundColor: config.enabled ? "#dcfce7" : "#f3f4f6",
+                            color: config.enabled ? "#166534" : "#6b7280",
+                            fontWeight: "500",
+                        }}>
+                            {config.enabled ? "ACTIEF" : "INACTIEF"}
+                        </div>
+                    </div>
+
+                    {!config.enabled ? (
+                        <div style={{
+                            padding: "12px",
+                            backgroundColor: "#fef3c7",
+                            border: "1px solid #fcd34d",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            color: "#92400e",
+                        }}>
+                            Auto-goedkeuring is uitgeschakeld. Alle boten vereisen handmatige beoordeling.
+                        </div>
+                    ) : config.rules.length === 0 ? (
+                        <div style={{
+                            padding: "12px",
+                            backgroundColor: "#fef2f2",
+                            border: "1px solid #fca5a5",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            color: "#dc2626",
+                        }}>
+                            Geen regels geconfigureerd. Standaard actie: {config.default_action === "auto_approve" ? "automatisch goedkeuren" : "handmatige beoordeling"}.
+                        </div>
+                    ) : (
+                        <>
+                            <div style={{
+                                fontSize: "12px",
+                                color: colors.gray600,
+                                marginBottom: "12px",
+                                padding: "8px",
+                                backgroundColor: "#f1f5f9",
+                                borderRadius: "4px",
+                            }}>
+                                Boten worden automatisch goedgekeurd als ze voldoen aan <strong>één van de onderstaande regels</strong>:
+                            </div>
+                            {config.rules.map(renderRule)}
+                            <div style={{
+                                fontSize: "11px",
+                                color: colors.gray600,
+                                marginTop: "8px",
+                                padding: "8px",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "4px",
+                                borderLeft: "3px solid #e2e8f0",
+                            }}>
+                                <strong>Standaard actie:</strong> Als geen regel overeenkomt → {config.default_action === "auto_approve" ? "automatisch goedkeuren" : "handmatige beoordeling"}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ——— Main List Component ———
 function InsuredObjectList() {
     const [objects, setObjects] = useState<InsuredObject[]>([])
@@ -3327,24 +3309,60 @@ function InsuredObjectList() {
     const [searchTerm, setSearchTerm] = useState("")
     const [brokerInfo, setBrokerInfo] = useState<BrokerInfo | null>(null)
     
+    // Uitgangsdatum management state
+    const [editingUitgangsdatum, setEditingUitgangsdatum] = useState<string | null>(null)
+    const [showUitgangsdatumModal, setShowUitgangsdatumModal] = useState(false)
+    const [selectedUitgangsdatum, setSelectedUitgangsdatum] = useState("")
+    const [uitgangsdatumError, setUitgangsdatumError] = useState<string | null>(null)
+    
+    // Uitgangsdatum validation function
+    const validateUitgangsdatum = (date: string): { isValid: boolean; error?: string } => {
+        const selectedDate = new Date(date)
+        const today = new Date()
+        const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const endOfYear = new Date(today.getFullYear(), 11, 31) // December 31st of current year
+        
+        // Check if date is more than 1 week in the past
+        if (selectedDate < oneWeekAgo) {
+            return { 
+                isValid: false, 
+                error: "Uitgangsdatum kan niet meer dan 1 week in het verleden liggen. Neem contact op met de beheerders." 
+            }
+        }
+        
+        // Check if date is in the next year
+        if (selectedDate.getFullYear() > today.getFullYear()) {
+            return { 
+                isValid: false, 
+                error: "Uitgangsdatum kan niet in het volgende jaar liggen. Neem contact op met de beheerders." 
+            }
+        }
+        
+        return { isValid: true }
+    }
+
     // Dynamic schema hook
     const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(currentOrganization || undefined)
     
-    // Use dynamic schema or fallback to default
-    const COLUMNS = schema || DEFAULT_SCHEMA
+    // Use dynamic schema or fallback to empty array
+    const COLUMNS = schema || []
     
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set())
     
-    // Update visible columns when schema changes
+    // Update visible columns when schema changes - use organization's field visibility configuration
     useEffect(() => {
         if (COLUMNS.length > 0) {
-            setVisibleColumns(
-                new Set(
-                    COLUMNS.filter((col) => col.group === "basic").map(
-                        (col) => col.key
-                    )
-                )
-            )
+            // Use fields marked as visible in the organization's schema configuration
+            const visibleColumnsFromSchema = COLUMNS
+                .filter((col) => col.visible)
+                .map((col) => col.key)
+            
+            // If no columns are marked visible, fallback to essential columns
+            const columnsToShow = visibleColumnsFromSchema.length > 0 
+                ? visibleColumnsFromSchema 
+                : ['objectType', 'status', 'waarde']
+            
+            setVisibleColumns(new Set(columnsToShow))
         }
     }, [COLUMNS])
     const [organizations, setOrganizations] = useState<string[]>([])
@@ -3366,6 +3384,259 @@ function InsuredObjectList() {
         null
     )
     const [showCreateForm, setShowCreateForm] = useState<boolean>(false)
+    
+    // Print modal state
+    const [showPrintModal, setShowPrintModal] = useState<boolean>(false)
+    const [selectedPrintObjects, setSelectedPrintObjects] = useState<Set<string>>(new Set())
+    const [selectedPrintFields, setSelectedPrintFields] = useState<Set<string>>(new Set())
+    const [includeTotals, setIncludeTotals] = useState<boolean>(true)
+
+    // Get insured object fields only (excluding organization fields)
+    const printableFields = React.useMemo(() => {
+        // Filter columns to only include fields that are relevant to insured objects
+        // This excludes organization-specific fields
+        return COLUMNS.filter(field => {
+            // Exclude organization-only fields by checking objectTypes
+            const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+            
+            // Include fields that are either user-input fields or commonly printed system fields
+            const isRelevantField = field.inputType === 'user' || 
+                                   field.inputType === 'system' || 
+                                   field.inputType === 'auto' ||
+                                   !field.inputType // fallback for fields without inputType
+            
+            return isNotOrganizationField && isRelevantField
+        })
+    }, [COLUMNS])
+
+    // PDF Generation Function
+    const generatePDF = () => {
+        const selectedObjects = filteredObjects.filter(obj => selectedPrintObjects.has(obj.id))
+        const selectedFields = printableFields.filter(col => selectedPrintFields.has(col.key))
+        
+        // Calculate totals for selected objects
+        const totalWaarde = selectedObjects.reduce((sum, obj) => sum + (Number(obj.waarde) || 0), 0)
+        const totalPremieVerzekerdePeriode = selectedObjects.reduce((sum, obj) => {
+            const { periodPremium } = calculateObjectPremiums(obj)
+            return sum + periodPremium
+        }, 0)
+        const totalPremieJaar = selectedObjects.reduce((sum, obj) => {
+            const { yearlyPremium } = calculateObjectPremiums(obj)
+            return sum + yearlyPremium
+        }, 0)
+        
+        // Create a new window/tab for PDF content
+        const printWindow = window.open('', '_blank', 'width=800,height=600')
+        if (!printWindow) {
+            alert('Popup geblokkeerd. Sta popups toe voor deze website.')
+            return
+        }
+
+        const currentDate = new Date().toLocaleDateString('nl-NL')
+        const organizationName = currentOrganization || 'Alle organisaties'
+        
+        // Generate HTML content for PDF
+        const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Vloot Overzicht - ${organizationName}</title>
+    <style>
+        body { 
+            font-family: ${FONT_STACK}; 
+            margin: 40px; 
+            color: #1f2937; 
+            line-height: 1.4;
+        }
+        .header { 
+            border-bottom: 2px solid ${colors.primary}; 
+            padding-bottom: 20px; 
+            margin-bottom: 30px; 
+        }
+        .header h1 { 
+            color: ${colors.primary}; 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 600;
+        }
+        .header .subtitle { 
+            color: #6b7280; 
+            margin: 8px 0 0 0; 
+            font-size: 16px; 
+        }
+        .meta-info {
+            background-color: #f8fafc;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            border-left: 4px solid ${colors.primary};
+        }
+        .meta-info div {
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        .meta-info strong {
+            color: #374151;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 30px; 
+            font-size: 12px;
+        }
+        th, td { 
+            padding: 8px 6px; 
+            text-align: left; 
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+        th { 
+            background-color: ${colors.gray100}; 
+            font-weight: 600; 
+            color: #374151; 
+            border-bottom: 2px solid ${colors.gray300};
+        }
+        tr:hover { 
+            background-color: #f9fafb; 
+        }
+        .totals { 
+            background-color: #f0f9ff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid ${colors.primary}40;
+            margin-top: 24px;
+        }
+        .totals h3 { 
+            color: ${colors.primary}; 
+            margin-top: 0; 
+            font-size: 18px; 
+        }
+        .totals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .totals-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid ${colors.gray200};
+        }
+        .totals-label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        .totals-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .currency {
+            color: ${colors.primary};
+        }
+        @media print {
+            body { margin: 20px; }
+            .header { page-break-after: avoid; }
+            table { page-break-inside: avoid; }
+            .totals { page-break-before: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Vloot Overzicht</h1>
+        <div class="subtitle">${organizationName}</div>
+    </div>
+    
+    <div class="meta-info">
+        <div><strong>Datum:</strong> ${currentDate}</div>
+        <div><strong>Aantal objecten:</strong> ${selectedObjects.length}</div>
+        <div><strong>Geselecteerde velden:</strong> ${selectedFields.length}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                ${selectedFields.map(field => `<th>${field.label}</th>`).join('')}
+            </tr>
+        </thead>
+        <tbody>
+            ${selectedObjects.map(obj => `
+                <tr>
+                    ${selectedFields.map(field => {
+                        let value = obj[field.key as keyof typeof obj]
+                        
+                        // Format specific fields
+                        if (field.key === 'waarde' || field.key === 'totalePremieOverHetJaar' || field.key === 'totalePremieOverDeVerzekerdePeriode') {
+                            const numValue = Number(value) || 0
+                            value = numValue.toLocaleString('nl-NL', { 
+                                style: 'currency', 
+                                currency: 'EUR',
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0
+                            })
+                        } else if (field.key === 'premiepromillage') {
+                            const numValue = Number(value) || 0
+                            value = numValue.toFixed(2) + '‰'
+                        }
+                        
+                        return `<td>${value || '-'}</td>`
+                    }).join('')}
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+
+    ${includeTotals ? `
+    <div class="totals">
+        <h3>Totaaloverzicht</h3>
+        <div class="totals-grid">
+            <div class="totals-item">
+                <div class="totals-label">Totale waarde</div>
+                <div class="totals-value currency">€${totalWaarde.toLocaleString('nl-NL')}</div>
+            </div>
+            <div class="totals-item">
+                <div class="totals-label">Totale premie (jaar)</div>
+                <div class="totals-value currency">€${Math.round(totalPremieJaar).toLocaleString('nl-NL')}</div>
+            </div>
+            <div class="totals-item">
+                <div class="totals-label">Totale premie (verzekerde periode)</div>
+                <div class="totals-value currency">€${Math.round(totalPremieVerzekerdePeriode).toLocaleString('nl-NL')}</div>
+            </div>
+            <div class="totals-item">
+                <div class="totals-label">Aantal objecten</div>
+                <div class="totals-value">${selectedObjects.length}</div>
+            </div>
+        </div>
+    </div>
+    ` : ''}
+
+    <script>
+        window.onload = function() {
+            // Automatically trigger print dialog
+            setTimeout(() => {
+                window.print();
+                // Close window after printing (user can cancel this)
+                window.onafterprint = function() {
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                }
+            }, 500);
+        }
+    </script>
+</body>
+</html>`
+
+        printWindow.document.write(htmlContent)
+        printWindow.document.close()
+        
+        // Close the modal
+        setShowPrintModal(false)
+    }
 
     // Toggle functions
     const toggleColumn = (column: string) => {
@@ -3518,17 +3789,35 @@ function InsuredObjectList() {
 
             const data = await res.json()
             console.log(`Received data:`, data)
-            const objectsList = Array.isArray(data) ? data : data.items || []
+            
+            // More robust data parsing with null safety
+            let objectsList: InsuredObject[] = []
+            if (Array.isArray(data)) {
+                objectsList = data
+            } else if (data && typeof data === 'object' && Array.isArray(data.items)) {
+                objectsList = data.items
+            } else {
+                console.warn('Unexpected API response format:', data)
+                objectsList = []
+            }
+            
             console.log(`Setting objects: ${objectsList.length} items`)
-            setObjects(objectsList)
+            // Update all objects with calculated premium values for consistency
+            const objectsWithCalculatedPremiums = objectsList.map(obj => updateObjectWithCalculatedPremiums(obj))
+            setObjects(objectsWithCalculatedPremiums)
         } catch (err: any) {
             console.error("Error in fetchObjects:", err)
+            // Ensure objects remains an empty array on error, not null
+            setObjects([])
             throw new Error(err.message || "Failed to fetch insured objects")
         }
     }
 
     // Role-aware filtering with organization-specific context
-    const filteredObjects = objects
+    // Debug logging to understand objects state
+    console.log('Objects state before filtering:', objects, typeof objects, Array.isArray(objects))
+    
+    const filteredObjects = objects && Array.isArray(objects)
         ? filterObjects(
               objects,
               searchTerm,
@@ -3537,7 +3826,7 @@ function InsuredObjectList() {
               selectedObjectTypes,
               isAdmin(userInfo),
               currentOrganization // Pass current organization for filtering
-          )
+          ).map(obj => updateObjectWithCalculatedPremiums(obj)) // Ensure calculated fields are up-to-date
         : []
 
     const getVisibleColumnsList = () => {
@@ -3552,33 +3841,18 @@ function InsuredObjectList() {
             // All other fields follow in their original order
         ]
         
-        // Filter out object-specific brand/type columns if unified columns are available
-        const hasUnifiedBrand = COLUMNS.some(col => col.key === 'brand' && visibleColumns.has(col.key))
-        const hasUnifiedType = COLUMNS.some(col => col.key === 'type' && visibleColumns.has(col.key))
-        
+        // Filter columns based on visibility and data availability
         const filteredColumns = COLUMNS.filter((col) => {
             if (!visibleColumns.has(col.key)) return false
             
-            // Hide object-specific brand columns if unified brand is available
-            if (hasUnifiedBrand && ['merkBoot', 'trailerMerk', 'motorMerk'].includes(col.key)) {
-                return false
-            }
-            
-            // Hide object-specific type columns if unified type is available  
-            if (hasUnifiedType && ['typeBoot', 'trailerType', 'motorModel'].includes(col.key)) {
-                return false
-            }
-            
             // Hide columns that have no data in the current filtered set
             const columnHasData = filteredObjects.some(obj => {
-                const value = (col.key === 'brand' || col.key === 'type') 
-                    ? safeGetUnifiedFieldValue(obj, col.key)
-                    : obj[col.key as keyof InsuredObject]
+                const value = obj[col.key as keyof InsuredObject]
                 return value !== null && value !== undefined && value !== ''
             })
             
             // Always show essential columns even if empty
-            const essentialColumns = ['objectType', 'status', 'waarde', 'brand', 'type']
+            const essentialColumns = ['objectType', 'status', 'waarde', 'merkBoot', 'typeBoot', 'merkMotor', 'typeMotor', 'chassisnummer', 'uitgangsdatum']
             if (essentialColumns.includes(col.key)) {
                 return true
             }
@@ -3728,6 +4002,65 @@ function InsuredObjectList() {
         },
         [decliningObjectId]
     )
+
+    // Uitgangsdatum handlers
+    const handleUitgangsdatumClick = useCallback((objectId: string, currentDate?: string) => {
+        setEditingUitgangsdatum(objectId)
+        setSelectedUitgangsdatum(currentDate || new Date().toISOString().split('T')[0])
+        setUitgangsdatumError(null)
+        setShowUitgangsdatumModal(true)
+    }, [])
+
+    const handleUitgangsdatumCancel = useCallback(() => {
+        setEditingUitgangsdatum(null)
+        setSelectedUitgangsdatum("")
+        setUitgangsdatumError(null)
+        setShowUitgangsdatumModal(false)
+    }, [])
+
+    const handleUitgangsdatumConfirm = useCallback(async () => {
+        if (!editingUitgangsdatum || !selectedUitgangsdatum) return
+
+        // Validate the date
+        const validation = validateUitgangsdatum(selectedUitgangsdatum)
+        if (!validation.isValid) {
+            setUitgangsdatumError(validation.error || "Invalid date")
+            return
+        }
+
+        try {
+            const token = getIdToken()
+            const res = await fetch(
+                `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${editingUitgangsdatum}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ 
+                        uitgangsdatum: selectedUitgangsdatum,
+                        status: "OutOfPolicy" 
+                    }),
+                }
+            )
+
+            if (!res.ok) {
+                throw new Error(`Failed to update: ${res.status} ${res.statusText}`)
+            }
+
+            // Show success message
+            setSuccessMessage("Uitgangsdatum successfully set - object is now out of policy")
+
+            // Refresh the list
+            await fetchObjects()
+            
+            // Close modal
+            handleUitgangsdatumCancel()
+        } catch (err: any) {
+            setUitgangsdatumError(err.message || "Failed to update uitgangsdatum")
+        }
+    }, [editingUitgangsdatum, selectedUitgangsdatum, validateUitgangsdatum, handleUitgangsdatumCancel])
 
     if (isLoading || schemaLoading) {
         return (
@@ -3880,9 +4213,22 @@ function InsuredObjectList() {
                             >
                                 {filteredObjects.length} objecten
                             </div>
+                            <PrintOverviewButton onPrintClick={() => setShowPrintModal(true)} />
                             <CreateObjectButton onCreateClick={() => setShowCreateForm(true)} />
                         </div>
                     </div>
+
+                    {/* Auto Accept Rules Display - only show when viewing specific organization */}
+                    {currentOrganization && (
+                        <div style={{
+                            marginTop: "16px",
+                            marginBottom: "8px",
+                            display: "flex",
+                            justifyContent: "flex-start",
+                        }}>
+                            <AutoAcceptRulesDisplay organizationName={currentOrganization} />
+                        </div>
+                    )}
 
                     <SearchAndFilterBar
                         searchTerm={searchTerm}
@@ -3974,21 +4320,27 @@ function InsuredObjectList() {
                                     key={object.id}
                                     style={{
                                         backgroundColor:
-                                            index % 2 === 0
-                                                ? "#ffffff"
-                                                : "#f8fafc",
-                                        transition: "background-color 0.2s",
+                                            object.status === "OutOfPolicy"
+                                                ? "#f9fafb"
+                                                : index % 2 === 0
+                                                    ? "#ffffff"
+                                                    : "#f8fafc",
+                                        opacity: object.status === "OutOfPolicy" ? 0.6 : 1,
+                                        transition: "background-color 0.2s, opacity 0.2s",
                                     }}
-                                    onMouseOver={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                            "#f1f5f9")
-                                    }
-                                    onMouseOut={(e) =>
-                                        (e.currentTarget.style.backgroundColor =
-                                            index % 2 === 0
+                                    onMouseOver={(e) => {
+                                        if (object.status !== "OutOfPolicy") {
+                                            e.currentTarget.style.backgroundColor = "#f1f5f9"
+                                        }
+                                    }}
+                                    onMouseOut={(e) => {
+                                        const originalBg = object.status === "OutOfPolicy"
+                                            ? "#f9fafb"
+                                            : index % 2 === 0
                                                 ? "#ffffff"
-                                                : "#f8fafc")
-                                    }
+                                                : "#f8fafc"
+                                        e.currentTarget.style.backgroundColor = originalBg
+                                    }}
                                 >
                                     {/* Actions cell */}
                                     <td
@@ -4066,22 +4418,98 @@ function InsuredObjectList() {
                                                     <UnifiedStatusCell
                                                         object={object}
                                                         userInfo={userInfo}
-                                                        onApprove={handleApprove}
-                                                        onDecline={handleDecline}
                                                     />
                                                 </td>
                                             )
                                         }
 
-                                        // Regular cell rendering with unified field support
-                                        const cellValue = (col.key === 'brand' || col.key === 'type') 
-                                            ? safeGetUnifiedFieldValue(object, col.key)
-                                            : object[col.key as keyof InsuredObject]
-                                        const displayValue =
-                                            renderObjectCellValue(
-                                                col,
-                                                cellValue
+                                        // Special handling for uitgangsdatum column to make it clickable
+                                        if (col.key === "uitgangsdatum") {
+                                            const cellValue = object.uitgangsdatum
+                                            const hasValue = cellValue && cellValue.trim() !== ""
+                                            
+                                            return (
+                                                <td
+                                                    key={col.key}
+                                                    style={{
+                                                        padding: "12px 8px",
+                                                        borderBottom: "1px solid #f1f5f9",
+                                                        color: "#374151",
+                                                        fontSize: "13px",
+                                                        lineHeight: "1.3",
+                                                        cursor: object.status !== "OutOfPolicy" ? "pointer" : "default",
+                                                    }}
+                                                    onClick={() => {
+                                                        if (object.status !== "OutOfPolicy") {
+                                                            handleUitgangsdatumClick(object.id, cellValue)
+                                                        }
+                                                    }}
+                                                    onMouseOver={(e) => {
+                                                        if (object.status !== "OutOfPolicy" && !hasValue) {
+                                                            const div = e.currentTarget.querySelector('div')
+                                                            if (div) {
+                                                                div.style.backgroundColor = "#bfdbfe"
+                                                                div.style.borderColor = "#1d4ed8"
+                                                                div.style.transform = "scale(1.02)"
+                                                            }
+                                                        }
+                                                    }}
+                                                    onMouseOut={(e) => {
+                                                        if (object.status !== "OutOfPolicy" && !hasValue) {
+                                                            const div = e.currentTarget.querySelector('div')
+                                                            if (div) {
+                                                                div.style.backgroundColor = "#dbeafe"
+                                                                div.style.borderColor = "#3b82f6"
+                                                                div.style.transform = "scale(1)"
+                                                            }
+                                                        }
+                                                    }}
+                                                    title={
+                                                        object.status !== "OutOfPolicy" 
+                                                            ? "Klik om uitgangsdatum in te stellen"
+                                                            : "Uitgangsdatum is al ingesteld"
+                                                    }
+                                                >
+                                                    <div
+                                                        style={{
+                                                            padding: hasValue ? "6px 12px" : "8px 16px",
+                                                            borderRadius: "8px",
+                                                            backgroundColor: 
+                                                                object.status !== "OutOfPolicy" 
+                                                                    ? (hasValue ? "#f8fafc" : "#dbeafe")
+                                                                    : "transparent",
+                                                            border: 
+                                                                object.status !== "OutOfPolicy" && !hasValue
+                                                                    ? "1px solid #3b82f6"
+                                                                    : hasValue
+                                                                        ? "1px solid #e5e7eb"
+                                                                        : "none",
+                                                            color: 
+                                                                object.status !== "OutOfPolicy"
+                                                                    ? (hasValue ? "#374151" : "#1d4ed8")
+                                                                    : "#d1d5db",
+                                                            fontWeight: hasValue ? "normal" : "500",
+                                                            fontSize: hasValue ? "13px" : "12px",
+                                                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+                                                            textAlign: "center",
+                                                            minWidth: hasValue ? "auto" : "160px",
+                                                            transition: "all 0.2s ease",
+                                                            opacity: object.status === "OutOfPolicy" ? 0.8 : 1,
+                                                        }}
+                                                    >
+                                                        {hasValue
+                                                            ? new Date(cellValue).toLocaleDateString()
+                                                            : object.status !== "OutOfPolicy"
+                                                                ? "Klik hier om een uitgangsdatum aan te geven"
+                                                                : "-"
+                                                        }
+                                                    </div>
+                                                </td>
                                             )
+                                        }
+
+                                        // Regular cell rendering using direct field access
+                                        const cellValue = object[col.key as keyof InsuredObject]
 
                                         return (
                                             <td
@@ -4098,7 +4526,7 @@ function InsuredObjectList() {
                                                 }}
                                                 title={String(cellValue ?? "-")}
                                             >
-                                                {displayValue}
+                                                {renderObjectCellValue(col, cellValue)}
                                             </td>
                                         )
                                     })}
@@ -4108,6 +4536,9 @@ function InsuredObjectList() {
                     </table>
                 </div>
             </div>
+
+            {/* Totals Display */}
+            <TotalsDisplay objects={filteredObjects} />
 
             {/* Notifications */}
             {successMessage &&
@@ -4234,7 +4665,651 @@ function InsuredObjectList() {
                     onOrganizationSelect={setCurrentOrganization}
                 />
             )}
+
+            {/* Uitgangsdatum Confirmation Modal */}
+            {showUitgangsdatumModal && ReactDOM.createPortal(
+                <>
+                    <div
+                        style={styles.modalOverlay}
+                        onClick={handleUitgangsdatumCancel}
+                    >
+                        <div
+                            style={{
+                                ...styles.modal,
+                                width: "400px",
+                                maxWidth: "90vw",
+                                padding: "24px",
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "600", color: colors.gray800, fontFamily: FONT_STACK }}>
+                                Uitgangsdatum instellen
+                            </h3>
+                            
+                            <p style={{ ...styles.description, margin: "0 0 16px 0" }}>
+                                Door het instellen van een uitgangsdatum wordt de status automatisch gewijzigd naar "Buiten Polis". Dit betekent dat het object niet meer onder het beleid valt.
+                            </p>
+
+                            <div style={{ marginBottom: "16px" }}>
+                                <label style={styles.label}>
+                                    Uitgangsdatum:
+                                </label>
+                                <input
+                                    type="date"
+                                    value={selectedUitgangsdatum}
+                                    onChange={(e) => {
+                                        setSelectedUitgangsdatum(e.target.value)
+                                        setUitgangsdatumError(null) // Clear error when user changes date
+                                    }}
+                                    style={{
+                                        ...styles.input,
+                                        border: uitgangsdatumError ? `1px solid ${colors.error}` : `1px solid ${colors.gray300}`,
+                                    }}
+                                />
+                            </div>
+
+                            {uitgangsdatumError && (
+                                <div style={{
+                                    ...styles.errorAlert,
+                                    marginBottom: "16px",
+                                }}>
+                                    {uitgangsdatumError}
+                                </div>
+                            )}
+
+                            <div style={styles.buttonGroup}>
+                                <button
+                                    onClick={handleUitgangsdatumCancel}
+                                    style={{
+                                        fontFamily: FONT_STACK,
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                        borderRadius: "6px",
+                                        padding: "10px 16px",
+                                        border: "1px solid",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        outline: "none",
+                                        backgroundColor: "#f3f4f6",
+                                        color: "#374151",
+                                        borderColor: "#d1d5db",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#e5e7eb"
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#f3f4f6"
+                                    }}
+                                >
+                                    Annuleren
+                                </button>
+                                <button
+                                    onClick={handleUitgangsdatumConfirm}
+                                    style={{
+                                        fontFamily: FONT_STACK,
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                        borderRadius: "6px",
+                                        padding: "10px 16px",
+                                        border: "1px solid",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        outline: "none",
+                                        backgroundColor: "#3b82f6",
+                                        color: "#ffffff",
+                                        borderColor: "#3b82f6",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#2563eb"
+                                        e.currentTarget.style.borderColor = "#2563eb"
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#3b82f6"
+                                        e.currentTarget.style.borderColor = "#3b82f6"
+                                    }}
+                                >
+                                    Bevestigen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>,
+                document.body
+            )}
+
+            {/* Print Modal */}
+            {showPrintModal && ReactDOM.createPortal(
+                <>
+                    <div
+                        style={styles.modalOverlay}
+                        onClick={() => setShowPrintModal(false)}
+                    >
+                        <div
+                            style={{
+                                ...styles.modal,
+                                width: "800px",
+                                maxWidth: "90vw",
+                                maxHeight: "90vh",
+                                padding: "24px",
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <h3 style={{ 
+                                margin: "0 0 24px 0", 
+                                fontSize: "20px", 
+                                fontWeight: "600", 
+                                color: colors.gray800, 
+                                fontFamily: FONT_STACK 
+                            }}>
+                                Print Overzicht
+                            </h3>
+
+                            <div style={{ marginBottom: "24px" }}>
+                                <h4 style={{ 
+                                    margin: "0 0 12px 0", 
+                                    fontSize: "16px", 
+                                    fontWeight: "500", 
+                                    color: colors.gray700,
+                                    fontFamily: FONT_STACK 
+                                }}>
+                                    Selecteer objecten ({filteredObjects.length} beschikbaar)
+                                </h4>
+                                
+                                <div style={{ 
+                                    display: "flex", 
+                                    gap: "12px", 
+                                    marginBottom: "16px" 
+                                }}>
+                                    <button
+                                        onClick={() => setSelectedPrintObjects(new Set(filteredObjects.map(obj => obj.id)))}
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                        }}
+                                    >
+                                        Alles selecteren
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedPrintObjects(new Set())}
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                        }}
+                                    >
+                                        Alles deselecteren
+                                    </button>
+                                </div>
+
+                                <div style={{
+                                    maxHeight: "200px",
+                                    overflowY: "auto",
+                                    border: `1px solid ${colors.gray200}`,
+                                    borderRadius: "8px",
+                                    padding: "12px",
+                                    backgroundColor: colors.gray50
+                                }}>
+                                    {filteredObjects.map(obj => (
+                                        <div key={obj.id} style={{ 
+                                            display: "flex", 
+                                            alignItems: "center", 
+                                            gap: "8px", 
+                                            marginBottom: "8px" 
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPrintObjects.has(obj.id)}
+                                                onChange={(e) => {
+                                                    const newSelected = new Set(selectedPrintObjects)
+                                                    if (e.target.checked) {
+                                                        newSelected.add(obj.id)
+                                                    } else {
+                                                        newSelected.delete(obj.id)
+                                                    }
+                                                    setSelectedPrintObjects(newSelected)
+                                                }}
+                                                style={{ cursor: "pointer" }}
+                                            />
+                                            <span style={{ 
+                                                fontSize: "14px", 
+                                                color: colors.gray700,
+                                                fontFamily: FONT_STACK 
+                                            }}>
+                                                {(() => {
+                                                    const objectType = obj.objectType || "onbekend"
+                                                    
+                                                    // Use actual available field names based on object type
+                                                    let brand = ""
+                                                    let type = ""
+                                                    let identifier = ""
+                                                    
+                                                    if (objectType === "boot") {
+                                                        brand = obj.merkBoot || "Onbekend merk"
+                                                        type = obj.typeBoot || "Onbekend type"
+                                                        identifier = obj.bootnummer || obj.cinNummer || ""
+                                                    } else if (objectType === "motor") {
+                                                        brand = obj.merkMotor || "Onbekend merk"  
+                                                        type = obj.typeMotor || "Onbekend type"
+                                                        identifier = obj.motornummer || obj.motorSerienummer || ""
+                                                    } else if (objectType === "trailer") {
+                                                        brand = obj.merkTrailer || "Onbekend merk"
+                                                        type = obj.typeTrailer || "Onbekend type"
+                                                        identifier = obj.chassisnummer || ""
+                                                    } else {
+                                                        // Fallback: try any available brand/type field
+                                                        brand = obj.merkBoot || obj.merkMotor || obj.merkTrailer || "Onbekend merk"
+                                                        type = obj.typeBoot || obj.typeMotor || obj.typeTrailer || "Onbekend type"
+                                                        identifier = obj.bootnummer || obj.motornummer || obj.chassisnummer || obj.cinNummer || ""
+                                                    }
+                                                    
+                                                    const typeLabel = objectType === "boot" ? "boot" : objectType === "motor" ? "motor" : objectType === "trailer" ? "trailer" : objectType
+                                                    
+                                                    return `${brand} ${type} (${typeLabel})${identifier ? ` - ${identifier}` : ""}`
+                                                })()}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: "24px" }}>
+                                <h4 style={{ 
+                                    margin: "0 0 12px 0", 
+                                    fontSize: "16px", 
+                                    fontWeight: "500", 
+                                    color: colors.gray700,
+                                    fontFamily: FONT_STACK 
+                                }}>
+                                    Selecteer velden
+                                </h4>
+                                
+                                <div style={{ 
+                                    display: "flex", 
+                                    gap: "12px", 
+                                    marginBottom: "16px" 
+                                }}>
+                                    <button
+                                        onClick={() => setSelectedPrintFields(new Set(printableFields.map(col => col.key)))}
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                        }}
+                                    >
+                                        Alle velden
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const basicFields = ['objectType', 'merkBoot', 'typeBoot', 'merkMotor', 'typeMotor', 'waarde', 'premiepromillage', 'status']
+                                            setSelectedPrintFields(new Set(basicFields.filter(field => printableFields.some(col => col.key === field))))
+                                        }}
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                        }}
+                                    >
+                                        Basis velden
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedPrintFields(new Set())}
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                        }}
+                                    >
+                                        Geen velden
+                                    </button>
+                                </div>
+
+                                <div style={{
+                                    maxHeight: "150px",
+                                    overflowY: "auto",
+                                    border: `1px solid ${colors.gray200}`,
+                                    borderRadius: "8px",
+                                    padding: "12px",
+                                    backgroundColor: colors.gray50,
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                                    gap: "8px"
+                                }}>
+                                    {printableFields.map(col => (
+                                        <div key={col.key} style={{ 
+                                            display: "flex", 
+                                            alignItems: "center", 
+                                            gap: "8px" 
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPrintFields.has(col.key)}
+                                                onChange={(e) => {
+                                                    const newSelected = new Set(selectedPrintFields)
+                                                    if (e.target.checked) {
+                                                        newSelected.add(col.key)
+                                                    } else {
+                                                        newSelected.delete(col.key)
+                                                    }
+                                                    setSelectedPrintFields(newSelected)
+                                                }}
+                                                style={{ cursor: "pointer" }}
+                                            />
+                                            <span style={{ 
+                                                fontSize: "13px", 
+                                                color: colors.gray700,
+                                                fontFamily: FONT_STACK 
+                                            }}>
+                                                {col.label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: "24px" }}>
+                                <div style={{ 
+                                    display: "flex", 
+                                    alignItems: "center", 
+                                    gap: "8px" 
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={includeTotals}
+                                        onChange={(e) => setIncludeTotals(e.target.checked)}
+                                        style={{ cursor: "pointer" }}
+                                    />
+                                    <span style={{ 
+                                        fontSize: "14px", 
+                                        color: colors.gray700,
+                                        fontFamily: FONT_STACK 
+                                    }}>
+                                        Totaaloverzicht toevoegen
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style={styles.buttonGroup}>
+                                <button
+                                    onClick={() => setShowPrintModal(false)}
+                                    style={styles.secondaryButton}
+                                >
+                                    Annuleren
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (selectedPrintObjects.size === 0) {
+                                            alert("Selecteer minimaal één object om te printen.")
+                                            return
+                                        }
+                                        if (selectedPrintFields.size === 0) {
+                                            alert("Selecteer minimaal één veld om te printen.")
+                                            return
+                                        }
+                                        generatePDF()
+                                    }}
+                                    style={{
+                                        ...styles.primaryButton,
+                                        opacity: (selectedPrintObjects.size === 0 || selectedPrintFields.size === 0) ? 0.6 : 1
+                                    }}
+                                >
+                                    <FaPrint size={14} />
+                                    PDF Genereren
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>,
+                document.body
+            )}
             </div>
+    )
+}
+
+// ——— Premium Calculation Utilities ———
+// IMPORTANT: These utilities ensure consistent premium calculations across the application.
+// The totals overview will always be calculated from the actual field values using these
+// utility functions, preventing discrepancies between individual object values and totals.
+
+// Helper function to calculate insurance period in days
+const calculateInsurancePeriod = (obj: InsuredObject): number => {
+    const startDate = obj.ingangsdatum ? new Date(obj.ingangsdatum) : new Date()
+    let endDate: Date
+    
+    if (obj.uitgangsdatum && obj.uitgangsdatum.trim() !== "") {
+        endDate = new Date(obj.uitgangsdatum)
+    } else {
+        // If no end date, calculate until end of current year
+        const currentYear = new Date().getFullYear()
+        endDate = new Date(currentYear, 11, 31) // December 31st
+    }
+    
+    // Calculate difference in days
+    const timeDifference = endDate.getTime() - startDate.getTime()
+    const daysDifference = Math.max(1, Math.ceil(timeDifference / (1000 * 3600 * 24)))
+    
+    return daysDifference
+}
+
+// Helper function to calculate individual premiums consistently
+const calculateObjectPremiums = (obj: InsuredObject) => {
+    const waarde = Number(obj.waarde) || 0
+    const promillage = Number(obj.premiepromillage) || 0
+    const yearlyPremium = waarde * promillage / 1000
+    
+    // Calculate actual period premium based on days
+    const periodDays = calculateInsurancePeriod(obj)
+    const periodPremium = yearlyPremium * (periodDays / 365)
+    
+    return {
+        yearlyPremium,
+        periodPremium,
+        periodDays
+    }
+}
+
+// Function to update object with calculated premium values
+const updateObjectWithCalculatedPremiums = (obj: InsuredObject): InsuredObject => {
+    const { yearlyPremium, periodPremium, periodDays } = calculateObjectPremiums(obj)
+    
+    return {
+        ...obj,
+        totalePremieOverHetJaar: yearlyPremium,
+        totalePremieOverDeVerzekerdePeriode: periodPremium,
+        aantalVerzekerdeDagen: periodDays
+    }
+}
+
+// ——— Totals Display Component ———
+function TotalsDisplay({ 
+    objects, 
+    label 
+}: { 
+    objects: InsuredObject[], 
+    label?: string 
+}) {
+    if (!objects || objects.length === 0) {
+        return null
+    }
+
+    // Use useMemo to recalculate totals efficiently when objects change
+    const { totalWaarde, totalPremieVerzekerdePeriode, totalPremieJaar, difference, percentageDifference } = React.useMemo(() => {
+        console.log('🧮 Recalculating totals for', objects.length, 'objects')
+        
+        const totalWaarde = objects.reduce((sum, obj) => {
+            return sum + (Number(obj.waarde) || 0)
+        }, 0)
+        
+        const totalPremieVerzekerdePeriode = objects.reduce((sum, obj) => {
+            const { periodPremium } = calculateObjectPremiums(obj)
+            return sum + periodPremium
+        }, 0)
+        
+        const totalPremieJaar = objects.reduce((sum, obj) => {
+            const { yearlyPremium } = calculateObjectPremiums(obj)
+            return sum + yearlyPremium
+        }, 0)
+        
+        // Calculate difference and percentage
+        const difference = totalPremieJaar - totalPremieVerzekerdePeriode
+        const percentageDifference = totalPremieJaar > 0 ? ((difference / totalPremieJaar) * 100) : 0
+
+        console.log('💰 Calculated totals:', {
+            totalWaarde: totalWaarde.toLocaleString(),
+            totalPremieJaar: Math.round(totalPremieJaar).toLocaleString(),
+            totalPremieVerzekerdePeriode: Math.round(totalPremieVerzekerdePeriode).toLocaleString(),
+            difference: Math.round(Math.abs(difference)).toLocaleString(),
+            percentageDifference: percentageDifference.toFixed(1) + '%'
+        })
+        
+        return {
+            totalWaarde,
+            totalPremieVerzekerdePeriode,
+            totalPremieJaar,
+            difference,
+            percentageDifference
+        }
+    }, [objects]) // Recalculate when objects array changes
+
+    return (
+        <div style={{
+            margin: "16px 0",
+            padding: "16px",
+            backgroundColor: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "8px",
+            fontFamily: FONT_STACK,
+        }}>
+            <div style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "12px"
+            }}>
+                <h3 style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: "#1f2937"
+                }}>
+                    {label || "Totaaloverzicht"}
+                </h3>
+                <div style={{
+                    marginLeft: "12px",
+                    fontSize: "14px",
+                    color: "#6b7280",
+                    backgroundColor: "#e5e7eb",
+                    padding: "4px 8px",
+                    borderRadius: "4px"
+                }}>
+                    {objects.length} objecten
+                </div>
+            </div>
+            
+            <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: "16px"
+            }}>
+                <div style={{
+                    padding: "12px",
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px"
+                }}>
+                    <div style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                        fontWeight: "500"
+                    }}>
+                        Totale waarde
+                    </div>
+                    <div style={{
+                        fontSize: "18px",
+                        fontWeight: "600",
+                        color: "#1f2937"
+                    }}>
+                        €{totalWaarde.toLocaleString()}
+                    </div>
+                </div>
+                
+                <div style={{
+                    padding: "12px",
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px"
+                }}>
+                    <div style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                        fontWeight: "500"
+                    }}>
+                        Totale premie over de verzekerde periode
+                    </div>
+                    <div style={{
+                        fontSize: "18px",
+                        fontWeight: "600",
+                        color: colors.primary
+                    }}>
+                        €{Math.round(totalPremieVerzekerdePeriode).toLocaleString()}
+                    </div>
+                </div>
+                
+                <div style={{
+                    padding: "12px",
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px"
+                }}>
+                    <div style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                        fontWeight: "500"
+                    }}>
+                        Totale premie over het jaar
+                    </div>
+                    <div style={{
+                        fontSize: "18px",
+                        fontWeight: "600",
+                        color: colors.secondary
+                    }}>
+                        €{Math.round(totalPremieJaar).toLocaleString()}
+                    </div>
+                </div>
+                
+                <div style={{
+                    padding: "12px",
+                    backgroundColor: difference > 0 ? "#fef3f2" : "#f0fdf4",
+                    border: `1px solid ${difference > 0 ? "#fecaca" : "#bbf7d0"}`,
+                    borderRadius: "6px"
+                }}>
+                    <div style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        marginBottom: "4px",
+                        fontWeight: "500"
+                    }}>
+                        Verschil (jaar - periode)
+                    </div>
+                    <div style={{
+                        fontSize: "18px",
+                        fontWeight: "600",
+                        color: difference > 0 ? "#dc2626" : "#16a34a"
+                    }}>
+                        €{Math.round(Math.abs(difference)).toLocaleString()}
+                    </div>
+                    <div style={{
+                        fontSize: "12px",
+                        color: difference > 0 ? "#dc2626" : "#16a34a",
+                        marginTop: "2px"
+                    }}>
+                        {difference > 0 ? "+" : ""}{percentageDifference.toFixed(1)}%
+                    </div>
+                </div>
+            </div>
+        </div>
     )
 }
 

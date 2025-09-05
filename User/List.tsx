@@ -571,8 +571,7 @@ function EditUserForm({
                         marginTop: "4px",
                     }}
                 >
-                    This field cannot be edited as it's linked to your Cognito
-                    identity.
+                    Dit veld is een unieke identifier en kan niet veranderd worden
                 </div>
             </div>
 
@@ -1646,7 +1645,7 @@ export function UserPageOverride(): Override {
                             {[
                                 { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                                 { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
-                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
+                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending_overview" },
                                 { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                 { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
                             ].filter((tab) => {

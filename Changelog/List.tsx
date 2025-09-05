@@ -24,48 +24,47 @@ import {
     FaCogs,
 } from "react-icons/fa"
 
-// ——— Constants & Helpers ———
-const API_BASE_URL = "https://dev.api.hienfeld.io"
-const CHANGELOG_PATH = "/neptunus/changelog"
-const INSURED_OBJECT_PATH = "/neptunus/insured-object"
-
-// Enhanced font stack for better typography
-const FONT_STACK =
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
+import { colors, styles, hover, FONT_STACK, animations } from "../theme"
+import { API_BASE_URL, API_PATHS, getIdToken, getUserId } from "../utils"
 
 // Add CSS animation for loading spinner
-if (typeof document !== 'undefined') {
-    const style = document.createElement('style')
+if (typeof document !== "undefined") {
+    const style = document.createElement("style")
     style.textContent = `
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
     `
-    if (!document.head.querySelector('style[data-changelog-spinner]')) {
-        style.setAttribute('data-changelog-spinner', 'true')
+    if (!document.head.querySelector("style[data-changelog-spinner]")) {
+        style.setAttribute("data-changelog-spinner", "true")
         document.head.appendChild(style)
     }
 }
 
-function getIdToken(): string | null {
-    return sessionStorage.getItem("idToken")
-}
-
-async function fetchChangelog(): Promise<any[]> {
+async function fetchChangelog(page: number = 0, pageSize: number = 50): Promise<{items: any[], pagination: any}> {
     const token = getIdToken()
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     }
     if (token) headers.Authorization = `Bearer ${token}`
-    const res = await fetch(`${API_BASE_URL}${CHANGELOG_PATH}`, {
+    
+    const url = new URL(`${API_BASE_URL}${API_PATHS.CHANGELOG}`)
+    url.searchParams.append('page', page.toString())
+    url.searchParams.append('pageSize', pageSize.toString())
+    
+    const res = await fetch(url.toString(), {
         method: "GET",
         headers,
         mode: "cors",
     })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const json = await res.json()
-    return json.items || json.data || json
+    
+    return {
+        items: json.items || json.data || json,
+        pagination: json.pagination || { page: 0, pageSize: 50, totalItems: 0, hasMore: false, totalPages: 0 }
+    }
 }
 
 async function fetchPendingCount(): Promise<number> {
@@ -75,16 +74,20 @@ async function fetchPendingCount(): Promise<number> {
             "Content-Type": "application/json",
         }
         if (token) headers.Authorization = `Bearer ${token}`
-        
-        const res = await fetch(`${API_BASE_URL}${INSURED_OBJECT_PATH}?status=Pending`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
-        
+
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
+
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const data = await res.json()
-        const result = data.items || data.objects || data.insuredObjects || data || []
+        const result =
+            data.items || data.objects || data.insuredObjects || data || []
         return Array.isArray(result) ? result.length : 0
     } catch (error) {
         console.error("Error fetching pending count:", error)
@@ -109,71 +112,82 @@ function getTableDisplayName(sourceTableTag: string): string {
 }
 
 // Helper function to get icon and display name based on insured object type
-function getInsuredObjectIconAndName(formattedChanges: any, entityId: string): { icon: React.ReactNode, displayName: string } {
+function getInsuredObjectIconAndName(
+    formattedChanges: any,
+    entityId: string
+): { icon: React.ReactNode; displayName: string } {
     // Check for boat/ship
-    if (formattedChanges?.merkBoot || formattedChanges?.typeBoot || formattedChanges?.bootnummer) {
+    if (
+        formattedChanges?.merkBoot ||
+        formattedChanges?.typeBoot ||
+        formattedChanges?.bootnummer
+    ) {
         const boatNumber = formattedChanges.bootnummer || ""
         const displayName = boatNumber ? `Boat: ${boatNumber}` : "Boat: Unknown"
         return {
-            icon: <FaShip style={{ color: "#3b82f6" }} />,
-            displayName
+            icon: <FaShip style={{ color: colors.primary }} />,
+            displayName,
         }
     }
-    
+
     // Check for trailer
     if (formattedChanges?.trailerRegistratienummer) {
         const trailerNumber = formattedChanges.trailerRegistratienummer
         return {
-            icon: <FaTruck style={{ color: "#f59e0b" }} />,
-            displayName: `Trailer: ${trailerNumber}`
+            icon: <FaTruck style={{ color: colors.warning }} />,
+            displayName: `Trailer: ${trailerNumber}`,
         }
     }
-    
+
     // Check for motor
     if (formattedChanges?.motorMerk || formattedChanges?.motorSerienummer) {
         const motorNumber = formattedChanges.motorSerienummer || "Unknown"
         return {
-            icon: <FaCogs style={{ color: "#dc2626" }} />,
-            displayName: `Motor: ${motorNumber}`
+            icon: <FaCogs style={{ color: colors.error }} />,
+            displayName: `Motor: ${motorNumber}`,
         }
     }
-    
+
     // Check for objectType to determine type
     if (formattedChanges?.objectType) {
         const objectType = formattedChanges.objectType.toLowerCase()
-        if (objectType.includes('boat') || objectType.includes('boot')) {
+        if (objectType.includes("boat") || objectType.includes("boot")) {
             return {
-                icon: <FaShip style={{ color: "#3b82f6" }} />,
-                displayName: "Boat: Unknown"
+                icon: <FaShip style={{ color: colors.primary }} />,
+                displayName: "Boat: Unknown",
             }
-        } else if (objectType.includes('trailer')) {
+        } else if (objectType.includes("trailer")) {
             return {
-                icon: <FaTruck style={{ color: "#f59e0b" }} />,
-                displayName: "Trailer: Unknown"
+                icon: <FaTruck style={{ color: colors.warning }} />,
+                displayName: "Trailer: Unknown",
             }
-        } else if (objectType.includes('motor')) {
+        } else if (objectType.includes("motor")) {
             return {
-                icon: <FaCogs style={{ color: "#dc2626" }} />,
-                displayName: "Motor: Unknown"
+                icon: <FaCogs style={{ color: colors.error }} />,
+                displayName: "Motor: Unknown",
             }
         }
     }
-    
+
     // Default to boat if no specific type found
     return {
-        icon: <FaShip style={{ color: "#3b82f6" }} />,
-        displayName: `Object: ${entityId.slice(-8)}`
+        icon: <FaShip style={{ color: colors.primary }} />,
+        displayName: `Object: ${entityId.slice(-8)}`,
     }
 }
 
 // ——— Entity Information Fetching ———
-async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes: any): Promise<{
+async function fetchEntityInfo(
+    entityId: string,
+    sourceTableTag: string,
+    changes: any
+): Promise<{
     displayName: string
     organization?: string
     icon: React.ReactNode
 } | null> {
     if (!entityId || !sourceTableTag) return null
-    
+
     // First try to extract info from changes data (which is always available)
     const formattedChanges = formatDynamoDBValue(changes)
     let displayName = "Unknown"
@@ -183,23 +197,30 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
     // Set icon and display name based on source table and content
     switch (sourceTableTag.toLowerCase()) {
         case "insuredobject":
-            const insuredObjectInfo = getInsuredObjectIconAndName(formattedChanges, entityId)
+            const insuredObjectInfo = getInsuredObjectIconAndName(
+                formattedChanges,
+                entityId
+            )
             icon = insuredObjectInfo.icon
             displayName = insuredObjectInfo.displayName
             break
         case "policy":
-            icon = <FaFileContract style={{ color: "#10b981" }} />
-            const polisnummer = formattedChanges?.polisnummer || entityId.slice(-8)
+            icon = <FaFileContract style={{ color: colors.success }} />
+            const polisnummer =
+                formattedChanges?.polisnummer || entityId.slice(-8)
             displayName = `Polis: ${polisnummer}`
             break
         case "organization":
-            icon = <FaBuilding style={{ color: "#f59e0b" }} />
+            icon = <FaBuilding style={{ color: colors.warning }} />
             const orgName = formattedChanges?.name || entityId.slice(-8)
             displayName = `Organisatie: ${orgName}`
             break
         case "user":
-            icon = <FaUser style={{ color: "#8b5cf6" }} />
-            const email = formattedChanges?.email || formattedChanges?.username || entityId.slice(-8)
+            icon = <FaUser style={{ color: colors.primary }} />
+            const email =
+                formattedChanges?.email ||
+                formattedChanges?.username ||
+                entityId.slice(-8)
             displayName = `User: ${email}`
             break
     }
@@ -207,19 +228,22 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
     // Extract organization information
     organization = formattedChanges?.organization || ""
     if (sourceTableTag.toLowerCase() === "user") {
-        organization = Array.isArray(formattedChanges?.organizations) ? 
-            formattedChanges.organizations[0] : 
-            (formattedChanges?.organizations || "")
+        organization = Array.isArray(formattedChanges?.organizations)
+            ? formattedChanges.organizations[0]
+            : formattedChanges?.organizations || ""
     } else if (sourceTableTag.toLowerCase() === "organization") {
         organization = displayName.replace("Organisatie: ", "")
     }
 
     // If we got good info from changes, return it
-    if (displayName !== "Unknown" && displayName !== `${sourceTableTag} ${entityId.slice(-8)}`) {
+    if (
+        displayName !== "Unknown" &&
+        displayName !== `${sourceTableTag} ${entityId.slice(-8)}`
+    ) {
         return {
             displayName,
             organization,
-            icon
+            icon,
         }
     }
 
@@ -228,39 +252,42 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
     if (!token) {
         // Return the info we have from changes
         return {
-            displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
+            displayName:
+                displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
             organization,
-            icon
+            icon,
         }
     }
 
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
     }
-    
+
     try {
         let endpoint = ""
-        
+
         switch (sourceTableTag.toLowerCase()) {
             case "insuredobject":
-                endpoint = `/neptunus/insured-object/${entityId}`
+                endpoint = `${API_PATHS.INSURED_OBJECT}/${entityId}`
                 break
             case "policy":
-                endpoint = `/neptunus/policy/${entityId}`
+                endpoint = `${API_PATHS.POLICY}/${entityId}`
                 break
             case "organization":
-                endpoint = `/neptunus/organization/${entityId}`
+                endpoint = `${API_PATHS.ORGANIZATION}/${entityId}`
                 break
             case "user":
-                endpoint = `/neptunus/user/${entityId}`
+                endpoint = `${API_PATHS.USER}/${entityId}`
                 break
             default:
                 // Return changes-based info for unknown types
                 return {
-                    displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
+                    displayName:
+                        displayName ||
+                        `${sourceTableTag} ${entityId.slice(-8)}`,
                     organization,
-                    icon
+                    icon,
                 }
         }
 
@@ -269,29 +296,31 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
             headers,
             mode: "cors",
         })
-        
+
         if (res.ok) {
             const data = await res.json()
-            
+
             // Enhance the display info with API data if available
             if (sourceTableTag.toLowerCase() === "insuredobject") {
                 const obj = data.insuredObject || data
                 if (obj.merkBoot || obj.typeBoot) {
                     const boatName = obj.merkBoot || obj.typeBoot || ""
                     const boatNumber = obj.bootnummer || ""
-                    displayName = boatName ? 
-                        (boatNumber ? `${boatName} (${boatNumber})` : boatName) :
-                        (boatNumber ? `Boot ${boatNumber}` : displayName)
+                    displayName = boatName
+                        ? boatNumber
+                            ? `${boatName} (${boatNumber})`
+                            : boatName
+                        : boatNumber
+                          ? `Boot ${boatNumber}`
+                          : displayName
                 }
                 organization = obj.organization || organization
-                
             } else if (sourceTableTag.toLowerCase() === "policy") {
                 const policy = data.policy || data
                 if (policy.polisnummer) {
                     displayName = policy.polisnummer
                 }
                 organization = policy.organization || organization
-                
             } else if (sourceTableTag.toLowerCase() === "organization") {
                 const org = data.organization || data
                 if (org.name) {
@@ -301,16 +330,18 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
             }
         }
         // If API call fails, we still have the changes-based info to fall back on
-        
     } catch (error) {
-        console.warn(`Could not fetch ${sourceTableTag} details for ${entityId}:`, error)
+        console.warn(
+            `Could not fetch ${sourceTableTag} details for ${entityId}:`,
+            error
+        )
         // Continue with changes-based info
     }
 
     return {
         displayName: displayName || `${sourceTableTag} ${entityId.slice(-8)}`,
         organization,
-        icon
+        icon,
     }
 }
 
@@ -318,10 +349,10 @@ async function fetchEntityInfo(entityId: string, sourceTableTag: string, changes
 function getRelativeTime(timestamp: string): string {
     const now = new Date()
     const changeTime = new Date(timestamp)
-    
+
     // Subtract 2 hours to correct for timezone difference
     changeTime.setHours(changeTime.getHours() + 2)
-    
+
     const diffMs = now.getTime() - changeTime.getTime()
     const diffSeconds = Math.floor(diffMs / 1000)
     const diffMinutes = Math.floor(diffSeconds / 60)
@@ -341,26 +372,26 @@ function getActionStyle(action: string) {
     switch (action?.toUpperCase()) {
         case "CREATE":
             return {
-                backgroundColor: "#ecfdf5",
-                color: "#059669",
-                border: "1px solid #a7f3d0",
+                backgroundColor: colors.successBg,
+                color: colors.success,
+                border: `1px solid ${colors.successBorder}`,
             }
         case "UPDATE":
             return {
-                backgroundColor: "#fefce8",
-                color: "#ca8a04",
-                border: "1px solid #fde68a",
+                backgroundColor: colors.warningBg,
+                color: colors.warning,
+                border: `1px solid ${colors.warningBorder}`,
             }
         case "DELETE":
             return {
-                backgroundColor: "#fef2f2",
-                color: "#dc2626",
-                border: "1px solid #fecaca",
+                backgroundColor: colors.errorBg,
+                color: colors.error,
+                border: `1px solid ${colors.errorBorder}`,
             }
         default:
             return {
-                backgroundColor: "#f9fafb",
-                color: "#6b7280",
+                backgroundColor: colors.gray50,
+                color: colors.gray500,
                 border: "1px solid #e5e7eb",
             }
     }
@@ -417,7 +448,7 @@ function formatChangeValue(value: any): string {
         if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
             const dateValue = new Date(value)
             dateValue.setHours(dateValue.getHours() + 2)
-            return dateValue.toLocaleString('nl-NL')
+            return dateValue.toLocaleString("nl-NL")
         }
         return value
     }
@@ -437,30 +468,46 @@ function formatChangeValue(value: any): string {
     if (typeof value === "object") {
         const keys = Object.keys(value)
         if (keys.length === 0) return "Empty object"
-        
+
         // Special handling for configuration objects with required/visible pattern
-        if (keys.length > 5 && keys.every(key => 
-            typeof value[key] === "object" && 
-            value[key] && 
-            ("required" in value[key] || "visible" in value[key])
-        )) {
-            const requiredFields = keys.filter(key => value[key]?.required === true)
-            const visibleFields = keys.filter(key => value[key]?.visible === true)
-            
+        if (
+            keys.length > 5 &&
+            keys.every(
+                (key) =>
+                    typeof value[key] === "object" &&
+                    value[key] &&
+                    ("required" in value[key] || "visible" in value[key])
+            )
+        ) {
+            const requiredFields = keys.filter(
+                (key) => value[key]?.required === true
+            )
+            const visibleFields = keys.filter(
+                (key) => value[key]?.visible === true
+            )
+
             let summary = `Configuration for ${keys.length} fields`
             if (requiredFields.length > 0) {
                 summary += ` • Required: ${requiredFields.join(", ")}`
             }
-            if (visibleFields.length > 0 && visibleFields.length !== requiredFields.length) {
+            if (
+                visibleFields.length > 0 &&
+                visibleFields.length !== requiredFields.length
+            ) {
                 summary += ` • Visible: ${visibleFields.join(", ")}`
             }
             return summary
         }
-        
+
         if (keys.length <= 3) {
-            return keys.map(key => `${key}: ${formatChangeValue(value[key])}`).join(", ")
+            return keys
+                .map((key) => `${key}: ${formatChangeValue(value[key])}`)
+                .join(", ")
         }
-        return `${keys.slice(0, 3).map(key => `${key}: ${formatChangeValue(value[key])}`).join(", ")} ... (+${keys.length - 3} more fields)`
+        return `${keys
+            .slice(0, 3)
+            .map((key) => `${key}: ${formatChangeValue(value[key])}`)
+            .join(", ")} ... (+${keys.length - 3} more fields)`
     }
 
     return String(value)
@@ -534,54 +581,60 @@ const COLUMNS: {
 // ——— Entity History Builder ———
 function buildEntityHistory(changelog: any[]): Map<string, any[]> {
     const entityHistories = new Map<string, any[]>()
-    
+
     // Sort changelog by timestamp (oldest first) to build proper history
-    const sortedChangelog = [...changelog].sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    const sortedChangelog = [...changelog].sort(
+        (a, b) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )
-    
+
     for (const entry of sortedChangelog) {
         if (!entry.entityId) continue
-        
+
         if (!entityHistories.has(entry.entityId)) {
             entityHistories.set(entry.entityId, [])
         }
-        
+
         entityHistories.get(entry.entityId)!.push(entry)
     }
-    
+
     return entityHistories
 }
 
 // ——— Get Previous State for Entity ———
-function getPreviousEntityState(entityHistory: any[], currentEntryIndex: number, currentChanges: any): any {
+function getPreviousEntityState(
+    entityHistory: any[],
+    currentEntryIndex: number,
+    currentChanges: any
+): any {
     if (currentEntryIndex <= 0 || !currentChanges) return null
-    
+
     // Get the fields that are changing in the current entry
     const currentFields = Object.keys(currentChanges)
-    
+
     // Look through previous entries to find the last known value for each field
     const previousState: any = {}
-    
+
     for (const field of currentFields) {
         // Find the most recent previous entry that had this field
         for (let i = currentEntryIndex - 1; i >= 0; i--) {
             const entry = entityHistory[i]
-            if (!entry.changes || entry.action === 'DELETE') continue
-            
+            if (!entry.changes || entry.action === "DELETE") continue
+
             if (field in entry.changes) {
                 // Found the previous value for this field
-                if (entry.action === 'CREATE' || entry.action === 'UPDATE') {
-                    previousState[field] = formatDynamoDBValue(entry.changes[field])
+                if (entry.action === "CREATE" || entry.action === "UPDATE") {
+                    previousState[field] = formatDynamoDBValue(
+                        entry.changes[field]
+                    )
                     break // Found the most recent value, stop looking
                 }
             }
         }
     }
-    
+
     return Object.keys(previousState).length > 0 ? previousState : null
 }
-
 
 // ——— Enhanced Change Value Formatter for Old/New Values ———
 function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
@@ -593,42 +646,52 @@ function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
             if (value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
                 const dateValue = new Date(value)
                 dateValue.setHours(dateValue.getHours() + 2)
-                return dateValue.toLocaleString('nl-NL')
+                return dateValue.toLocaleString("nl-NL")
             }
             return value
         }
-        if (typeof value === "number") return value.toLocaleString('nl-NL')
+        if (typeof value === "number") return value.toLocaleString("nl-NL")
         if (Array.isArray(value)) {
             if (value.length === 0) return "Lege lijst"
-            return value.length <= 3 ? value.join(", ") : `${value.slice(0, 3).join(", ")} ... (+${value.length - 3} meer)`
+            return value.length <= 3
+                ? value.join(", ")
+                : `${value.slice(0, 3).join(", ")} ... (+${value.length - 3} meer)`
         }
         if (typeof value === "object") {
             const keys = Object.keys(value)
             if (keys.length === 0) return "Leeg object"
-            return keys.length <= 2 ? keys.map(k => `${k}: ${value[k]}`).join(", ") : `${keys.length} velden`
+            return keys.length <= 2
+                ? keys.map((k) => `${k}: ${value[k]}`).join(", ")
+                : `${keys.length} velden`
         }
         return String(value)
     }
 
     const oldFormatted = formatSingleValue(oldValue)
     const newFormatted = formatSingleValue(newValue)
-    
+
     // Handle cases where values are the same (shouldn't happen in updates, but just in case)
     if (oldFormatted === newFormatted) {
         return (
-            <div style={{ 
-                padding: "4px 8px",
-                backgroundColor: "#f3f4f6",
-                borderRadius: "4px",
-                color: "#6b7280" 
-            }}>
-                <span style={{ 
-                    fontSize: "10px", 
-                    fontWeight: "600", 
-                    color: "#6b7280",
-                    textTransform: "uppercase",
-                    marginRight: "6px"
-                }}>Ongewijzigd:</span>
+            <div
+                style={{
+                    padding: "4px 8px",
+                    backgroundColor: colors.gray100,
+                    borderRadius: "4px",
+                    color: colors.gray500,
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: colors.gray500,
+                        textTransform: "uppercase",
+                        marginRight: "6px",
+                    }}
+                >
+                    Ongewijzigd:
+                </span>
                 {newFormatted}
             </div>
         )
@@ -637,22 +700,28 @@ function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
     // Handle case where old value was null (new addition)
     if (oldValue === null || oldValue === undefined) {
         return (
-            <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "6px",
-                padding: "6px 10px",
-                backgroundColor: "#ecfdf5",
-                borderRadius: "6px",
-                border: "1px solid #a7f3d0"
-            }}>
-                <span style={{ 
-                    fontSize: "11px", 
-                    fontWeight: "600", 
-                    color: "#059669",
-                    textTransform: "uppercase"
-                }}>Toegevoegd:</span>
-                <span style={{ color: "#059669", fontWeight: "500" }}>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    backgroundColor: "#ecfdf5",
+                    borderRadius: "6px",
+                    border: "1px solid #a7f3d0",
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: colors.success,
+                        textTransform: "uppercase",
+                    }}
+                >
+                    Toegevoegd:
+                </span>
+                <span style={{ color: colors.success, fontWeight: "500" }}>
                     {newFormatted}
                 </span>
             </div>
@@ -662,22 +731,30 @@ function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
     // Handle case where new value is null (deletion)
     if (newValue === null || newValue === undefined) {
         return (
-            <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "6px",
-                padding: "6px 10px",
-                backgroundColor: "#fef2f2",
-                borderRadius: "6px",
-                border: "1px solid #fecaca"
-            }}>
-                <span style={{ 
-                    fontSize: "11px", 
-                    fontWeight: "600", 
-                    color: "#dc2626",
-                    textTransform: "uppercase"
-                }}>Verwijderd:</span>
-                <span style={{ color: "#dc2626", textDecoration: "line-through" }}>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    backgroundColor: "#fef2f2",
+                    borderRadius: "6px",
+                    border: "1px solid #fecaca",
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: colors.error,
+                        textTransform: "uppercase",
+                    }}
+                >
+                    Verwijderd:
+                </span>
+                <span
+                    style={{ color: colors.error, textDecoration: "line-through" }}
+                >
                     {oldFormatted}
                 </span>
             </div>
@@ -686,63 +763,91 @@ function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
 
     // Normal update case - show old and new values side by side
     return (
-        <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "1fr auto 1fr", 
-            gap: "8px", 
-            alignItems: "center",
-            padding: "8px",
-            backgroundColor: "#fef9e7",
-            borderRadius: "8px",
-            border: "1px solid #fed7aa"
-        }}>
-            <div style={{ 
-                display: "flex", 
-                flexDirection: "column",
-                gap: "2px",
-                padding: "6px 8px",
-                backgroundColor: "#fef2f2",
-                borderRadius: "6px",
-                border: "1px solid #fecaca"
-            }}>
-                <span style={{ 
-                    fontSize: "10px", 
-                    fontWeight: "600", 
-                    color: "#dc2626",
-                    textTransform: "uppercase"
-                }}>Oud:</span>
-                <span style={{ color: "#dc2626", fontSize: "12px", textDecoration: "line-through" }}>
+        <div
+            style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto 1fr",
+                gap: "8px",
+                alignItems: "center",
+                padding: "8px",
+                backgroundColor: "#fef9e7",
+                borderRadius: "8px",
+                border: "1px solid #fed7aa",
+            }}
+        >
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                    padding: "6px 8px",
+                    backgroundColor: "#fef2f2",
+                    borderRadius: "6px",
+                    border: "1px solid #fecaca",
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: colors.error,
+                        textTransform: "uppercase",
+                    }}
+                >
+                    Oud:
+                </span>
+                <span
+                    style={{
+                        color: colors.error,
+                        fontSize: "12px",
+                        textDecoration: "line-through",
+                    }}
+                >
                     {oldFormatted}
                 </span>
             </div>
-            
-            <div style={{ 
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#ca8a04",
-                fontSize: "14px",
-                fontWeight: "bold"
-            }}>
+
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ca8a04",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                }}
+            >
                 →
             </div>
-            
-            <div style={{ 
-                display: "flex", 
-                flexDirection: "column",
-                gap: "2px",
-                padding: "6px 8px",
-                backgroundColor: "#ecfdf5",
-                borderRadius: "6px",
-                border: "1px solid #a7f3d0"
-            }}>
-                <span style={{ 
-                    fontSize: "10px", 
-                    fontWeight: "600", 
-                    color: "#059669",
-                    textTransform: "uppercase"
-                }}>Nieuw:</span>
-                <span style={{ color: "#059669", fontWeight: "500", fontSize: "12px" }}>
+
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                    padding: "6px 8px",
+                    backgroundColor: "#ecfdf5",
+                    borderRadius: "6px",
+                    border: "1px solid #a7f3d0",
+                }}
+            >
+                <span
+                    style={{
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: colors.success,
+                        textTransform: "uppercase",
+                    }}
+                >
+                    Nieuw:
+                </span>
+                <span
+                    style={{
+                        color: colors.success,
+                        fontWeight: "500",
+                        fontSize: "12px",
+                    }}
+                >
                     {newFormatted}
                 </span>
             </div>
@@ -778,7 +883,7 @@ function ExpandableChanges({
                     alignItems: "center",
                     gap: "6px",
                     padding: "4px 8px",
-                    backgroundColor: "#f3f4f6",
+                    backgroundColor: colors.gray100,
                     border: "none",
                     borderRadius: "6px",
                     fontSize: "12px",
@@ -786,12 +891,16 @@ function ExpandableChanges({
                     cursor: "pointer",
                     fontFamily: FONT_STACK,
                     transition: "all 0.2s",
-                    color: "#374151",
+                    color: colors.gray700,
                 }}
                 onMouseOver={(e) =>
-                    ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
+                    ((e.target as HTMLElement).style.backgroundColor =
+                        colors.gray200)
                 }
-                onMouseOut={(e) => ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")}
+                onMouseOut={(e) =>
+                    ((e.target as HTMLElement).style.backgroundColor =
+                        colors.gray100)
+                }
             >
                 {isExpanded ? (
                     <FaChevronDown size={10} />
@@ -809,7 +918,7 @@ function ExpandableChanges({
                     style={{
                         marginTop: "8px",
                         padding: "12px",
-                        backgroundColor: "#f8fafc",
+                        backgroundColor: colors.gray50,
                         borderRadius: "6px",
                         border: "1px solid #e5e7eb",
                         fontSize: "12px",
@@ -820,35 +929,59 @@ function ExpandableChanges({
                         ([key, value]: [string, any]) => {
                             const formattedValue = formatDynamoDBValue(value)
                             let displayValue: React.ReactNode
-                            
-                            if (isUpdate && previousState && key in previousState) {
+
+                            if (
+                                isUpdate &&
+                                previousState &&
+                                key in previousState
+                            ) {
                                 // We have historical data - show before/after comparison
                                 const oldValue = previousState[key]
-                                displayValue = formatOldNewValue(oldValue, formattedValue)
+                                displayValue = formatOldNewValue(
+                                    oldValue,
+                                    formattedValue
+                                )
                             } else if (isCreate) {
                                 // New field being added
-                                displayValue = formatOldNewValue(null, formattedValue)
+                                displayValue = formatOldNewValue(
+                                    null,
+                                    formattedValue
+                                )
                             } else if (isDelete) {
                                 // Field being deleted
-                                displayValue = formatOldNewValue(formattedValue, null)
+                                displayValue = formatOldNewValue(
+                                    formattedValue,
+                                    null
+                                )
                             } else if (isUpdate) {
                                 // Update without historical context - show as changed value
                                 displayValue = (
-                                    <div style={{ 
-                                        padding: "6px 10px",
-                                        backgroundColor: "#fefce8",
-                                        borderRadius: "6px",
-                                        border: "1px solid #fde68a"
-                                    }}>
-                                        <span style={{ 
-                                            fontSize: "11px", 
-                                            fontWeight: "600", 
-                                            color: "#ca8a04",
-                                            textTransform: "uppercase",
-                                            display: "block",
-                                            marginBottom: "4px"
-                                        }}>Gewijzigd naar:</span>
-                                        <span style={{ color: "#92400e", fontSize: "12px" }}>
+                                    <div
+                                        style={{
+                                            padding: "6px 10px",
+                                            backgroundColor: "#fefce8",
+                                            borderRadius: "6px",
+                                            border: "1px solid #fde68a",
+                                        }}
+                                    >
+                                        <span
+                                            style={{
+                                                fontSize: "11px",
+                                                fontWeight: "600",
+                                                color: "#ca8a04",
+                                                textTransform: "uppercase",
+                                                display: "block",
+                                                marginBottom: "4px",
+                                            }}
+                                        >
+                                            Gewijzigd naar:
+                                        </span>
+                                        <span
+                                            style={{
+                                                color: "#92400e",
+                                                fontSize: "12px",
+                                            }}
+                                        >
                                             {formatChangeValue(formattedValue)}
                                         </span>
                                     </div>
@@ -856,12 +989,12 @@ function ExpandableChanges({
                             } else {
                                 // Fallback display
                                 displayValue = (
-                                    <div style={{ color: "#6b7280" }}>
+                                    <div style={{ color: colors.gray500 }}>
                                         {formatChangeValue(formattedValue)}
                                     </div>
                                 )
                             }
-                            
+
                             return (
                                 <div
                                     key={key}
@@ -869,7 +1002,7 @@ function ExpandableChanges({
                                         marginBottom: "12px",
                                         wordBreak: "break-word",
                                         padding: "10px",
-                                        backgroundColor: "#ffffff",
+                                        backgroundColor: colors.white,
                                         borderRadius: "6px",
                                         border: "1px solid #e5e7eb",
                                         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
@@ -878,18 +1011,24 @@ function ExpandableChanges({
                                     <div
                                         style={{
                                             fontWeight: "600",
-                                            color: "#374151",
+                                            color: colors.gray700,
                                             marginBottom: "6px",
                                             fontSize: "13px",
                                             fontFamily: FONT_STACK,
                                         }}
                                     >
-                                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                                        {key
+                                            .replace(/([A-Z])/g, " $1")
+                                            .replace(/^./, (str) =>
+                                                str.toUpperCase()
+                                            )}
                                     </div>
-                                    <div style={{ 
-                                        fontSize: "12px",
-                                        lineHeight: "1.4",
-                                    }}>
+                                    <div
+                                        style={{
+                                            fontSize: "12px",
+                                            lineHeight: "1.4",
+                                        }}
+                                    >
                                         {displayValue}
                                     </div>
                                 </div>
@@ -978,7 +1117,7 @@ function ChangelogSearchAndFilterBar({
                             left: "12px",
                             top: "50%",
                             transform: "translateY(-50%)",
-                            color: "#6b7280",
+                            color: colors.gray500,
                             fontSize: "14px",
                         }}
                     />
@@ -997,9 +1136,9 @@ function ChangelogSearchAndFilterBar({
                             transition: "border-color 0.2s",
                         }}
                         onFocus={(e) =>
-                            (e.target.style.borderColor = "#3b82f6")
+                            (e.target.style.borderColor = colors.primary)
                         }
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        onBlur={(e) => (e.target.style.borderColor = colors.gray300)}
                     />
                 </div>
 
@@ -1011,13 +1150,16 @@ function ChangelogSearchAndFilterBar({
                             padding: "12px 16px",
                             backgroundColor:
                                 selectedTableTags.size > 0
-                                    ? "#3b82f6"
-                                    : "#ffffff",
+                                    ? colors.primary
+                                    : colors.white,
                             color:
                                 selectedTableTags.size > 0
                                     ? "white"
-                                    : "#374151",
-                            border: selectedTableTags.size > 0 ? "none" : "1px solid #d1d5db",
+                                    : colors.gray700,
+                            border:
+                                selectedTableTags.size > 0
+                                    ? "none"
+                                    : "1px solid #d1d5db",
                             borderRadius: "8px",
                             fontSize: "14px",
                             fontWeight: "500",
@@ -1031,23 +1173,25 @@ function ChangelogSearchAndFilterBar({
                         }}
                         onMouseOver={(e) => {
                             if (selectedTableTags.size === 0) {
-                                ((e.target as HTMLElement).style.backgroundColor = "#f9fafb")
+                                ;(
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.gray50
                             }
                         }}
                         onMouseOut={(e) => {
                             if (selectedTableTags.size === 0) {
-                                ((e.target as HTMLElement).style.backgroundColor = "#ffffff")
+                                ;(
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.white
                             }
                         }}
                     >
-                        <FaDatabase /> 
-                        {selectedTableTags.size === 0 
-                            ? "Selecteer tabellen" 
-                            : `${selectedTableTags.size} geselecteerd`
-                        }
+                        <FaDatabase />
+                        {selectedTableTags.size === 0
+                            ? "Selecteer tabellen"
+                            : `${selectedTableTags.size} geselecteerd`}
                     </button>
                 </div>
-
 
                 <div style={{ position: "relative" }}>
                     <button
@@ -1055,8 +1199,8 @@ function ChangelogSearchAndFilterBar({
                         onClick={() => setShowColumnFilter(!showColumnFilter)}
                         style={{
                             padding: "12px 16px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
+                            backgroundColor: colors.gray100,
+                            color: colors.gray700,
                             border: "none",
                             borderRadius: "8px",
                             fontSize: "14px",
@@ -1069,10 +1213,12 @@ function ChangelogSearchAndFilterBar({
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) =>
-                            ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
+                            ((e.target as HTMLElement).style.backgroundColor =
+                                colors.gray200)
                         }
                         onMouseOut={(e) =>
-                            ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")
+                            ((e.target as HTMLElement).style.backgroundColor =
+                                colors.gray100)
                         }
                     >
                         <FaFilter /> Columns ({visibleColumns.size})
@@ -1103,7 +1249,8 @@ function ChangelogSearchAndFilterBar({
                                 backgroundColor: "#fff",
                                 border: "1px solid #d1d5db",
                                 borderRadius: "12px",
-                                boxShadow: "0 20px 50px rgba(0,0,0,0.12), 0 4px 6px rgba(0,0,0,0.06)",
+                                boxShadow:
+                                    "0 20px 50px rgba(0,0,0,0.12), 0 4px 6px rgba(0,0,0,0.06)",
                                 zIndex: 1000,
                                 minWidth: "280px",
                                 maxHeight: "400px",
@@ -1113,18 +1260,20 @@ function ChangelogSearchAndFilterBar({
                             <div
                                 style={{
                                     padding: "16px 20px",
-                                    borderBottom: "1px solid #e5e7eb",
-                                    backgroundColor: "#f8fafc",
+                                    borderBottom: `1px solid ${colors.gray200}`,
+                                    backgroundColor: colors.gray50,
                                     borderRadius: "12px 12px 0 0",
                                 }}
                             >
-                                <h3 style={{
-                                    margin: "0 0 12px 0",
-                                    fontSize: "15px",
-                                    fontWeight: "600",
-                                    color: "#374151",
-                                    fontFamily: FONT_STACK,
-                                }}>
+                                <h3
+                                    style={{
+                                        margin: "0 0 12px 0",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
+                                        color: colors.gray700,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                >
                                     Filter op tabellen
                                 </h3>
                                 <div style={{ display: "flex", gap: "8px" }}>
@@ -1145,7 +1294,7 @@ function ChangelogSearchAndFilterBar({
                                         style={{
                                             padding: "6px 12px",
                                             fontSize: "12px",
-                                            backgroundColor: "#3b82f6",
+                                            backgroundColor: colors.primary,
                                             color: "white",
                                             border: "none",
                                             borderRadius: "6px",
@@ -1154,10 +1303,14 @@ function ChangelogSearchAndFilterBar({
                                             transition: "background-color 0.2s",
                                         }}
                                         onMouseOver={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor = "#2563eb")
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor = colors.primaryHover)
                                         }
                                         onMouseOut={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor = "#3b82f6")
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor = colors.primary)
                                         }
                                     >
                                         Alles selecteren
@@ -1171,8 +1324,8 @@ function ChangelogSearchAndFilterBar({
                                         style={{
                                             padding: "6px 12px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
-                                            color: "#374151",
+                                            backgroundColor: colors.gray100,
+                                            color: colors.gray700,
                                             border: "1px solid #d1d5db",
                                             borderRadius: "6px",
                                             cursor: "pointer",
@@ -1180,10 +1333,14 @@ function ChangelogSearchAndFilterBar({
                                             transition: "background-color 0.2s",
                                         }}
                                         onMouseOver={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor = "#e5e7eb")
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor = colors.gray200)
                                         }
                                         onMouseOut={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor = "#f3f4f6")
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor = colors.gray100)
                                         }
                                     >
                                         Alles wissen
@@ -1192,8 +1349,9 @@ function ChangelogSearchAndFilterBar({
                             </div>
                             <div style={{ padding: "8px 0" }}>
                                 {availableTableTags.map((tag) => {
-                                    const isSelected = selectedTableTags.has(tag)
-                                    
+                                    const isSelected =
+                                        selectedTableTags.has(tag)
+
                                     return (
                                         <label
                                             key={tag}
@@ -1205,41 +1363,62 @@ function ChangelogSearchAndFilterBar({
                                                 cursor: "pointer",
                                                 fontSize: "14px",
                                                 fontFamily: FONT_STACK,
-                                                transition: "background-color 0.2s",
-                                                backgroundColor: isSelected ? "#f0f9ff" : "transparent",
-                                                borderLeft: isSelected ? "3px solid #3b82f6" : "3px solid transparent",
+                                                transition:
+                                                    "background-color 0.2s",
+                                                backgroundColor: isSelected
+                                                    ? "#f0f9ff"
+                                                    : "transparent",
+                                                borderLeft: isSelected
+                                                    ? `3px solid ${colors.primary}`
+                                                    : "3px solid transparent",
                                             }}
                                             onMouseOver={(e) =>
-                                                (e.currentTarget.style.backgroundColor = isSelected ? "#f0f9ff" : "#f9fafb")
+                                                (e.currentTarget.style.backgroundColor =
+                                                    isSelected
+                                                        ? "#f0f9ff"
+                                                        : colors.gray50)
                                             }
                                             onMouseOut={(e) =>
-                                                (e.currentTarget.style.backgroundColor = isSelected ? "#f0f9ff" : "transparent")
+                                                (e.currentTarget.style.backgroundColor =
+                                                    isSelected
+                                                        ? "#f0f9ff"
+                                                        : "transparent")
                                             }
                                         >
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
-                                                onChange={() => onTableTagChange(tag)}
+                                                onChange={() =>
+                                                    onTableTagChange(tag)
+                                                }
                                                 style={{
                                                     cursor: "pointer",
-                                                    accentColor: "#3b82f6",
+                                                    accentColor: colors.primary,
                                                     width: "16px",
                                                     height: "16px",
                                                 }}
                                             />
-                                            <FaDatabase 
+                                            <FaDatabase
                                                 style={{
-                                                    color: isSelected ? "#3b82f6" : "#6b7280",
+                                                    color: isSelected
+                                                        ? colors.primary
+                                                        : colors.gray500,
                                                     fontSize: "16px",
                                                     transition: "color 0.2s",
-                                                }} 
+                                                }}
                                             />
                                             <div style={{ flex: 1 }}>
-                                                <div style={{
-                                                    fontWeight: isSelected ? "600" : "500",
-                                                    color: isSelected ? "#1e40af" : "#374151",
-                                                    marginBottom: "2px",
-                                                }}>
+                                                <div
+                                                    style={{
+                                                        fontWeight: isSelected
+                                                            ? "600"
+                                                            : "500",
+                                                        color: isSelected
+                                                            ? "#1e40af"
+                                                            : colors.gray700,
+                                                        marginBottom: "2px",
+                                                    }}
+                                                >
                                                     {tag}
                                                 </div>
                                             </div>
@@ -1285,7 +1464,7 @@ function ChangelogSearchAndFilterBar({
                             <div
                                 style={{
                                     padding: "12px",
-                                    borderBottom: "1px solid #e5e7eb",
+                                    borderBottom: `1px solid ${colors.gray200}`,
                                 }}
                             >
                                 <div style={{ display: "flex", gap: "8px" }}>
@@ -1315,7 +1494,7 @@ function ChangelogSearchAndFilterBar({
                                         style={{
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
+                                            backgroundColor: colors.gray100,
                                             border: "none",
                                             borderRadius: "4px",
                                             cursor: "pointer",
@@ -1335,7 +1514,7 @@ function ChangelogSearchAndFilterBar({
                                         style={{
                                             padding: "4px 8px",
                                             fontSize: "12px",
-                                            backgroundColor: "#f3f4f6",
+                                            backgroundColor: colors.gray100,
                                             border: "none",
                                             borderRadius: "4px",
                                             cursor: "pointer",
@@ -1360,10 +1539,10 @@ function ChangelogSearchAndFilterBar({
                                             <div
                                                 style={{
                                                     padding: "8px 12px",
-                                                    backgroundColor: "#f8fafc",
+                                                    backgroundColor: colors.gray50,
                                                     fontSize: "12px",
                                                     fontWeight: "600",
-                                                    color: "#374151",
+                                                    color: colors.gray700,
                                                     display: "flex",
                                                     justifyContent:
                                                         "space-between",
@@ -1374,7 +1553,7 @@ function ChangelogSearchAndFilterBar({
                                                 <span
                                                     style={{
                                                         fontSize: "11px",
-                                                        color: "#6b7280",
+                                                        color: colors.gray500,
                                                     }}
                                                 >
                                                     {visibleInGroup}/
@@ -1397,7 +1576,7 @@ function ChangelogSearchAndFilterBar({
                                                     }}
                                                     onMouseOver={(e) =>
                                                         (e.currentTarget.style.backgroundColor =
-                                                            "#f9fafb")
+                                                            colors.gray50)
                                                     }
                                                     onMouseOut={(e) =>
                                                         (e.currentTarget.style.backgroundColor =
@@ -1470,7 +1649,7 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}/neptunus/user/${cognitoSub}`, {
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
             method: "GET",
             headers,
             mode: "cors",
@@ -1504,25 +1683,60 @@ export function ChangelogPageOverride(): Override {
         new Set()
     )
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-    const [entityInfoCache, setEntityInfoCache] = useState<Map<string, any>>(new Map())
-    const [loadingEntityInfo, setLoadingEntityInfo] = useState<Set<string>>(new Set())
+    const [entityInfoCache, setEntityInfoCache] = useState<Map<string, any>>(
+        new Map()
+    )
+    const [loadingEntityInfo, setLoadingEntityInfo] = useState<Set<string>>(
+        new Set()
+    )
     const [pendingCount, setPendingCount] = useState<number>(0)
+    
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState<number>(0)
+    const [pagination, setPagination] = useState<any | null>(null)
+    const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false)
 
     const refresh = useCallback(() => {
-        fetchChangelog()
-            .then(setChangelog)
+        fetchChangelog(0, 50)
+            .then((response) => {
+                setChangelog(response.items)
+                setPagination(response.pagination)
+                setCurrentPage(0)
+            })
             .catch((err) => {
                 console.error(err)
                 setError(err.message)
             })
     }, [])
 
+    const loadMore = useCallback(async () => {
+        if (!pagination?.hasMore || isLoadingMore) return
+        
+        setIsLoadingMore(true)
+        try {
+            const nextPage = currentPage + 1
+            const response = await fetchChangelog(nextPage, 50)
+            
+            // Append new items to existing changelog
+            setChangelog(prev => [...(prev || []), ...response.items])
+            setPagination(response.pagination)
+            setCurrentPage(nextPage)
+        } catch (err) {
+            console.error(err)
+            setError(err.message)
+        } finally {
+            setIsLoadingMore(false)
+        }
+    }, [currentPage, pagination?.hasMore, isLoadingMore])
+
     // Initialize user info
     useEffect(() => {
         async function initializeUser() {
             const currentUserInfo = getCurrentUserInfo()
             if (currentUserInfo) {
-                const detailedUserInfo = await fetchUserInfo(currentUserInfo.sub)
+                const detailedUserInfo = await fetchUserInfo(
+                    currentUserInfo.sub
+                )
                 setUserInfo(detailedUserInfo)
             }
         }
@@ -1585,46 +1799,52 @@ export function ChangelogPageOverride(): Override {
         const fetchEntityInfoForEntries = async () => {
             const entriesToFetch = filteredChangelog
                 .slice(0, 50) // Only fetch for first 50 visible entries to avoid overwhelming the API
-                .filter(item => 
-                    item.entityId && 
-                    item.sourceTableTag && 
-                    !entityInfoCache.has(item.entityId) &&
-                    !loadingEntityInfo.has(item.entityId)
+                .filter(
+                    (item) =>
+                        item.entityId &&
+                        item.sourceTableTag &&
+                        !entityInfoCache.has(item.entityId) &&
+                        !loadingEntityInfo.has(item.entityId)
                 )
 
             if (entriesToFetch.length === 0) return
 
-
-
             // Mark as loading
-            setLoadingEntityInfo(prev => {
+            setLoadingEntityInfo((prev) => {
                 const newSet = new Set(prev)
-                entriesToFetch.forEach(item => newSet.add(item.entityId))
+                entriesToFetch.forEach((item) => newSet.add(item.entityId))
                 return newSet
             })
 
             // Fetch entity info for each entry
             const promises = entriesToFetch.map(async (item) => {
                 try {
-                    const entityInfo = await fetchEntityInfo(item.entityId, item.sourceTableTag, item.changes)
+                    const entityInfo = await fetchEntityInfo(
+                        item.entityId,
+                        item.sourceTableTag,
+                        item.changes
+                    )
                     return { entityId: item.entityId, entityInfo }
                 } catch (error) {
-                    console.warn(`Failed to fetch entity info for ${item.entityId}:`, error)
-                    return { 
-                        entityId: item.entityId, 
+                    console.warn(
+                        `Failed to fetch entity info for ${item.entityId}:`,
+                        error
+                    )
+                    return {
+                        entityId: item.entityId,
                         entityInfo: {
                             displayName: `${item.sourceTableTag} ${item.entityId.slice(-8)}`,
                             organization: "",
-                            icon: <FaClipboardList />
-                        }
+                            icon: <FaClipboardList />,
+                        },
                     }
                 }
             })
 
             const results = await Promise.all(promises)
-            
+
             // Update cache
-            setEntityInfoCache(prev => {
+            setEntityInfoCache((prev) => {
                 const newMap = new Map(prev)
                 results.forEach(({ entityId, entityInfo }) => {
                     if (entityInfo) {
@@ -1635,15 +1855,21 @@ export function ChangelogPageOverride(): Override {
             })
 
             // Remove from loading set
-            setLoadingEntityInfo(prev => {
+            setLoadingEntityInfo((prev) => {
                 const newSet = new Set(prev)
-                entriesToFetch.forEach(item => newSet.delete(item.entityId))
+                entriesToFetch.forEach((item) => newSet.delete(item.entityId))
                 return newSet
             })
         }
 
         fetchEntityInfoForEntries()
-    }, [changelog, filteredChangelog, selectedTableTags, searchTerm, entityInfoCache.size]) // Re-run when filters change or cache size changes
+    }, [
+        changelog,
+        filteredChangelog,
+        selectedTableTags,
+        searchTerm,
+        entityInfoCache.size,
+    ]) // Re-run when filters change or cache size changes
 
     // Get available table tags
     const availableTableTags = Array.from(
@@ -1698,7 +1924,7 @@ export function ChangelogPageOverride(): Override {
                         alignItems: "center",
                         height: "200px",
                         fontSize: "16px",
-                        color: "#6b7280",
+                        color: colors.gray500,
                         fontFamily: FONT_STACK,
                     }}
                 >
@@ -1717,7 +1943,7 @@ export function ChangelogPageOverride(): Override {
                         backgroundColor: "#fef2f2",
                         border: "1px solid #fecaca",
                         borderRadius: "8px",
-                        color: "#dc2626",
+                        color: colors.error,
                         fontFamily: FONT_STACK,
                     }}
                 >
@@ -1736,25 +1962,31 @@ export function ChangelogPageOverride(): Override {
             <div
                 style={{
                     padding: "24px",
-                    backgroundColor: "#f8fafc",
-                    minHeight: "100vh",
+                    backgroundColor: colors.gray50,
+                    height: "100vh",
                     fontFamily: FONT_STACK,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
                 }}
             >
                 <div
                     style={{
-                        backgroundColor: "#fff",
+                        backgroundColor: colors.white,
                         borderRadius: "12px",
                         boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                         overflow: "hidden",
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
                     }}
                 >
                     {/* Enhanced Navigation Tabs at Top */}
                     <div
                         style={{
                             padding: "20px 24px",
-                            backgroundColor: "#f8fafc",
-                            borderBottom: "1px solid #e5e7eb",
+                            backgroundColor: colors.gray50,
+                            borderBottom: `1px solid ${colors.gray200}`,
                             display: "flex",
                             gap: "8px",
                             overflowX: "auto",
@@ -1762,98 +1994,153 @@ export function ChangelogPageOverride(): Override {
                         }}
                     >
                         {[
-                            { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
-                            { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
-                            { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
-                            { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
-                            { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                        ].filter((tab) => {
-                            // Hide pending, users, and changelog tabs for regular users
-                            if (userInfo?.role === "user" && (tab.key === "pending" || tab.key === "users" || tab.key === "changelog")) {
-                                return false
-                            }
-                            return true
-                        }).map((tab) => {
-                            const isActive = tab.key === "changelog"
-                            const Icon = tab.icon
-                            
-                            return (
-                                <button
-                                    key={tab.key}
-                                    onClick={() => {
-                                        if (!isActive) {
-                                            window.location.href = tab.href
-                                        }
-                                    }}
-                                    style={{
-                                        padding: "16px 24px",
-                                        backgroundColor: isActive ? "#3b82f6" : "#ffffff",
-                                        color: isActive ? "white" : "#6b7280",
-                                        border: isActive ? "none" : "2px solid #e5e7eb",
-                                        borderRadius: "12px",
-                                        fontSize: "15px",
-                                        fontWeight: "600",
-                                        cursor: isActive ? "default" : "pointer",
-                                        fontFamily: FONT_STACK,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        transition: "all 0.2s",
-                                        minHeight: "48px",
-                                        boxShadow: isActive 
-                                            ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
-                                            : "0 2px 4px rgba(0,0,0,0.05)",
-                                        transform: isActive ? "translateY(-1px)" : "none",
-                                    }}
-                                    onMouseOver={(e) => {
-                                        if (!isActive) {
-                                            const target = e.target as HTMLElement
-                                            target.style.backgroundColor = "#f8fafc"
-                                            target.style.borderColor = "#3b82f6"
-                                            target.style.color = "#3b82f6"
-                                            target.style.transform = "translateY(-1px)"
-                                            target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
-                                        }
-                                    }}
-                                    onMouseOut={(e) => {
-                                        if (!isActive) {
-                                            const target = e.target as HTMLElement
-                                            target.style.backgroundColor = "#ffffff"
-                                            target.style.borderColor = "#e5e7eb"
-                                            target.style.color = "#6b7280"
-                                            target.style.transform = "none"
-                                            target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
-                                        }
-                                    }}
-                                >
-                                    <Icon size={14} />
-                                    {tab.label}
-                                    {/* Pending count badge */}
-                                    {tab.key === "pending" && pendingCount > 0 && (
-                                        <span
-                                            style={{
-                                                backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
-                                                color: "white",
-                                                borderRadius: "10px",
-                                                padding: "2px 6px",
-                                                fontSize: "12px",
-                                                fontWeight: "700",
-                                                minWidth: "18px",
-                                                textAlign: "center",
-                                                marginLeft: "4px",
-                                            }}
-                                        >
-                                            {pendingCount}
-                                        </span>
-                                    )}
-                                </button>
-                            )
-                        })}
+                            {
+                                key: "organizations",
+                                label: "Organisaties",
+                                icon: FaBuilding,
+                                href: "/organizations",
+                            },
+                            {
+                                key: "policies",
+                                label: "Polissen",
+                                icon: FaFileContract,
+                                href: "/policies",
+                            },
+                            {
+                                key: "pending",
+                                label: "Pending Items",
+                                icon: FaClock,
+                                href: "/pending_overview",
+                            },
+                            {
+                                key: "users",
+                                label: "Gebruikers",
+                                icon: FaUsers,
+                                href: "/users",
+                            },
+                            {
+                                key: "changelog",
+                                label: "Wijzigingslogboek",
+                                icon: FaClipboardList,
+                                href: "/changelog",
+                            },
+                        ]
+                            .filter((tab) => {
+                                // Hide pending, users, and changelog tabs for regular users
+                                if (
+                                    userInfo?.role === "user" &&
+                                    (tab.key === "pending" ||
+                                        tab.key === "users" ||
+                                        tab.key === "changelog")
+                                ) {
+                                    return false
+                                }
+                                return true
+                            })
+                            .map((tab) => {
+                                const isActive = tab.key === "changelog"
+                                const Icon = tab.icon
+
+                                return (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => {
+                                            if (!isActive) {
+                                                window.location.href = tab.href
+                                            }
+                                        }}
+                                        style={{
+                                            padding: "16px 24px",
+                                            backgroundColor: isActive
+                                                ? colors.primary
+                                                : colors.white,
+                                            color: isActive
+                                                ? "white"
+                                                : colors.gray500,
+                                            border: isActive
+                                                ? "none"
+                                                : "2px solid #e5e7eb",
+                                            borderRadius: "12px",
+                                            fontSize: "15px",
+                                            fontWeight: "600",
+                                            cursor: isActive
+                                                ? "default"
+                                                : "pointer",
+                                            fontFamily: FONT_STACK,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            transition: "all 0.2s",
+                                            minHeight: "48px",
+                                            boxShadow: isActive
+                                                ? "0 2px 8px rgba(59, 130, 246, 0.15)"
+                                                : "0 2px 4px rgba(0,0,0,0.05)",
+                                            transform: isActive
+                                                ? "translateY(-1px)"
+                                                : "none",
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!isActive) {
+                                                const target =
+                                                    e.target as HTMLElement
+                                                target.style.backgroundColor =
+                                                    "#f8fafc"
+                                                target.style.borderColor =
+                                                    colors.primary
+                                                target.style.color = colors.primary
+                                                target.style.transform =
+                                                    "translateY(-1px)"
+                                                target.style.boxShadow =
+                                                    "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!isActive) {
+                                                const target =
+                                                    e.target as HTMLElement
+                                                target.style.backgroundColor =
+                                                    colors.white
+                                                target.style.borderColor =
+                                                    colors.gray200
+                                                target.style.color = colors.gray500
+                                                target.style.transform = "none"
+                                                target.style.boxShadow =
+                                                    "0 2px 4px rgba(0,0,0,0.05)"
+                                            }
+                                        }}
+                                    >
+                                        <Icon size={14} />
+                                        {tab.label}
+                                        {/* Pending count badge */}
+                                        {tab.key === "pending" &&
+                                            pendingCount > 0 && (
+                                                <span
+                                                    style={{
+                                                        backgroundColor:
+                                                            isActive
+                                                                ? "rgba(255,255,255,0.3)"
+                                                                : colors.error,
+                                                        color: "white",
+                                                        borderRadius: "10px",
+                                                        padding: "2px 6px",
+                                                        fontSize: "12px",
+                                                        fontWeight: "700",
+                                                        minWidth: "18px",
+                                                        textAlign: "center",
+                                                        marginLeft: "4px",
+                                                    }}
+                                                >
+                                                    {pendingCount}
+                                                </span>
+                                            )}
+                                    </button>
+                                )
+                            })}
                     </div>
                     <div
                         style={{
                             padding: "24px",
-                            borderBottom: "1px solid #e5e7eb",
+                            borderBottom: `1px solid ${colors.gray200}`,
                         }}
                     >
                         <div
@@ -1885,8 +2172,8 @@ export function ChangelogPageOverride(): Override {
                             <div
                                 style={{
                                     fontSize: "14px",
-                                    color: "#6b7280",
-                                    backgroundColor: "#f3f4f6",
+                                    color: colors.gray500,
+                                    backgroundColor: colors.gray100,
                                     padding: "6px 12px",
                                     borderRadius: "6px",
                                 }}
@@ -1906,11 +2193,11 @@ export function ChangelogPageOverride(): Override {
                         />
                     </div>
 
-
                     <div
                         style={{
                             overflowX: "auto",
-                            maxHeight: "70vh",
+                            overflowY: "auto",
+                            flex: 1,
                             position: "relative",
                         }}
                     >
@@ -1926,7 +2213,7 @@ export function ChangelogPageOverride(): Override {
                                 style={{
                                     position: "sticky",
                                     top: 0,
-                                    backgroundColor: "#f8fafc",
+                                    backgroundColor: colors.gray50,
                                     zIndex: 10,
                                 }}
                             >
@@ -1940,7 +2227,7 @@ export function ChangelogPageOverride(): Override {
                                                 borderBottom:
                                                     "2px solid #e5e7eb",
                                                 fontWeight: "600",
-                                                color: "#374151",
+                                                color: colors.gray700,
                                                 width: col.width || "auto",
                                                 minWidth: "80px",
                                                 fontSize: "13px",
@@ -1955,11 +2242,19 @@ export function ChangelogPageOverride(): Override {
                             <tbody>
                                 {filteredChangelog.map((item, index) => {
                                     const isExpanded = expandedRows.has(item.id)
-                                    
+
                                     // Calculate previous state for this entry
-                                    const entityHistory = entityHistories.get(item.entityId) || []
-                                    const entryIndex = entityHistory.findIndex(entry => entry.id === item.id)
-                                    const previousState = getPreviousEntityState(entityHistory, entryIndex, item.changes)
+                                    const entityHistory =
+                                        entityHistories.get(item.entityId) || []
+                                    const entryIndex = entityHistory.findIndex(
+                                        (entry) => entry.id === item.id
+                                    )
+                                    const previousState =
+                                        getPreviousEntityState(
+                                            entityHistory,
+                                            entryIndex,
+                                            item.changes
+                                        )
 
                                     return (
                                         <React.Fragment key={item.id}>
@@ -1967,7 +2262,7 @@ export function ChangelogPageOverride(): Override {
                                                 style={{
                                                     backgroundColor:
                                                         index % 2 === 0
-                                                            ? "#ffffff"
+                                                            ? colors.white
                                                             : "#f8fafc",
                                                     transition:
                                                         "background-color 0.2s",
@@ -1979,7 +2274,7 @@ export function ChangelogPageOverride(): Override {
                                                 onMouseOut={(e) =>
                                                     (e.currentTarget.style.backgroundColor =
                                                         index % 2 === 0
-                                                            ? "#ffffff"
+                                                            ? colors.white
                                                             : "#f8fafc")
                                                 }
                                             >
@@ -1990,24 +2285,46 @@ export function ChangelogPageOverride(): Override {
                                                         let displayValue: React.ReactNode
 
                                                         // Debug: Log which condition is being checked for entityInfo column
-                                                        if (col.key === "entityInfo" && index === 0) {
-                                                            console.log("Processing entityInfo column, cellValue:", cellValue)
-                                                            console.log("cellValue == null?", cellValue == null)
+                                                        if (
+                                                            col.key ===
+                                                                "entityInfo" &&
+                                                            index === 0
+                                                        ) {
+                                                            console.log(
+                                                                "Processing entityInfo column, cellValue:",
+                                                                cellValue
+                                                            )
+                                                            console.log(
+                                                                "cellValue == null?",
+                                                                cellValue ==
+                                                                    null
+                                                            )
                                                         }
 
                                                         // Handle entityInfo column first (before null check)
-                                                        if (col.key === "entityInfo") {
-                                                            const entityInfo = entityInfoCache.get(item.entityId)
-                                                            const isLoading = loadingEntityInfo.has(item.entityId)
-                                                            
+                                                        if (
+                                                            col.key ===
+                                                            "entityInfo"
+                                                        ) {
+                                                            const entityInfo =
+                                                                entityInfoCache.get(
+                                                                    item.entityId
+                                                                )
+                                                            const isLoading =
+                                                                loadingEntityInfo.has(
+                                                                    item.entityId
+                                                                )
+
                                                             if (isLoading) {
                                                                 displayValue = (
                                                                     <div
                                                                         style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
+                                                                            display:
+                                                                                "flex",
+                                                                            alignItems:
+                                                                                "center",
                                                                             gap: "8px",
-                                                                            color: "#6b7280",
+                                                                            color: colors.gray500,
                                                                         }}
                                                                     >
                                                                         <div
@@ -2015,49 +2332,75 @@ export function ChangelogPageOverride(): Override {
                                                                                 width: "16px",
                                                                                 height: "16px",
                                                                                 border: "2px solid #e5e7eb",
-                                                                                borderTop: "2px solid #3b82f6",
-                                                                                borderRadius: "50%",
-                                                                                animation: "spin 1s linear infinite",
+                                                                                borderTop:
+                                                                                    `2px solid ${colors.primary}`,
+                                                                                borderRadius:
+                                                                                    "50%",
+                                                                                animation:
+                                                                                    "spin 1s linear infinite",
                                                                             }}
                                                                         />
-                                                                        <span style={{ fontSize: "12px" }}>Laden...</span>
+                                                                        <span
+                                                                            style={{
+                                                                                fontSize:
+                                                                                    "12px",
+                                                                            }}
+                                                                        >
+                                                                            Laden...
+                                                                        </span>
                                                                     </div>
                                                                 )
-                                                            } else if (entityInfo) {
+                                                            } else if (
+                                                                entityInfo
+                                                            ) {
                                                                 displayValue = (
                                                                     <div
                                                                         style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
+                                                                            display:
+                                                                                "flex",
+                                                                            alignItems:
+                                                                                "center",
                                                                             gap: "8px",
                                                                         }}
                                                                     >
-                                                                        {entityInfo.icon}
+                                                                        {
+                                                                            entityInfo.icon
+                                                                        }
                                                                         <div>
                                                                             <div
                                                                                 style={{
-                                                                                    fontWeight: "500",
-                                                                                    color: "#374151",
-                                                                                    fontSize: "13px",
+                                                                                    fontWeight:
+                                                                                        "500",
+                                                                                    color: colors.gray700,
+                                                                                    fontSize:
+                                                                                        "13px",
                                                                                 }}
                                                                             >
-                                                                                {entityInfo.displayName}
+                                                                                {
+                                                                                    entityInfo.displayName
+                                                                                }
                                                                             </div>
                                                                             {entityInfo.organization && (
                                                                                 <div
                                                                                     style={{
-                                                                                        fontSize: "11px",
-                                                                                        color: "#6b7280",
-                                                                                        marginTop: "2px",
+                                                                                        fontSize:
+                                                                                            "11px",
+                                                                                        color: colors.gray500,
+                                                                                        marginTop:
+                                                                                            "2px",
                                                                                     }}
                                                                                 >
-                                                                                    <FaBuilding 
-                                                                                        style={{ 
-                                                                                            fontSize: "10px", 
-                                                                                            marginRight: "4px" 
-                                                                                        }} 
+                                                                                    <FaBuilding
+                                                                                        style={{
+                                                                                            fontSize:
+                                                                                                "10px",
+                                                                                            marginRight:
+                                                                                                "4px",
+                                                                                        }}
                                                                                     />
-                                                                                    {entityInfo.organization}
+                                                                                    {
+                                                                                        entityInfo.organization
+                                                                                    }
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -2068,20 +2411,39 @@ export function ChangelogPageOverride(): Override {
                                                                 displayValue = (
                                                                     <div
                                                                         style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
+                                                                            display:
+                                                                                "flex",
+                                                                            alignItems:
+                                                                                "center",
                                                                             gap: "8px",
-                                                                            color: "#6b7280",
+                                                                            color: colors.gray500,
                                                                         }}
                                                                     >
-                                                                        <FaClipboardList style={{ fontSize: "14px" }} />
-                                                                        <span style={{ fontSize: "12px" }}>
-                                                                            {item.sourceTableTag} {item.entityId.slice(-8)}
+                                                                        <FaClipboardList
+                                                                            style={{
+                                                                                fontSize:
+                                                                                    "14px",
+                                                                            }}
+                                                                        />
+                                                                        <span
+                                                                            style={{
+                                                                                fontSize:
+                                                                                    "12px",
+                                                                            }}
+                                                                        >
+                                                                            {
+                                                                                item.sourceTableTag
+                                                                            }{" "}
+                                                                            {item.entityId.slice(
+                                                                                -8
+                                                                            )}
                                                                         </span>
                                                                     </div>
                                                                 )
                                                             }
-                                                        } else if (cellValue == null) {
+                                                        } else if (
+                                                            cellValue == null
+                                                        ) {
                                                             displayValue = (
                                                                 <span
                                                                     style={{
@@ -2133,16 +2495,24 @@ export function ChangelogPageOverride(): Override {
                                                                 >
                                                                     <FaClock
                                                                         style={{
-                                                                            color: "#6b7280",
+                                                                            color: colors.gray500,
                                                                             fontSize:
                                                                                 "12px",
                                                                         }}
                                                                     />
                                                                     <span
                                                                         title={(() => {
-                                                                            const dateValue = new Date(cellValue)
-                                                                            dateValue.setHours(dateValue.getHours() + 2)
-                                                                            return dateValue.toLocaleString('nl-NL')
+                                                                            const dateValue =
+                                                                                new Date(
+                                                                                    cellValue
+                                                                                )
+                                                                            dateValue.setHours(
+                                                                                dateValue.getHours() +
+                                                                                    2
+                                                                            )
+                                                                            return dateValue.toLocaleString(
+                                                                                "nl-NL"
+                                                                            )
                                                                         })()}
                                                                     >
                                                                         {getRelativeTime(
@@ -2167,7 +2537,7 @@ export function ChangelogPageOverride(): Override {
                                                                 >
                                                                     <FaUser
                                                                         style={{
-                                                                            color: "#6b7280",
+                                                                            color: colors.gray500,
                                                                             fontSize:
                                                                                 "12px",
                                                                         }}
@@ -2182,146 +2552,58 @@ export function ChangelogPageOverride(): Override {
                                                             displayValue = (
                                                                 <div
                                                                     style={{
-                                                                        display: "flex",
-                                                                        alignItems: "center",
+                                                                        display:
+                                                                            "flex",
+                                                                        alignItems:
+                                                                            "center",
                                                                         gap: "8px",
                                                                     }}
                                                                 >
                                                                     <FaDatabase
                                                                         style={{
-                                                                            color: "#6b7280",
-                                                                            fontSize: "14px",
+                                                                            color: colors.gray500,
+                                                                            fontSize:
+                                                                                "14px",
                                                                         }}
                                                                     />
                                                                     <div>
                                                                         <div
                                                                             style={{
-                                                                                fontWeight: "500",
-                                                                                color: "#374151",
+                                                                                fontWeight:
+                                                                                    "500",
+                                                                                color: colors.gray700,
                                                                             }}
                                                                         >
-                                                                            {getTableDisplayName(item.sourceTableTag)}
+                                                                            {getTableDisplayName(
+                                                                                item.sourceTableTag
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             )
-                                                        } else if (
-                                                            col.key === "entityInfo"
-                                                        ) {
-                                                            // Debug: Check if we enter this block
-                                                            if (index === 0) {
-                                                                console.log("Entering entityInfo rendering for first row")
-                                                            }
-                                                            
-                                                            const entityInfo = entityInfoCache.get(item.entityId)
-                                                            const isLoading = loadingEntityInfo.has(item.entityId)
-                                                            
-                                                            // Debug logging
-                                                            if (index < 5) { // Only log first 5 entries to avoid spam
-                                                                console.log(`Render entityInfo for ${item.entityId}:`, {
-                                                                    entityInfo,
-                                                                    isLoading,
-                                                                    cacheHas: entityInfoCache.has(item.entityId),
-                                                                    cacheSize: entityInfoCache.size
-                                                                })
-                                                            }
-                                                            
-                                                            if (isLoading) {
-                                                                displayValue = (
-                                                                    <div
-                                                                        style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
-                                                                            gap: "8px",
-                                                                            color: "#6b7280",
-                                                                        }}
-                                                                    >
-                                                                        <div
-                                                                            style={{
-                                                                                width: "16px",
-                                                                                height: "16px",
-                                                                                border: "2px solid #e5e7eb",
-                                                                                borderTop: "2px solid #3b82f6",
-                                                                                borderRadius: "50%",
-                                                                                animation: "spin 1s linear infinite",
-                                                                            }}
-                                                                        />
-                                                                        <span style={{ fontSize: "12px" }}>Laden...</span>
-                                                                    </div>
-                                                                )
-                                                            } else if (entityInfo) {
-                                                                displayValue = (
-                                                                    <div
-                                                                        style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
-                                                                            gap: "8px",
-                                                                        }}
-                                                                    >
-                                                                        {entityInfo.icon}
-                                                                        <div>
-                                                                            <div
-                                                                                style={{
-                                                                                    fontWeight: "500",
-                                                                                    color: "#374151",
-                                                                                    fontSize: "13px",
-                                                                                }}
-                                                                            >
-                                                                                {entityInfo.displayName}
-                                                                            </div>
-                                                                            {entityInfo.organization && (
-                                                                                <div
-                                                                                    style={{
-                                                                                        fontSize: "11px",
-                                                                                        color: "#6b7280",
-                                                                                        marginTop: "2px",
-                                                                                    }}
-                                                                                >
-                                                                                    <FaBuilding 
-                                                                                        style={{ 
-                                                                                            fontSize: "10px", 
-                                                                                            marginRight: "4px" 
-                                                                                        }} 
-                                                                                    />
-                                                                                    {entityInfo.organization}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                )
-                                                            } else {
-                                                                // Fallback display
-                                                                displayValue = (
-                                                                    <div
-                                                                        style={{
-                                                                            display: "flex",
-                                                                            alignItems: "center",
-                                                                            gap: "8px",
-                                                                            color: "#6b7280",
-                                                                        }}
-                                                                    >
-                                                                        <FaClipboardList style={{ fontSize: "14px" }} />
-                                                                        <span style={{ fontSize: "12px" }}>
-                                                                            {item.sourceTableTag} {item.entityId.slice(-8)}
-                                                                        </span>
-                                                                    </div>
-                                                                )
-                                                            }
                                                         } else if (
                                                             col.key ===
                                                             "changes"
                                                         ) {
                                                             displayValue = (
                                                                 <ExpandableChanges
-                                                                    changes={item.changes}
-                                                                    action={item.action}
-                                                                    isExpanded={isExpanded}
+                                                                    changes={
+                                                                        item.changes
+                                                                    }
+                                                                    action={
+                                                                        item.action
+                                                                    }
+                                                                    isExpanded={
+                                                                        isExpanded
+                                                                    }
                                                                     onToggle={() =>
                                                                         toggleRowExpansion(
                                                                             item.id
                                                                         )
                                                                     }
-                                                                    previousState={previousState}
+                                                                    previousState={
+                                                                        previousState
+                                                                    }
                                                                 />
                                                             )
                                                         } else {
@@ -2339,7 +2621,7 @@ export function ChangelogPageOverride(): Override {
                                                                         "12px 8px",
                                                                     borderBottom:
                                                                         "1px solid #f1f5f9",
-                                                                    color: "#374151",
+                                                                    color: colors.gray700,
                                                                     fontSize:
                                                                         "13px",
                                                                     lineHeight:
@@ -2364,6 +2646,115 @@ export function ChangelogPageOverride(): Override {
                             </tbody>
                         </table>
                     </div>
+                    
+                    {/* Pagination Controls */}
+                    {pagination && (
+                        <div
+                            style={{
+                                padding: "20px 24px",
+                                backgroundColor: colors.gray50,
+                                borderTop: `1px solid ${colors.gray200}`,
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                                gap: "12px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    color: colors.gray500,
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                }}
+                            >
+                                Toont {Math.min(pagination.pageSize * (pagination.page + 1), pagination.totalItems)} van {pagination.totalItems} wijzigingen
+                                {pagination.page > 0 && ` (Pagina ${pagination.page + 1} van ${pagination.totalPages})`}
+                            </div>
+                            
+                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                {pagination.hasMore && (
+                                    <button
+                                        onClick={loadMore}
+                                        disabled={isLoadingMore}
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor: isLoadingMore ? colors.gray100 : colors.primary,
+                                            color: isLoadingMore ? "#9ca3af" : colors.white,
+                                            border: "none",
+                                            borderRadius: "6px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            fontFamily: FONT_STACK,
+                                            cursor: isLoadingMore ? "not-allowed" : "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (!isLoadingMore) {
+                                                e.currentTarget.style.backgroundColor = colors.primaryHover
+                                            }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (!isLoadingMore) {
+                                                e.currentTarget.style.backgroundColor = colors.primary
+                                            }
+                                        }}
+                                    >
+                                        {isLoadingMore ? (
+                                            <>
+                                                <div
+                                                    style={{
+                                                        width: "16px",
+                                                        height: "16px",
+                                                        border: "2px solid #d1d5db",
+                                                        borderTop: "2px solid #9ca3af",
+                                                        borderRadius: "50%",
+                                                        animation: "spin 1s linear infinite",
+                                                    }}
+                                                />
+                                                Laden...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Meer laden ({Math.min(50, pagination.totalItems - (pagination.page + 1) * pagination.pageSize)} meer)
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                                
+                                {currentPage > 0 && (
+                                    <button
+                                        onClick={refresh}
+                                        style={{
+                                            padding: "8px 16px",
+                                            backgroundColor: colors.white,
+                                            color: colors.gray700,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "6px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            fontFamily: FONT_STACK,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s ease",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = colors.gray50
+                                            e.currentTarget.style.borderColor = "#9ca3af"
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = colors.white
+                                            e.currentTarget.style.borderColor = colors.gray300
+                                        }}
+                                    >
+                                        Terug naar start
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         ),

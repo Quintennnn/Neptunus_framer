@@ -2,7 +2,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes, FaShip, FaTruck, FaCog, FaArrowLeft, FaUser } from "react-icons/fa"
-import { colors, styles, hover, animations, FONT_STACK } from "../theme"
+import { colors, styles, hover, animations, FONT_STACK } from "../Theme"
 import { 
     API_BASE_URL, 
     API_PATHS, 
@@ -14,8 +14,8 @@ import {
     validateYear,
     validateNumberRange,
     formatLabel
-} from "../utils"
-import { useDynamicSchema, type FieldSchema } from "../hooks/useDynamicSchema"
+} from "../Utils"
+import { useDynamicSchema, useCompleteSchema, getUserInputFieldsForObjectType, type FieldSchema } from "../hooks/UseDynamicSchema"
 
 
 // Object type definitions
@@ -29,42 +29,11 @@ interface UserInfo {
     organizations?: string[]
 }
 
-// Legacy types removed - now using dynamic schema
-
-// Comprehensive form state for all insured object types (Dutch field names)
-type InsuredObjectFormState = {
-    // Required fields for all objects
+// Dynamic form state - fields determined by schema from backend
+type InsuredObjectFormState = Record<string, any> & {
+    // Only enforce essential fields that are always required
     objectType: ObjectType
-    waarde: number // value
     organization: string
-    ingangsdatum: string // insuranceStartDate
-    premiepromillage: number // premiumPerMille
-    eigenRisico: number // deductible
-    
-    // Common optional fields
-    uitgangsdatum?: string // insuranceEndDate
-    notitie?: string // notes
-    
-    // Boat-specific fields (conditional) - Dutch names
-    ligplaats?: string // mooringLocation
-    aantalMotoren?: number // numberOfEngines
-    typeMerkMotor?: string // engineType
-    merkBoot?: string // boatBrand
-    typeBoot?: string // boatType
-    bouwjaar?: number // yearOfConstruction
-    aantalVerzekerdeDagen?: number // numberOfInsuredDays
-    totalePremieOverHetJaar?: number // totalAnnualPremium
-    totalePremieOverDeVerzekerdePeriode?: number // totalPremiumForInsuredPeriod
-    bootnummer?: string // boatNumber
-    motornummer?: string // engineNumber
-    cinNummer?: string // cinNumber
-    
-    // Trailer-specific fields (conditional) - Dutch names
-    trailerRegistratienummer?: string
-    
-    // Motor-specific fields (conditional) - Dutch names
-    motorMerk?: string
-    motorSerienummer?: string
 }
 
 // Object type configurations
@@ -171,100 +140,105 @@ async function fetchUserOrganizations(userInfo: UserInfo): Promise<string[]> {
     }
 }
 
-// Get default form state based on object type (Dutch field names)
-function getDefaultFormState(objectType: ObjectType): InsuredObjectFormState {
+// Generate default form state based on dynamic schema
+function getDefaultFormState(objectType: ObjectType, schema: FieldSchema[] | null): InsuredObjectFormState {
     const baseState: InsuredObjectFormState = {
         objectType,
-        waarde: 0, // value
         organization: "",
-        ingangsdatum: "", // insuranceStartDate
-        premiepromillage: 0, // premiumPerMille
-        eigenRisico: 0, // deductible
-        uitgangsdatum: "", // insuranceEndDate
-        notitie: "", // notes
     }
 
-    // Add type-specific defaults
-    switch (objectType) {
-        case "boat":
-            return {
-                ...baseState,
-                ligplaats: "", // mooringLocation
-                aantalMotoren: 1, // numberOfEngines
-                typeMerkMotor: "", // engineType
-                merkBoot: "", // boatBrand
-                typeBoot: "", // boatType
-                bouwjaar: new Date().getFullYear(), // yearOfConstruction
-                aantalVerzekerdeDagen: 365, // numberOfInsuredDays
-                totalePremieOverHetJaar: 0, // totalAnnualPremium
-                totalePremieOverDeVerzekerdePeriode: 0, // totalPremiumForInsuredPeriod
-                bootnummer: "", // boatNumber
-                motornummer: "", // engineNumber
-                cinNummer: "", // cinNumber
-            }
-        case "trailer":
-            return {
-                ...baseState,
-                trailerRegistratienummer: "",
-            }
-        case "motor":
-            return {
-                ...baseState,
-                motorMerk: "",
-                motorSerienummer: "",
-            }
-        default:
-            return baseState
+    // If no schema available, return minimal state
+    if (!schema) {
+        return {
+            ...baseState,
+            waarde: 0,
+            ingangsdatum: "",
+        }
     }
+
+    // Build form state from schema for this specific object type (shows all user input fields for create forms)
+    const fieldsForType = getFieldsFromSchemaForCreateForm(schema, objectType)
+    
+    fieldsForType.forEach(field => {
+        // Set default values based on field type
+        switch (field.type) {
+            case "number":
+                baseState[field.key] = field.key === "bouwjaar" ? new Date().getFullYear() : 
+                                     field.key === "aantalMotoren" ? 1 : 
+                                     field.key === "aantalVerzekerdeDagen" ? 365 : 0
+                break
+            case "currency":
+                baseState[field.key] = 0
+                break
+            case "date":
+                // Set ingangsdatum to today by default, others empty
+                baseState[field.key] = field.key === "ingangsdatum" ? "" : ""
+                break
+            case "dropdown":
+                baseState[field.key] = ""  // Empty string for dropdown - user must select
+                break
+            case "text":
+            case "textarea":
+            default:
+                baseState[field.key] = ""
+                break
+        }
+    })
+
+    return baseState
 }
 
-// Get fields to render based on dynamic schema
-function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+
+// Get fields to render based on dynamic schema - using schema as single source of truth
+// For CREATE FORMS: Show ALL user input fields regardless of organization visible setting
+function getFieldsFromSchemaForCreateForm(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+    console.log("🔍 getFieldsFromSchemaForCreateForm DEBUG START")
+    console.log("Schema received:", schema)
+    console.log("Object type:", objectType)
+    
     if (!schema) {
-        // Fallback to minimal required fields
-        const commonFields: FieldSchema[] = [
-            { key: "waarde", label: "Waarde", type: "currency", group: "essential", required: true, visible: true, sortable: true, width: "120px" },
-            { key: "ingangsdatum", label: "Ingangsdatum", type: "date", group: "dates", required: false, visible: true, sortable: true, width: "120px" },
-            { key: "notitie", label: "Notitie", type: "textarea", group: "metadata", required: false, visible: true, sortable: false, width: "200px" },
-        ]
-
-        switch (objectType) {
-            case "boat":
-                return [
-                    { key: "merkBoot", label: "Merk Boot", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "typeBoot", label: "Type Boot", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
-                    ...commonFields
-                ]
-            case "trailer":
-                return [
-                    { key: "trailerRegistratienummer", label: "Chassisnummer", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "130px" },
-                    ...commonFields
-                ]
-            case "motor":
-                return [
-                    { key: "motorMerk", label: "Motor Merk", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "motorSerienummer", label: "Motor Nummer", type: "text", group: "identity", required: true, visible: true, sortable: true, width: "120px" },
-                    ...commonFields
-                ]
-            default:
-                return commonFields
-        }
+        console.log("❌ No schema provided, returning empty array")
+        return []
     }
-
-    // Filter fields for the specific object type and only show visible ones
-    return schema.filter(field => {
-        // Always show common fields (no objectTypes specified)
-        if (!field.objectTypes || field.objectTypes.length === 0) {
-            return field.visible
-        }
-        // Show fields specific to this object type
-        return field.objectTypes.includes(objectType) && field.visible
+    
+    console.log("📊 Total fields in schema:", schema.length)
+    console.log("📋 All schema fields:", schema.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
+    
+    // Filter for this object type
+    const fieldsForType = schema.filter(field => {
+        if (!objectType) return !field.objectTypes || field.objectTypes.length === 0
+        return !field.objectTypes || field.objectTypes.includes(objectType)
     })
+    
+    console.log("🎯 Fields matching object type '" + objectType + "':", fieldsForType.length)
+    console.log("🎯 Fields for type:", fieldsForType.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
+    
+    // Show ALL user input fields regardless of visible setting (for create forms only)
+    const finalFields = fieldsForType.filter(field => {
+        const isUserField = field.inputType === 'user'
+        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+        
+        console.log(`🔎 Field ${field.key}: isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}`)
+        
+        // IMPORTANT: Do NOT check field.visible here - create forms show all user input fields
+        return isUserField && isNotOrganizationField
+    })
+    
+    console.log("✅ Final filtered fields for create form:", finalFields.length)
+    console.log("✅ Final fields:", finalFields.map(f => ({ key: f.key, label: f.label, visible: f.visible, required: f.required })))
+    console.log("🔍 getFieldsFromSchemaForCreateForm DEBUG END")
+    
+    return finalFields
+}
+
+// Legacy function for backward compatibility (used by list view)
+function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+    return getUserInputFieldsForObjectType(schema, objectType)
 }
 
 
 // Object Type Selector Component
-function ObjectTypeSelector({
+export function ObjectTypeSelector({
     onSelect,
     onClose,
     onBack,
@@ -383,7 +357,7 @@ function ObjectTypeSelector({
 }
 
 // Organization Selector Component
-function OrganizationSelector({
+export function OrganizationSelector({
     userInfo,
     availableOrganizations,
     onSelect,
@@ -504,20 +478,27 @@ function InsuredObjectForm({
     onClose,
     onBack,
     onSuccess,
+    compatibilityMode = 'advanced',
+    payloadFormat = 'cleaned',
+    dateHandling = 'auto',
 }: {
     objectType: ObjectType
     selectedOrganization: string
     onClose: () => void
     onBack: () => void
     onSuccess?: () => void
+    
+    // Compatibility props for list file integration
+    compatibilityMode?: 'simple' | 'advanced'
+    payloadFormat?: 'simple' | 'cleaned'
+    dateHandling?: 'auto' | 'today'
 }) {
     const config = OBJECT_TYPE_CONFIG[objectType]
     const [form, setForm] = React.useState<InsuredObjectFormState>(() => {
-        const defaultState = getDefaultFormState(objectType)
+        // Initialize with minimal state - will be updated when schema loads
         return {
-            ...defaultState,
+            objectType,
             organization: selectedOrganization,
-            ingangsdatum: new Date().toISOString().split('T')[0], // Set today's date in YYYY-MM-DD format
         }
     })
     const [error, setError] = React.useState<string | null>(null)
@@ -526,27 +507,63 @@ function InsuredObjectForm({
     const [isLoadingConfig, setIsLoadingConfig] = React.useState(config.useOrgConfig)
     // Legacy state removed - now using useDynamicSchema hook
     
-    // Use dynamic schema hook
-    const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(selectedOrganization)
+    // Use organization-specific schema but show ALL user input fields in create form
+    const { schema: orgSchema, loading: schemaLoading, error: schemaError } = useDynamicSchema(selectedOrganization)
 
     // Legacy functions removed - now using useDynamicSchema hook
 
-    // Set loading state based on schema loading
+    // Update form state when schema loads
     React.useEffect(() => {
+        console.log("🔄 Schema loading effect triggered")
+        console.log("Schema loading:", schemaLoading)
+        console.log("Schema error:", schemaError)
+        console.log("Org schema:", orgSchema)
+        console.log("Object type:", objectType)
+        console.log("Selected organization:", selectedOrganization)
+        
         setIsLoadingConfig(schemaLoading)
+        
         if (schemaError) {
+            console.log("❌ Schema error detected:", schemaError)
             setError("Kon schema niet laden: " + schemaError)
         }
-    }, [schemaLoading, schemaError])
+        
+        // Initialize form with schema-based defaults when schema is loaded
+        if (orgSchema && !schemaLoading) {
+            console.log("✅ Schema loaded, initializing form with defaults")
+            const defaultState = getDefaultFormState(objectType, orgSchema)
+            console.log("🎯 Default form state generated:", defaultState)
+            
+            setForm(prevForm => ({
+                ...defaultState,
+                organization: selectedOrganization,
+                // Handle date initialization based on compatibility mode
+                ingangsdatum: dateHandling === 'today' 
+                    ? new Date().toISOString().split('T')[0] 
+                    : (defaultState.ingangsdatum || new Date().toISOString().split('T')[0]),
+                // Preserve any existing form data
+                ...prevForm,
+            }))
+        }
+    }, [schemaLoading, schemaError, orgSchema, objectType, selectedOrganization])
 
-    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
         const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
-        setForm((prev) => ({
-            ...prev,
-            [name]: type === "number" ? (value === "" ? "" : parseFloat(value)) : value,
-        }))
+        
+        const formValue = type === "number" ? (value === "" ? "" : parseFloat(value)) : value
+        
+        setForm((prev) => {
+            const updated = {
+                ...prev,
+                [name]: formValue,
+            }
+            
+            // No field synchronization needed - using registry field names directly
+            
+            return updated
+        })
     }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -558,13 +575,44 @@ function InsuredObjectForm({
         setIsSubmitting(true)
 
         try {
+            // Prepare API payload based on compatibility mode
+            let apiPayload: any
+            
+            if (payloadFormat === 'simple') {
+                // Simple payload (list file behavior) - send form data directly
+                apiPayload = { ...form }
+            } else {
+                // Advanced payload (create file behavior) - clean up empty values
+                apiPayload = { ...form }
+                Object.keys(apiPayload).forEach(key => {
+                    if (apiPayload[key] === "" || apiPayload[key] === null || apiPayload[key] === undefined) {
+                        delete apiPayload[key]
+                    }
+                })
+            }
+
+            // Debug logging - now fully dynamic
+            const fieldsToRenderForDebug = getFieldsFromSchemaForCreateForm(orgSchema, objectType)
+            console.log("=== FORM SUBMISSION DEBUG ===")
+            console.log("Object Type:", objectType)
+            console.log("Form data:", form)
+            console.log("Fields to render:", fieldsToRenderForDebug.map(f => ({ key: f.key, label: f.label, required: f.required })))
+            console.log("API Payload:", apiPayload)
+            console.log("Payload keys:", Object.keys(apiPayload))
+            console.log("Required fields filled:", 
+                fieldsToRenderForDebug
+                    .filter(f => f.required)
+                    .map(f => ({ key: f.key, label: f.label, value: apiPayload[f.key], filled: !!apiPayload[f.key] }))
+            )
+            console.log("=== END DEBUG ===")
+
             const res = await fetch(API_BASE_URL + API_PATHS.INSURED_OBJECT, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${getIdToken()}`,
                 },
-                body: JSON.stringify(form),
+                body: JSON.stringify(apiPayload),
             })
             const data = await res.json()
 
@@ -589,20 +637,24 @@ function InsuredObjectForm({
     }
 
     const renderInput = (field: FieldSchema) => {
-        const val = form[field.key as keyof InsuredObjectFormState]
+        const val = form[field.key]
 
-        // Skip objectType, organization, and status fields (handled automatically)
-        if (field.key === "objectType" || field.key === "organization" || field.key === "status") return null
+        // Skip objectType, organization fields (handled automatically by form logic)
+        if (field.key === "objectType" || field.key === "organization") return null
+        
+        // All system/auto field filtering is now handled by getFieldsFromSchema()
+        // No need for hardcoded exclusions here
 
         const isNumber = field.type === "number" || field.type === "currency"
         const isTextArea = field.type === "textarea"
         const isDateField = field.type === "date"
+        const isDropdown = field.type === "dropdown"
         const inputType = field.type === "currency" ? "number" : 
                          field.type === "number" ? "number" :
                          isDateField ? "date" : "text"
 
         const label = field.label
-        const Component = isTextArea ? "textarea" : "input"
+        const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
 
         return (
             <div key={field.key} style={{ marginBottom: "16px", width: "100%" }}>
@@ -614,34 +666,66 @@ function InsuredObjectForm({
                     {label}
                     {field.required && <span style={{ color: colors.red, marginLeft: "4px" }}>*</span>}
                 </label>
-                <Component
-                    id={field.key}
-                    name={field.key}
-                    value={val === null || val === undefined ? "" : val}
-                    onChange={handleChange}
-                    disabled={isSubmitting}
-                    required={field.required}
-                    {...(Component === "input" ? { 
-                        type: inputType,
-                        ...(field.type === "currency" && { step: "0.01", min: "0" }),
-                        ...(field.type === "number" && { step: "1", min: "0" })
-                    } : { rows: 3 })}
-                    placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
-                    style={{
-                        ...styles.input,
-                        backgroundColor: isSubmitting ? colors.gray50 : colors.white,
-                        cursor: isSubmitting ? "not-allowed" : "text",
-                        borderColor: field.required ? colors.gray300 : colors.gray200,
-                    }}
-                    onFocus={(e) => {
-                        if (!isSubmitting) {
-                            hover.input(e.target as HTMLElement)
-                        }
-                    }}
-                    onBlur={(e) => {
-                        hover.resetInput(e.target as HTMLElement)
-                    }}
-                />
+                {isDropdown ? (
+                    <select
+                        id={field.key}
+                        name={field.key}
+                        value={val === null || val === undefined ? "" : val}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        required={field.required}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            borderColor: field.required ? colors.gray300 : colors.gray200,
+                        }}
+                        onFocus={(e) => {
+                            if (!isSubmitting) {
+                                hover.input(e.target as HTMLElement)
+                            }
+                        }}
+                        onBlur={(e) => {
+                            hover.resetInput(e.target as HTMLElement)
+                        }}
+                    >
+                        <option value="">Selecteer {label.toLowerCase()}</option>
+                        {field.options?.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <Component
+                        id={field.key}
+                        name={field.key}
+                        value={val === null || val === undefined ? "" : val}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        required={field.required}
+                        {...(Component === "input" ? { 
+                            type: inputType,
+                            ...(field.type === "currency" && { step: "0.01", min: "0" }),
+                            ...(field.type === "number" && { step: "1", min: "0" })
+                        } : { rows: 3 })}
+                        placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                            borderColor: field.required ? colors.gray300 : colors.gray200,
+                        }}
+                        onFocus={(e) => {
+                            if (!isSubmitting) {
+                                hover.input(e.target as HTMLElement)
+                            }
+                        }}
+                        onBlur={(e) => {
+                            hover.resetInput(e.target as HTMLElement)
+                        }}
+                    />
+                )}
             </div>
         )
     }
@@ -676,7 +760,15 @@ function InsuredObjectForm({
     }
 
     const IconComponent = config.icon
-    const fieldsToRender = getFieldsFromSchema(schema, objectType)
+    const fieldsToRender = getFieldsFromSchemaForCreateForm(orgSchema, objectType)
+    
+    console.log("🎨 RENDER DEBUG - InsuredObjectForm")
+    console.log("Org schema available:", !!orgSchema)
+    console.log("Schema loading:", schemaLoading)
+    console.log("Object type:", objectType)
+    console.log("Selected organization:", selectedOrganization)
+    console.log("Fields to render count:", fieldsToRender.length)
+    console.log("Fields to render:", fieldsToRender.map(f => ({ key: f.key, label: f.label, type: f.type, required: f.required })))
 
     return (
         <div
@@ -724,16 +816,30 @@ function InsuredObjectForm({
 
             {/* Form */}
             <form onSubmit={handleSubmit}>
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        columnGap: "24px",
-                        rowGap: "12px",
-                    }}
-                >
-                    {fieldsToRender.map(renderInput)}
-                </div>
+                {fieldsToRender.length === 0 && !isLoadingConfig ? (
+                    <div style={{
+                        padding: "24px",
+                        textAlign: "center",
+                        color: colors.gray500,
+                        backgroundColor: colors.gray50,
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.gray200}`,
+                        marginBottom: "24px",
+                    }}>
+                        Geen formuliervelden beschikbaar. Controleer de organisatieconfiguratie of neem contact op met de beheerder.
+                    </div>
+                ) : (
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            columnGap: "24px",
+                            rowGap: "12px",
+                        }}
+                    >
+                        {fieldsToRender.map(renderInput)}
+                    </div>
+                )}
 
                 {/* Submit Buttons */}
                 <div style={{ ...styles.buttonGroup, marginTop: "24px" }}>
@@ -951,6 +1057,135 @@ function InsuredObjectFormManager() {
             {overlay}
         </Frame>
     )
+}
+
+// Compatible CreateObjectModal for list file integration
+export function CreateObjectModal({ 
+    onClose, 
+    onOrganizationSelect,
+    onSuccess = () => window.location.reload()
+}: {
+    onClose: () => void
+    onOrganizationSelect?: (org: string) => void  
+    onSuccess?: () => void
+}) {
+    const [currentStep, setCurrentStep] = React.useState<"organization" | "selector" | "form">("organization")
+    const [selectedType, setSelectedType] = React.useState<ObjectType | null>(null)
+    const [selectedOrganization, setSelectedOrganization] = React.useState<string | null>(null)
+    const [userInfo, setUserInfo] = React.useState<UserInfo | null>(null)
+    const [availableOrganizations, setAvailableOrganizations] = React.useState<string[]>([])
+    const [isLoadingUser, setIsLoadingUser] = React.useState(true)
+
+    // Load user info and organizations on mount
+    React.useEffect(() => {
+        async function loadUserData() {
+            setIsLoadingUser(true)
+            try {
+                const basicUserInfo = getCurrentUserInfo()
+                if (basicUserInfo) {
+                    const detailedUserInfo = await fetchUserInfo(basicUserInfo.sub)
+                    if (detailedUserInfo) {
+                        setUserInfo(detailedUserInfo)
+                        const orgs = await fetchUserOrganizations(detailedUserInfo)
+                        setAvailableOrganizations(orgs)
+                        
+                        // If user has only one organization, pre-select it
+                        if (orgs.length === 1) {
+                            setSelectedOrganization(orgs[0])
+                            onOrganizationSelect?.(orgs[0])
+                            setCurrentStep("selector")
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load user data:", error)
+            } finally {
+                setIsLoadingUser(false)
+            }
+        }
+        
+        loadUserData()
+    }, [])
+
+    const handleOrganizationSelect = (organization: string) => {
+        setSelectedOrganization(organization)
+        onOrganizationSelect?.(organization)
+        setCurrentStep("selector")
+    }
+
+    const handleTypeSelect = (type: ObjectType) => {
+        setSelectedType(type)
+        setCurrentStep("form")
+    }
+
+    const handleBackToOrganization = () => {
+        setCurrentStep("organization")
+        setSelectedOrganization(null)
+    }
+
+    const handleBackToSelector = () => {
+        setCurrentStep("selector")
+        setSelectedType(null)
+    }
+
+    const handleSuccess = () => {
+        onSuccess()
+    }
+
+    const overlay = ReactDOM.createPortal(
+        <div style={styles.modalOverlay}>
+            {isLoadingUser ? (
+                <div style={{
+                    ...styles.modal,
+                    width: "min(90vw, 400px)",
+                    padding: "32px",
+                    textAlign: "center",
+                }}>
+                    <div style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "500" }}>
+                        Laden...
+                    </div>
+                    <div style={{
+                        ...styles.spinner,
+                        display: "inline-block",
+                        width: "20px",
+                        height: "20px",
+                        border: `2px solid ${colors.gray100}`,
+                        borderTop: `2px solid ${colors.primary}`,
+                    }} />
+                </div>
+            ) : userInfo && currentStep === "organization" ? (
+                <OrganizationSelector 
+                    userInfo={userInfo}
+                    availableOrganizations={availableOrganizations}
+                    onSelect={handleOrganizationSelect}
+                    onClose={onClose}
+                    onBack={onClose}
+                />
+            ) : userInfo && currentStep === "selector" ? (
+                <ObjectTypeSelector 
+                    onSelect={handleTypeSelect} 
+                    onClose={onClose}
+                    onBack={availableOrganizations.length > 1 ? handleBackToOrganization : onClose}
+                />
+            ) : userInfo && selectedType && selectedOrganization ? (
+                <InsuredObjectForm
+                    objectType={selectedType}
+                    selectedOrganization={selectedOrganization}
+                    onClose={onClose}
+                    onBack={handleBackToSelector}
+                    onSuccess={handleSuccess}
+                    
+                    // Use simple compatibility mode for list file integration
+                    compatibilityMode="simple"
+                    payloadFormat="simple" 
+                    dateHandling="today"
+                />
+            ) : null}
+        </div>,
+        document.body
+    )
+
+    return overlay
 }
 
 // Export Override

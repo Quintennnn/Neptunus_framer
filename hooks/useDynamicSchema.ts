@@ -4,13 +4,15 @@ import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
 export interface FieldSchema {
     key: string
     label: string
-    type: "text" | "number" | "currency" | "date" | "status" | "textarea"
+    type: "text" | "number" | "currency" | "date" | "status" | "textarea" | "dropdown"
     group: "basic" | "metadata"
     required: boolean
     visible: boolean
     sortable: boolean
     width: string
     objectTypes?: string[]
+    inputType?: "user" | "system" | "auto"  // From field registry to determine form visibility
+    options?: string[]  // Dropdown options for dropdown type
 }
 
 export interface SchemaResponse {
@@ -91,12 +93,7 @@ export function useDynamicSchema(organization?: string): UseDynamicSchemaReturn 
 // Helper function to get fields for a specific object type from schema
 export function getFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
     if (!schema) {
-        return DEFAULT_SCHEMA.filter(field => {
-            // If no object type specified, return basic fields
-            if (!objectType) return field.group === "basic" || !field.objectTypes
-            // If object type specified, return fields that don't specify objectTypes or include this objectType
-            return !field.objectTypes || field.objectTypes.includes(objectType)
-        })
+        return []
     }
 
     return schema.filter(field => {
@@ -112,329 +109,145 @@ export function getFieldKeysForObjectType(schema: FieldSchema[] | null, objectTy
     return getFieldsForObjectType(schema, objectType).map(field => field.key)
 }
 
-// Default fallback schema for when API is unavailable
-export const DEFAULT_SCHEMA: FieldSchema[] = [
-    // Essential fields
-    {
-        key: "objectType",
-        label: "Type",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px"
-    },
-    {
-        key: "status",
-        label: "Status",
-        type: "status",
-        group: "basic",
-        required: false,  // Status is automatically set, not user input
-        visible: true,    // Now visible as requested
-        sortable: true,
-        width: "100px"
-    },
-    {
-        key: "organization",
-        label: "Organization",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden from list view by default
-        sortable: true,
-        width: "150px"
-    },
-    {
-        key: "waarde",
-        label: "Waarde",
-        type: "currency",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px"
-    },
-    {
-        key: "premiepromillage",
-        label: "Premie ‰",
-        type: "number",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "100px"
-    },
-    {
-        key: "eigenRisico",
-        label: "Eigen Risico",
-        type: "currency",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "100px"
-    },
-    {
-        key: "ingangsdatum",
-        label: "Ingangsdatum",
-        type: "date",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "120px"
-    },
-    {
-        key: "uitgangsdatum",
-        label: "Uitgangsdatum",
-        type: "date",
-        group: "basic",
-        required: false,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "120px"
-    },
-    // Boat-specific fields
-    {
-        key: "merkBoot",
-        label: "Merk Boot",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - replaced by unified brand column
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "typeBoot",
-        label: "Type Boot",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "ligplaats",
-        label: "Ligplaats",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "150px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "bootnummer",
-        label: "Bootnummer",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "aantalMotoren",
-        label: "Aantal Motoren",
-        type: "number",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "80px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "typeMerkMotor",
-        label: "Type/Merk Motor",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "motornummer",
-        label: "Motornummer",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "130px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "bouwjaar",
-        label: "Bouwjaar",
-        type: "number",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "100px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "cinNummer",
-        label: "CIN Nummer",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "aantalVerzekerdeDagen",
-        label: "Aantal Verzekerde Dagen",
-        type: "number",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "totalePremieOverHetJaar",
-        label: "Totale Premie Over Het Jaar",
-        type: "currency",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "150px",
-        objectTypes: ["boat"]
-    },
-    {
-        key: "totalePremieOverDeVerzekerdePeriode",
-        label: "Totale Premie Over De Verzekerde Periode",
-        type: "currency",
-        group: "basic",
-        required: true,
-        visible: false,  // Hidden by default - available in column filter
-        sortable: true,
-        width: "180px",
-        objectTypes: ["boat"]
-    },
-    // Unified fields for all object types
-    {
-        key: "brand",
-        label: "Brand/Merk",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px"
-    },
-    {
-        key: "type",
-        label: "Model/Type",
-        type: "text",
-        group: "basic",
-        required: true,
-        visible: true,
-        sortable: true,
-        width: "120px"
-    },
-    // Trailer-specific fields
-    {
-        key: "trailerMerk",
-        label: "Trailer Merk",
-        type: "text",
-        group: "basic",
-        required: false,
-        visible: false,  // Hidden by default - replaced by unified brand column
-        sortable: true,
-        width: "120px",
-        objectTypes: ["trailer"]
-    },
-    {
-        key: "trailerType",
-        label: "Trailer Type",
-        type: "text",
-        group: "basic",
-        required: false,
-        visible: false,  // Hidden by default - replaced by unified type column
-        sortable: true,
-        width: "120px",
-        objectTypes: ["trailer"]
-    },
-    // Motor-specific fields
-    {
-        key: "motorMerk",
-        label: "Motor Merk",
-        type: "text",
-        group: "basic",
-        required: false,
-        visible: false,  // Hidden by default - replaced by unified brand column
-        sortable: true,
-        width: "120px",
-        objectTypes: ["motor"]
-    },
-    {
-        key: "motorModel",
-        label: "Motor Model",
-        type: "text",
-        group: "basic",
-        required: false,
-        visible: false,  // Hidden by default - replaced by unified type column
-        sortable: true,
-        width: "120px",
-        objectTypes: ["motor"]
-    },
-    // Common metadata fields
-    {
-        key: "notitie",
-        label: "Notitie",
-        type: "textarea",
-        group: "metadata",
-        required: false,
-        visible: true,
-        sortable: false,
-        width: "200px"
-    }
-]
 
-// Unified field mapping for smart column consolidation
-export const UNIFIED_FIELD_MAPPING = {
-    brand: {
-        boat: 'merkBoot',
-        trailer: 'trailerMerk', 
-        motor: 'motorMerk'
-    },
-    type: {
-        boat: 'typeBoot',
-        trailer: 'trailerType',
-        motor: 'motorModel'
-    }
-} as const
+// Helper function to get only user input fields for forms (excludes system and auto fields)
+// NOTE: For create forms, we need the COMPLETE schema without organization overrides
+// The organization-specific 'visible' setting should only affect table columns, not form fields
+export function getUserInputFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
+    const fieldsForType = getFieldsForObjectType(schema, objectType)
+    return fieldsForType.filter(field => {
+        // Only show fields that require user input (from field registry input_type)
+        // Only accept fields explicitly marked as 'user' input type
+        const isUserField = field.inputType === 'user'
+        
+        // Also filter out organization-specific fields from insured object forms
+        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+        
+        // IMPORTANT: We do NOT check field.visible here - visible is only for table columns!
+        // Create forms should show ALL user input fields regardless of organization visible setting
+        
+        return isUserField && isNotOrganizationField
+    })
+}
 
-// Helper function to get the actual field value for unified columns
-export function getUnifiedFieldValue(object: any, unifiedKey: string): string {
-    if (!(unifiedKey in UNIFIED_FIELD_MAPPING)) {
-        return object[unifiedKey] || ''
+// Hook for getting complete field schema (without organization overrides) for forms
+// For now, we'll create a schema where all user input fields are visible=true for forms
+export function useCompleteSchema(): UseDynamicSchemaReturn {
+    const [schema, setSchema] = useState<FieldSchema[] | null>(null)
+    const [loading, setLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const fetchSchema = async () => {
+        setLoading(true)
+        setError(null)
+
+        try {
+            const token = getIdToken()
+            if (!token) {
+                throw new Error("No authentication token available")
+            }
+
+            // For now, we'll use a dummy organization that doesn't exist to get default field registry schema
+            // This is a temporary solution until we have a proper complete schema endpoint
+            const response = await fetch(
+                `${API_BASE_URL}${API_PATHS.SCHEMA}/insured-objects/__COMPLETE_SCHEMA_DEFAULT__`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    mode: "cors",
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch complete schema: ${response.status} ${response.statusText}`)
+            }
+
+            const data: SchemaResponse = await response.json()
+            
+            // Force ALL user input fields to be visible for create forms (ignores organization visible setting)
+            const completeSchema = data.schema.fields.map(field => ({
+                ...field,
+                visible: true // Always show all fields in create forms, regardless of organization config
+            }))
+            
+            setSchema(completeSchema)
+        } catch (err: any) {
+            console.error("Error fetching complete schema:", err)
+            setError(err.message || "Failed to fetch complete schema")
+            setSchema(null)
+        } finally {
+            setLoading(false)
+        }
     }
-    
-    const mapping = UNIFIED_FIELD_MAPPING[unifiedKey as keyof typeof UNIFIED_FIELD_MAPPING]
-    const objectType = object.objectType
-    
-    if (objectType && objectType in mapping) {
-        const actualField = mapping[objectType as keyof typeof mapping]
-        return object[actualField] || ''
+
+    useEffect(() => {
+        fetchSchema()
+    }, [])
+
+    return {
+        schema,
+        loading,
+        error,
+        refetch: fetchSchema,
     }
-    
-    return ''
+}
+
+// No more hardcoded schema - all fields come from backend field registry
+
+// Hook for organization field schema
+export function useOrganizationSchema(): UseDynamicSchemaReturn {
+    const [schema, setSchema] = useState<FieldSchema[] | null>(null)
+    const [loading, setLoading] = useState<boolean>(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const fetchSchema = async () => {
+        setLoading(true)
+        setError(null)
+
+        try {
+            const token = getIdToken()
+            if (!token) {
+                throw new Error("No authentication token available")
+            }
+
+            const response = await fetch(
+                `${API_BASE_URL}${API_PATHS.SCHEMA}/organizations`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    mode: "cors",
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch organization schema: ${response.status} ${response.statusText}`)
+            }
+
+            const data: SchemaResponse = await response.json()
+            setSchema(data.schema.fields)
+        } catch (err: any) {
+            console.error("Error fetching organization schema:", err)
+            setError(err.message || "Failed to fetch organization schema")
+            setSchema(null)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchSchema()
+    }, [])
+
+    return {
+        schema,
+        loading,
+        error,
+        refetch: fetchSchema,
+    }
 }

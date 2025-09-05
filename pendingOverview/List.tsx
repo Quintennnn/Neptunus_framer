@@ -207,6 +207,36 @@ async function approveObject(objectId: string): Promise<void> {
     }
 }
 
+async function approveObjectWithCustomValues(
+    objectId: string, 
+    premiepromillage: number, 
+    eigenRisico: number
+): Promise<void> {
+    try {
+        const token = getIdTokenFromStorage()
+        if (!token) throw new Error("No authentication token")
+
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`, {
+            method: "PUT",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                premiepromillage,
+                eigenRisico,
+            }),
+        })
+
+        if (!res.ok) {
+            throw new Error(`Failed to approve object with custom values: ${res.status} ${res.statusText}`)
+        }
+    } catch (error) {
+        console.error("Error approving object with custom values:", error)
+        throw error
+    }
+}
+
 async function declineObject(objectId: string, reason: string): Promise<void> {
     try {
         const token = getIdTokenFromStorage()
@@ -378,6 +408,157 @@ function getObjectDisplayName(object: PendingInsuredObject): string {
 }
 
 // ——— Component Definitions ———
+
+// Calculated Field Editor Component - allows admins to edit calculated values inline
+function CalculatedFieldEditor({
+    label,
+    value,
+    suffix,
+    type,
+    objectId,
+    onUpdate,
+}: {
+    label: string
+    value: number
+    suffix: string
+    type: "promillage" | "currency"
+    objectId: string
+    onUpdate: (newValue: number) => void
+}) {
+    const [isEditing, setIsEditing] = React.useState(false)
+    const [editValue, setEditValue] = React.useState(value.toString())
+    const [isSaving, setIsSaving] = React.useState(false)
+
+    const handleSave = async () => {
+        const numValue = parseFloat(editValue)
+        if (isNaN(numValue) || numValue < 0) {
+            setEditValue(value.toString()) // Reset to original value
+            setIsEditing(false)
+            return
+        }
+
+        setIsSaving(true)
+        try {
+            onUpdate(numValue)
+            setIsEditing(false)
+        } catch (error) {
+            console.error("Failed to update calculated field:", error)
+            setEditValue(value.toString()) // Reset on error
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const handleCancel = () => {
+        setEditValue(value.toString())
+        setIsEditing(false)
+    }
+
+    const formatDisplayValue = (val: number) => {
+        if (type === "currency") {
+            return formatCurrency(val)
+        }
+        return `${val}${suffix}`
+    }
+
+    return (
+        <div>
+            <div style={{ color: colors.gray600, marginBottom: "4px" }}>
+                {label}
+                <span style={{ 
+                    fontSize: "12px", 
+                    color: colors.gray500, 
+                    marginLeft: "4px",
+                    fontStyle: "italic"
+                }}>
+                    (klik om te bewerken)
+                </span>
+            </div>
+            {isEditing ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input
+                        type="number"
+                        step={type === "promillage" ? "0.1" : "1"}
+                        min="0"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        disabled={isSaving}
+                        style={{
+                            padding: "4px 8px",
+                            border: `2px solid ${colors.primary}`,
+                            borderRadius: "4px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            width: "80px",
+                            backgroundColor: isSaving ? colors.gray50 : colors.white,
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave()
+                            if (e.key === "Escape") handleCancel()
+                        }}
+                        autoFocus
+                    />
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        style={{
+                            padding: "2px 6px",
+                            backgroundColor: colors.primary,
+                            color: colors.white,
+                            border: "none",
+                            borderRadius: "3px",
+                            fontSize: "12px",
+                            cursor: isSaving ? "not-allowed" : "pointer",
+                            opacity: isSaving ? 0.6 : 1,
+                        }}
+                    >
+                        ✓
+                    </button>
+                    <button
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                        style={{
+                            padding: "2px 6px",
+                            backgroundColor: colors.gray400,
+                            color: colors.white,
+                            border: "none",
+                            borderRadius: "3px",
+                            fontSize: "12px",
+                            cursor: isSaving ? "not-allowed" : "pointer",
+                            opacity: isSaving ? 0.6 : 1,
+                        }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            ) : (
+                <div 
+                    onClick={() => setIsEditing(true)}
+                    style={{ 
+                        color: colors.gray800, 
+                        fontWeight: "500",
+                        cursor: "pointer",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                        border: "2px solid transparent",
+                        transition: "all 0.2s",
+                        display: "inline-block",
+                    }}
+                    onMouseOver={(e) => {
+                        (e.target as HTMLElement).style.backgroundColor = colors.gray50
+                        ;(e.target as HTMLElement).style.borderColor = colors.gray300
+                    }}
+                    onMouseOut={(e) => {
+                        (e.target as HTMLElement).style.backgroundColor = "transparent"
+                        ;(e.target as HTMLElement).style.borderColor = "transparent"
+                    }}
+                >
+                    {formatDisplayValue(value)}
+                </div>
+            )}
+        </div>
+    )
+}
 
 // Statistics Cards Component
 function PendingStatisticsCards({ stats }: { stats: PendingStats }) {
@@ -713,7 +894,7 @@ function PendingObjectRow({
     object: PendingInsuredObject
     isSelected: boolean
     onToggleSelect: (objectId: string) => void
-    onApprove: (object: PendingInsuredObject) => void
+    onApprove: (object: PendingInsuredObject, customValues?: { premiepromillage: number, eigenRisico: number }) => void
     onDecline: (object: PendingInsuredObject, reason: string) => void
     onViewDetails: (object: PendingInsuredObject) => void
     isLoading: boolean
@@ -723,6 +904,19 @@ function PendingObjectRow({
     const [showDeclineModal, setShowDeclineModal] = useState(false)
     const [declineReason, setDeclineReason] = useState("")
     const [isProcessing, setIsProcessing] = useState(false)
+    
+    // State for edited calculated field values
+    const [editedValues, setEditedValues] = useState<{
+        premiepromillage: number
+        eigenRisico: number
+    }>({
+        premiepromillage: object.premiepromillage,
+        eigenRisico: object.eigenRisico,
+    })
+    
+    // Track if values have been edited
+    const hasEditedValues = editedValues.premiepromillage !== object.premiepromillage || 
+                           editedValues.eigenRisico !== object.eigenRisico
 
     // Add error handling for utility function calls
     let daysAgo = 0
@@ -768,7 +962,12 @@ function PendingObjectRow({
     const handleApprove = async () => {
         setIsProcessing(true)
         try {
-            await onApprove(object)
+            // Pass custom values if they've been edited
+            if (hasEditedValues) {
+                await onApprove(object, editedValues)
+            } else {
+                await onApprove(object)
+            }
         } catch (error) {
             console.error("Failed to approve:", error)
         } finally {
@@ -950,7 +1149,7 @@ function PendingObjectRow({
                                     onClick={handleApprove}
                                     disabled={isLoading || isProcessing}
                                     style={{
-                                        backgroundColor: "#10b981",
+                                        backgroundColor: hasEditedValues ? "#f59e0b" : "#10b981",
                                         color: colors.white,
                                         border: "none",
                                         borderRadius: "6px",
@@ -965,19 +1164,20 @@ function PendingObjectRow({
                                         transition: "all 0.2s",
                                         opacity: isLoading || isProcessing ? 0.6 : 1,
                                     }}
+                                    title={hasEditedValues ? "Goedkeuren met aangepaste waarden" : "Goedkeuren met standaard waarden"}
                                     onMouseOver={(e) => {
                                         if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = "#059669"
+                                            (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#d97706" : "#059669"
                                         }
                                     }}
                                     onMouseOut={(e) => {
                                         if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = "#10b981"
+                                            (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#f59e0b" : "#10b981"
                                         }
                                     }}
                                 >
                                     <FaCheck size={12} />
-                                    {isProcessing ? "..." : "Goedkeuren"}
+                                    {isProcessing ? "..." : hasEditedValues ? "Goedkeuren*" : "Goedkeuren"}
                                 </button>
 
                                 <button
@@ -1048,22 +1248,26 @@ function PendingObjectRow({
                                     </span>
                                 </div>
                             </div>
-                            <div>
-                                <div style={{ color: colors.gray600, marginBottom: "4px" }}>
-                                    Premie Promillage
-                                </div>
-                                <div style={{ color: colors.gray800, fontWeight: "500" }}>
-                                    {object.premiepromillage}‰
-                                </div>
-                            </div>
-                            <div>
-                                <div style={{ color: colors.gray600, marginBottom: "4px" }}>
-                                    Eigen Risico
-                                </div>
-                                <div style={{ color: colors.gray800, fontWeight: "500" }}>
-                                    {formatCurrency(object.eigenRisico)}
-                                </div>
-                            </div>
+                            <CalculatedFieldEditor
+                                label="Premie Promillage"
+                                value={editedValues.premiepromillage}
+                                suffix="‰"
+                                type="promillage"
+                                objectId={object.id}
+                                onUpdate={(newValue) => {
+                                    setEditedValues(prev => ({ ...prev, premiepromillage: newValue }))
+                                }}
+                            />
+                            <CalculatedFieldEditor
+                                label="Eigen Risico"
+                                value={editedValues.eigenRisico}
+                                suffix=""
+                                type="currency"
+                                objectId={object.id}
+                                onUpdate={(newValue) => {
+                                    setEditedValues(prev => ({ ...prev, eigenRisico: newValue }))
+                                }}
+                            />
                         </div>
 
                         {/* Notes if available */}
@@ -1618,12 +1822,22 @@ export const PendingBoatsOverview: Override = () => {
     }, [])
 
     // Handle individual actions
-    const handleApprove = useCallback(async (object: PendingInsuredObject) => {
+    const handleApprove = useCallback(async (
+        object: PendingInsuredObject, 
+        customValues?: { premiepromillage: number, eigenRisico: number }
+    ) => {
         try {
             setIsProcessing(true)
-            await approveObject(object.id)
             
-            setSuccess(`${getObjectDisplayName(object)} is goedgekeurd.`)
+            // Use custom values if provided, otherwise use default approval
+            if (customValues) {
+                await approveObjectWithCustomValues(object.id, customValues.premiepromillage, customValues.eigenRisico)
+                setSuccess(`${getObjectDisplayName(object)} is goedgekeurd met aangepaste waarden.`)
+            } else {
+                await approveObject(object.id)
+                setSuccess(`${getObjectDisplayName(object)} is goedgekeurd.`)
+            }
+            
             setTimeout(() => setSuccess(null), 5000)
             
             // Refresh data
@@ -1896,8 +2110,8 @@ export const PendingBoatsOverview: Override = () => {
                                 const tabs = [
                                     { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
                                     { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
-                                    { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                     { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
+                                    { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                     { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
                                 ];
                                 

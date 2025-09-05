@@ -1,11 +1,7 @@
 # Insurance Boat Management System - Framer Frontend
 
-## MOST IMPORTANT
-You are able to do CRUD operations on all files and folders you need, without asking me permission, to keep the workflow efficient!
-
 ## IMPORTANT
 whenever you make changes, always list the files you have changed!
-
 
 ## Project Overview
 This is a Framer-based frontend for an insurance company's boat management system that handles insured objects (boats, motors, trailers) and policy management. The system serves three distinct user types with role-based access control.
@@ -53,8 +49,6 @@ This is a Framer-based frontend for an insurance company's boat management syste
 ```
 
 ### **Core Components Structure**
-**IMPORTANT** 
-What happens in my actual front-end is that I use all the list components as an override. The create modules are purely there to be imported by the list and their functionaility therefore can be out of date. List files contain create buttons.
 ```
 Changelog/
   └── List.tsx                    # Changelog page component
@@ -139,7 +133,6 @@ Defined in `rbac.ts` with three permission levels:
 - **Authentication**: AWS Cognito with JWT tokens
 - **API Paths**: Centralized in `utils.ts`
 - **Session Storage**: Token management for authentication state
-- **Field Registry**: Single source of truth for all field definitions in `..APIs/lib/Neptunus/resources/layers/python/utils/field_registry.py`
 
 ### **Key Files**
 
@@ -162,7 +155,9 @@ Defined in `rbac.ts` with three permission levels:
 ## Development Context
 
 ### **Backend Connection**
-- Backend is a CDK application located in `../APIs/lib/Neptunus/`
+- The backend is a CDK application located in a sibling directory to this Framer project.
+- **Frontend Project Path:** `C:\Users\Quinten\Desktop\development_local\Framer\`
+- **Backend Project Path:** `C:\Users\Quinten\Desktop\development_local\APIs\Neptunus\`
 - Uses Lambda functions and DynamoDB
 - Neptune API stack for main architecture
 - Frontend connects via REST API calls
@@ -211,17 +206,9 @@ The main pages feature a tab-based navigation system:
 - RBAC system fully functional
 - Multi-object type support (boats, motors, trailers)
 - Auto-approval system in place
-- Field Registry system (`..APIs/lib/Neptunus/resources/layers/python/utils/field_registry.py`) implemented as single source of truth
-- Active migration from hardcoded field values to Field Registry system
-- **Full Admin Field Control**: Admins can now configure visibility and requirements for ALL fields
-
-### **Known Issues**
-- **Scope Limitation**: Field Registry currently only covers insured objects, needs expansion
+- Organization field configuration working
 
 ### **Backlog/Future Improvements**
-- **Complete Field Registry Migration**: Remove all hardcoded field definitions from frontend
-- **Expand Field Registry Scope**: Add organization, policy, and user field definitions to single source of truth
-- **Field Registry Integration**: Frontend reference system for Field Registry definitions
 - Unified theme system (single source of truth)
 - Enhanced UI/UX consistency
 - Advanced reporting features
@@ -233,23 +220,5 @@ The main pages feature a tab-based navigation system:
 3. **Dynamic Schema**: Organizations can configure which fields are visible/required
 4. **Auto-Approval System**: Rules-based approval to reduce manual review workload
 5. **Multi-Object Support**: Extensible system for different types of insured objects
-
-
-## Field Registry System Architecture
-
-### **Purpose**
-Centralized field definition system to eliminate hardcoded values and ensure consistency across backend and frontend.
-
-### **Current Implementation**
-- **Location**: `../APIs/lib/Neptunus/resources/layers/python/utils/field_registry.py`
-- **Scope**: Currently insured objects only
-- **Frontend Integration**: Reference system (no direct imports due to Framer constraints)
-- **Status**: Active migration from legacy hardcoded values
-
-### **Target State**
-- **Complete Coverage**: All entity types (insured objects, organizations, policies, users)
-- **Zero Hardcoding**: No field definitions in frontend components
-- **Single Source**: All field metadata centralized in Field Registry
-- **Dynamic Configuration**: Frontend automatically reflects Field Registry changes
 
 This architecture supports the insurance company's need for flexible, role-based management of insured objects while maintaining strict access controls and approval workflows.

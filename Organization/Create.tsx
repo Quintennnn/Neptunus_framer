@@ -17,12 +17,12 @@ import {
 // Define our form state shape for an Organization
 type OrganizationFormState = {
     name: string
+    type_organisatie: string
     street?: string
     city?: string
     state?: string
     postal_code?: string
     country?: string
-    linked_policy_id?: string
 }
 
 // Validation helper
@@ -32,6 +32,9 @@ function validateForm(form: OrganizationFormState): string[] {
     const nameError = validateRequired(form.name, "Organization name") || 
                       validateStringLength(form.name, "Organization name", 2, 100)
     if (nameError) errors.push(nameError)
+
+    const typeError = validateRequired(form.type_organisatie, "Organization type")
+    if (typeError) errors.push(typeError)
 
     return errors
 }
@@ -47,21 +50,22 @@ function OrganizationForm({
 }) {
     const [form, setForm] = React.useState<OrganizationFormState>({
         name: "",
+        type_organisatie: "",
         street: "",
         city: "",
         state: "",
         postal_code: "",
         country: "",
-        linked_policy_id: "",
     })
     const [error, setError] = React.useState<string | null>(null)
     const [success, setSuccess] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-        const { name, value } = e.target
+    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+        const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
+        
         setForm((prev) => ({ ...prev, [name]: value || undefined }))
     }
 
@@ -80,21 +84,16 @@ function OrganizationForm({
         setIsSubmitting(true)
 
         try {
-            // Debug: Log the form data being sent
-            console.log("Sending organization data:", form)
-            
-            // Prepare payload similar to the edit form
+            // Create organization
             const payload = {
                 name: form.name,
+                type_organisatie: form.type_organisatie,
                 street: form.street || undefined,
                 city: form.city || undefined,
                 state: form.state || undefined,
                 postal_code: form.postal_code || undefined,
                 country: form.country || undefined,
-                linked_policy_id: form.linked_policy_id || undefined,
             }
-            
-            console.log("Prepared payload:", payload)
             
             const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
                 method: "POST",
@@ -104,22 +103,17 @@ function OrganizationForm({
                 },
                 body: JSON.stringify(payload),
             })
-            const data = await res.json()
-
-            console.log("API Response:", data)
 
             if (!res.ok) {
-                console.error("API Error Response:", data)
-                setError(formatErrorMessage(data))
-            } else {
-                console.log("Organization created successfully:", data)
-                setSuccess(formatSuccessMessage(data, "Organization"))
-                // Auto-close after success
-                setTimeout(() => {
-                    onSuccess?.()
-                    onClose()
-                }, 2000)
+                const data = await res.json()
+                throw new Error(formatErrorMessage(data))
             }
+
+            setSuccess("Organization created successfully!")
+            setTimeout(() => {
+                onSuccess?.()
+                onClose()
+            }, 2000)
         } catch (err: any) {
             setError(err.message || "Failed to submit form. Please try again.")
         } finally {
@@ -265,6 +259,53 @@ function OrganizationForm({
                         }
                         onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                     />
+                </div>
+
+                {/* Organization Type Dropdown */}
+                <div style={{ marginBottom: "24px" }}>
+                    <label
+                        htmlFor="type_organisatie"
+                        style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151",
+                        }}
+                    >
+                        Type Organisatie
+                        <span style={{ color: "#ef4444" }}>*</span>
+                    </label>
+                    <select
+                        id="type_organisatie"
+                        name="type_organisatie"
+                        value={form.type_organisatie}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontFamily: FONT_STACK,
+                            transition: "border-color 0.2s",
+                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                            boxSizing: "border-box",
+                        }}
+                        onFocus={(e) =>
+                            !isSubmitting &&
+                            (e.target.style.borderColor = "#10b981")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                    >
+                        <option value="" disabled>
+                            Selecteer type organisatie
+                        </option>
+                        <option value="Huur">Huur</option>
+                        <option value="Handelsvoorraad">Handelsvoorraad</option>
+                    </select>
                 </div>
 
                 {/* Address Fields */}
@@ -456,42 +497,6 @@ function OrganizationForm({
                             />
                         </div>
                     </div>
-                </div>
-
-                {/* Policy Link Field */}
-                <div style={{ marginBottom: "24px" }}>
-                    <label htmlFor="linked_policy_id" style={{
-                        display: "block",
-                        marginBottom: "8px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        color: "#374151"
-                    }}>
-                        Gekoppelde Polis ID (Optioneel)
-                    </label>
-                    <input
-                        id="linked_policy_id"
-                        name="linked_policy_id"
-                        type="text"
-                        value={form.linked_policy_id || ""}
-                        onChange={handleChange}
-                        disabled={isSubmitting}
-                        placeholder="Voer polis ID in"
-                        style={{
-                            width: "100%",
-                            padding: "12px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontFamily: FONT_STACK,
-                            transition: "border-color 0.2s",
-                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
-                            cursor: isSubmitting ? "not-allowed" : "text",
-                            boxSizing: "border-box",
-                        }}
-                        onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
-                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                    />
                 </div>
 
                 {/* Submit Buttons */}

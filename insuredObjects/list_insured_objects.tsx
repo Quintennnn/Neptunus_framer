@@ -3,9 +3,14 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
-import { UserInfo as RBACUserInfo, hasPermission } from "../Rbac"
-import { colors, styles, hover, FONT_STACK } from "../theme"
+import { UserInfoBanner } from "https://framer.com/m/UserInfoBanner-R7Q1.js@U72OHgHMkersQv4QWNRo"
+import {
+    UserInfo as RBACUserInfo,
+    hasPermission,
+    isEditor,
+    isAdmin,
+    isUser,
+} from "../Rbac.tsx"
 import {
     FaEdit,
     FaTrashAlt,
@@ -28,11 +33,46 @@ import {
     FaInfoCircle,
     FaPrint,
 } from "react-icons/fa"
-import { colors, styles, hover, FONT_STACK } from "../Theme"
-import { API_BASE_URL, API_PATHS, getIdToken, formatErrorMessage, formatSuccessMessage } from "../Utils"
-import { ObjectType, OBJECT_TYPE_CONFIG, OrganizationSelector, ObjectTypeSelector, CreateObjectModal } from "./create_insured_object"
-import { useDynamicSchema, FieldSchema, getFieldsForObjectType as getSchemaFieldsForObjectType, getFieldKeysForObjectType, getUserInputFieldsForObjectType } from "../hooks/UseDynamicSchema"
-
+import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
+import {
+    API_BASE_URL,
+    API_PATHS,
+    getIdToken,
+    formatErrorMessage,
+    formatSuccessMessage,
+} from "../Utils.tsx"
+import {
+    ObjectType,
+    OBJECT_TYPE_CONFIG,
+    OrganizationSelector,
+    ObjectTypeSelector,
+    CreateObjectModal,
+} from "./Create.tsx"
+import {
+    getAllFilterableFields,
+    getEditableFieldsForObjectType,
+    getFieldKeysForObjectType,
+    getFieldsForObjectType as getSchemaFieldsForObjectType,
+    getFilterableFieldsForObjectType,
+    getPrintableFieldsForObjectType,
+    getUserInputFieldsForObjectType,
+    useCompleteSchema,
+    useDynamicSchema,
+    useOrganizationSchema,
+    type FieldSchema,
+} from "https://framer.com/m/UseDynamicSchema2-sydl.js@gU5g5fSgmxqlpbHHdwQy"
+import { EnhancedTotalsDisplay } from "../components/EnhancedTotalsDisplay.tsx"
+import {
+    calculateEnhancedTotals,
+    calculateInsurancePeriod,
+    calculateObjectPremiums,
+    formatCalculationResults,
+    generateStatusTooltip,
+    shouldIncludeInPremiumCalculation,
+    shouldIncludeInValueCalculation,
+    updateObjectWithCalculatedPremiums,
+    type InsuredObject as EnhancedInsuredObject,
+} from "../premiumCalculations.tsx"
 
 // Note: Unified field system removed - using direct field names from registry
 
@@ -42,32 +82,32 @@ function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
         <button
             onClick={onCreateClick}
             style={{
-                ...styles.primaryButton,
+                ...styles.createButton,
                 padding: "8px 16px",
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "14px",
                 fontWeight: "500",
-                backgroundColor: colors.primary,
+                backgroundColor: colors.actionCreate,
                 color: "white",
                 border: "none",
                 borderRadius: "6px",
                 cursor: "pointer",
-                boxShadow: `0 2px 4px ${colors.primary}30`,
+                boxShadow: `0 2px 4px ${colors.actionCreate}30`,
                 transition: "all 0.2s ease",
             }}
             onMouseOver={(e) => {
                 const target = e.target as HTMLElement
-                target.style.backgroundColor = `${colors.primary}dd`
+                hover.createButton(target)
                 target.style.transform = "translateY(-1px)"
-                target.style.boxShadow = `0 4px 8px ${colors.primary}40`
+                target.style.boxShadow = `0 4px 8px ${colors.actionCreate}40`
             }}
             onMouseOut={(e) => {
                 const target = e.target as HTMLElement
-                target.style.backgroundColor = colors.primary
+                hover.resetCreateButton(target)
                 target.style.transform = "translateY(0)"
-                target.style.boxShadow = `0 2px 4px ${colors.primary}30`
+                target.style.boxShadow = `0 2px 4px ${colors.actionCreate}30`
             }}
         >
             <FaPlus size={12} />
@@ -116,461 +156,6 @@ function PrintOverviewButton({ onPrintClick }: { onPrintClick: () => void }) {
     )
 }
 
-
-
-
-
-// Note: InsuredObjectForm is now imported from create_insured_object.tsx
-
-// Legacy function - kept for backward compatibility but should be removed
-function InsuredObjectForm_LEGACY({
-    objectType,
-    selectedOrganization,
-    onClose,
-    onBack,
-    onSuccess,
-}: {
-    objectType: ObjectType
-    selectedOrganization: string
-    onClose: () => void
-    onBack: () => void
-    onSuccess?: () => void
-}) {
-    const config = OBJECT_TYPE_CONFIG[objectType]
-    const [form, setForm] = React.useState<InsuredObjectFormState_LEGACY>(() => {
-        const defaultState = getDefaultFormState_LEGACY(objectType)
-        return {
-            ...defaultState,
-            organization: selectedOrganization,
-            ingangsdatum: new Date().toISOString().split('T')[0], // Set today's date in YYYY-MM-DD format
-        }
-    })
-    const [error, setError] = React.useState<string | null>(null)
-    const [success, setSuccess] = React.useState<string | null>(null)
-    const [isSubmitting, setIsSubmitting] = React.useState(false)
-    const [isLoadingConfig, setIsLoadingConfig] = React.useState(config.useOrgConfig === true)
-    
-    // Use dynamic schema hook
-    const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(selectedOrganization)
-
-    // Set loading state based on schema loading
-    React.useEffect(() => {
-        setIsLoadingConfig(schemaLoading)
-        if (schemaError) {
-            setError("Kon schema niet laden: " + schemaError)
-        }
-    }, [schemaLoading, schemaError])
-
-    // Note: Organization defaults (premiepromillage, eigenRisico) are now applied by backend automatically
-
-    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-        const { name, value, type } = e.target
-        setError(null)
-        setSuccess(null)
-        setForm((prev) => ({
-            ...prev,
-            [name]: type === "number" ? (value === "" ? "" : parseFloat(value)) : value,
-        }))
-    }
-
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-
-        setError(null)
-        setSuccess(null)
-        setIsSubmitting(true)
-
-        try {
-            const res = await fetch(API_BASE_URL + API_PATHS.INSURED_OBJECT, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${getIdToken()}`,
-                },
-                body: JSON.stringify(form),
-            })
-            const data = await res.json()
-
-            if (!res.ok) {
-                setError(formatErrorMessage(data))
-            } else {
-                setSuccess(formatSuccessMessage(data, `${config.label} insurance`))
-                // Auto-close after success
-                setTimeout(() => {
-                    onSuccess?.()
-                    onClose()
-                }, 2000)
-            }
-        } catch (err: any) {
-            setError(
-                err.message ||
-                    "Kon formulier niet verzenden. Controleer je verbinding en probeer opnieuw."
-            )
-        } finally {
-            setIsSubmitting(false)
-        }
-    }
-
-    const renderInput = (field: FieldSchema) => {
-        const val = form[field.key as keyof InsuredObjectFormState_LEGACY]
-
-        // Skip objectType, organization, and status fields (handled automatically)
-        if (field.key === "objectType" || field.key === "organization" || field.key === "status") return null
-
-        const isNumber = field.type === "number" || field.type === "currency"
-        const isTextArea = field.type === "textarea"
-        const isDateField = field.type === "date"
-        const isDropdown = field.type === "dropdown"
-        const inputType = field.type === "currency" ? "number" : 
-                         field.type === "number" ? "number" :
-                         isDateField ? "date" : "text"
-
-        const label = field.label
-        const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
-
-        return (
-            <div key={field.key} style={{ marginBottom: "16px", width: "100%" }}>
-                <label htmlFor={field.key} style={{
-                    ...styles.label,
-                    fontWeight: field.required ? "600" : "400",
-                    color: field.required ? colors.gray900 : colors.gray700,
-                }}>
-                    {label}
-                    {field.required && <span style={{ color: colors.error, marginLeft: "4px" }}>*</span>}
-                </label>
-                {isDropdown ? (
-                    <select
-                        id={field.key}
-                        name={field.key}
-                        value={val === null || val === undefined ? "" : val}
-                        onChange={handleChange}
-                        disabled={isSubmitting}
-                        required={field.required}
-                        style={{
-                            ...styles.input,
-                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
-                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                            borderColor: field.required ? colors.gray300 : colors.gray200,
-                        }}
-                        onFocus={(e) => {
-                            if (!isSubmitting) {
-                                hover.input(e.target as HTMLElement)
-                            }
-                        }}
-                        onBlur={(e) => {
-                            hover.resetInput(e.target as HTMLElement)
-                        }}
-                    >
-                        <option value="">Selecteer {label.toLowerCase()}</option>
-                        {field.options?.map((option) => (
-                            <option key={option} value={option}>
-                                {option}
-                            </option>
-                        ))}
-                    </select>
-                ) : (
-                    <Component
-                        id={field.key}
-                        name={field.key}
-                        value={val === null || val === undefined ? "" : val}
-                        onChange={handleChange}
-                        disabled={isSubmitting}
-                        required={field.required}
-                        {...(Component === "input" ? { 
-                            type: inputType,
-                            ...(field.type === "currency" && { step: "0.01", min: "0" }),
-                            ...(field.type === "number" && { step: "1", min: "0" })
-                        } : { rows: 3 })}
-                        placeholder={`Voer ${label.toLowerCase()} in${field.required ? ' (verplicht)' : ''}`}
-                        style={{
-                            ...styles.input,
-                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
-                            cursor: isSubmitting ? "not-allowed" : "text",
-                            borderColor: field.required ? colors.gray300 : colors.gray200,
-                        }}
-                        onFocus={(e) => {
-                            if (!isSubmitting) {
-                                hover.input(e.target as HTMLElement)
-                            }
-                        }}
-                        onBlur={(e) => {
-                            hover.resetInput(e.target as HTMLElement)
-                        }}
-                    />
-                )}
-            </div>
-        )
-    }
-
-    // Show loading state while fetching configuration
-    if (isLoadingConfig) {
-        return (
-            <div
-                style={{
-                    ...styles.modal,
-                    width: "min(90vw, 400px)",
-                    padding: "32px",
-                    textAlign: "center",
-                }}
-            >
-                <div style={{ marginBottom: "16px", fontSize: "18px", fontWeight: "500" }}>
-                    Formulierconfiguratie laden...
-                </div>
-                <div
-                    style={{
-                        ...styles.spinner,
-                        display: "inline-block",
-                        width: "20px",
-                        height: "20px",
-                        border: `2px solid ${colors.gray100}`,
-                        borderTop: `2px solid ${colors.primary}`,
-                    }}
-                />
-            </div>
-        )
-    }
-
-    const IconComponent = config.icon
-    const fieldsToRender = getFieldsFromSchema(schema, objectType)
-
-    return (
-        <div
-            style={{
-                ...styles.modal,
-                width: "min(90vw, 800px)",
-                maxHeight: "90vh",
-                padding: "32px",
-            }}
-        >
-            {/* Header */}
-            <div style={styles.header}>
-                <div style={{ display: "flex", alignItems: "center" }}>
-                    <button
-                        onClick={onBack}
-                        style={{
-                            ...styles.iconButton,
-                            marginRight: "12px",
-                        }}
-                        onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                        onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                    >
-                        <FaArrowLeft size={16} />
-                    </button>
-                    <IconComponent size={24} color={config.color} />
-                    <div style={{ ...styles.title, marginLeft: "12px" }}>
-                        Nieuwe {config.label} Toevoegen
-                    </div>
-                </div>
-                <button
-                    onClick={onClose}
-                    style={styles.iconButton}
-                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                >
-                    <FaTimes size={16} />
-                </button>
-            </div>
-
-            {/* Error Display */}
-            {error && <div style={styles.errorAlert}>{error}</div>}
-
-            {/* Success Display */}
-            {success && <div style={styles.successAlert}>{success}</div>}
-
-            {/* Form */}
-            <form onSubmit={handleSubmit}>
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        columnGap: "24px",
-                        rowGap: "12px",
-                    }}
-                >
-                    {fieldsToRender.map(renderInput)}
-                </div>
-
-                {/* Submit Buttons */}
-                <div style={{ ...styles.buttonGroup, marginTop: "24px" }}>
-                    <button
-                        type="button"
-                        onClick={onBack}
-                        disabled={isSubmitting}
-                        style={{
-                            ...styles.secondaryButton,
-                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                            opacity: isSubmitting ? 0.6 : 1,
-                        }}
-                        onMouseOver={(e) => {
-                            if (!isSubmitting) {
-                                hover.secondaryButton(e.target as HTMLElement)
-                            }
-                        }}
-                        onMouseOut={(e) => {
-                            if (!isSubmitting) {
-                                hover.resetSecondaryButton(e.target as HTMLElement)
-                            }
-                        }}
-                    >
-                        Terug
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        style={{
-                            ...styles.primaryButton,
-                            backgroundColor: isSubmitting ? colors.disabled : config.color,
-                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                        }}
-                        onMouseOver={(e) => {
-                            if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = `${config.color}dd`
-                            }
-                        }}
-                        onMouseOut={(e) => {
-                            if (!isSubmitting) {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = config.color
-                            }
-                        }}
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <div style={styles.spinner} />
-                                Verzenden...
-                            </>
-                        ) : (
-                            <>
-                                <FaPlus size={12} />
-                                {config.label} Toevoegen
-                            </>
-                        )}
-                    </button>
-                </div>
-            </form>
-        </div>
-    )
-}
-
-// Note: CreateObjectModal is now imported from create_insured_object.tsx
-
-// Legacy function - kept for backward compatibility but should be removed  
-function CreateObjectModal_LEGACY({ onClose, onOrganizationSelect }: { onClose: () => void; onOrganizationSelect?: (org: string) => void }) {
-    const [currentStep, setCurrentStep] = React.useState<'organization' | 'objectType' | 'form'>('organization')
-    const [selectedOrganization, setSelectedOrganization] = React.useState<string>("")
-    const [selectedObjectType, setSelectedObjectType] = React.useState<ObjectType | null>(null)
-    const [userInfo, setUserInfo] = React.useState<UserInfo | null>(null)
-    const [availableOrganizations, setAvailableOrganizations] = React.useState<string[]>([])
-    const [isLoading, setIsLoading] = React.useState(true)
-
-    // Load user info and organizations on component mount
-    React.useEffect(() => {
-        const loadUserData = async () => {
-            try {
-                setIsLoading(true)
-                const currentUser = getCurrentUserInfoForCreate_LEGACY()
-                if (!currentUser) throw new Error("No user info available")
-
-                // Fetch complete user info from backend
-                const completeUserInfo = await fetchUserInfo(currentUser.sub)
-                if (!completeUserInfo) throw new Error("Failed to fetch user details")
-
-                setUserInfo(completeUserInfo)
-
-                // Fetch available organizations for this user
-                const orgs = await fetchUserOrganizationsForCreate_LEGACY(completeUserInfo)
-                setAvailableOrganizations(orgs)
-
-                // If user has only one organization, auto-select it
-                if (orgs.length === 1) {
-                    setSelectedOrganization(orgs[0])
-                    setCurrentStep('objectType')
-                }
-            } catch (error) {
-                console.error("Failed to load user data:", error)
-                // Handle error - could show error message or close modal
-            } finally {
-                setIsLoading(false)
-            }
-        }
-
-        loadUserData()
-    }, [])
-
-    const handleOrganizationSelect = (org: string) => {
-        setSelectedOrganization(org)
-        onOrganizationSelect?.(org) // Notify parent component of organization change
-        setCurrentStep('objectType')
-    }
-
-    const handleObjectTypeSelect = (type: ObjectType) => {
-        setSelectedObjectType(type)
-        setCurrentStep('form')
-    }
-
-    const handleBackToObjectType = () => {
-        setCurrentStep('objectType')
-        setSelectedObjectType(null)
-    }
-
-    const handleBackToOrganization = () => {
-        setCurrentStep('organization')
-        setSelectedOrganization("")
-    }
-
-    const handleSuccess = () => {
-        // Optionally trigger a refresh of the list
-        window.location.reload()
-    }
-
-    // Show loading state
-    if (isLoading || !userInfo) {
-        return (
-            <div style={{
-                ...styles.modal,
-                width: "min(90vw, 400px)",
-                padding: "32px",
-                textAlign: "center",
-            }}>
-                <div style={styles.title}>Loading...</div>
-            </div>
-        )
-    }
-
-    return (
-        <>
-            {currentStep === 'organization' && (
-                <OrganizationSelector
-                    userInfo={userInfo}
-                    availableOrganizations={availableOrganizations}
-                    onSelect={handleOrganizationSelect}
-                    onClose={onClose}
-                    onBack={() => onClose()} // Close modal if going back from organization step
-                />
-            )}
-
-            {currentStep === 'objectType' && (
-                <ObjectTypeSelector
-                    onSelect={handleObjectTypeSelect}
-                    onClose={onClose}
-                    onBack={handleBackToOrganization}
-                />
-            )}
-
-            {currentStep === 'form' && selectedObjectType && (
-                <InsuredObjectForm_LEGACY
-                    objectType={selectedObjectType}
-                    selectedOrganization={selectedOrganization}
-                    onClose={onClose}
-                    onBack={handleBackToObjectType}
-                    onSuccess={handleSuccess}
-                />
-            )}
-        </>
-    )
-}
-
 // ——— Status color mapping ———
 const STATUS_COLORS = {
     Insured: { bg: "#dcfce7", text: "#166534" },
@@ -590,21 +175,21 @@ const STATUS_TRANSLATIONS = {
 }
 
 // ——— Simple Tooltip Component ———
-function StatusTooltip({ 
-    children, 
-    tooltip, 
-    show 
-}: { 
+function StatusTooltip({
+    children,
+    tooltip,
+    show,
+}: {
     children: React.ReactNode
     tooltip: string
-    show: boolean 
+    show: boolean
 }) {
     const [isVisible, setIsVisible] = useState(false)
 
     if (!show) return <>{children}</>
 
     return (
-        <div 
+        <div
             style={{ position: "relative", display: "inline-block" }}
             onMouseEnter={() => setIsVisible(true)}
             onMouseLeave={() => setIsVisible(false)}
@@ -660,7 +245,8 @@ function UnifiedStatusCell({
     object: InsuredObject
     userInfo: UserInfo | null
 }) {
-    const statusColor = STATUS_COLORS[object.status] || STATUS_COLORS["Not Insured"]
+    const statusColor =
+        STATUS_COLORS[object.status] || STATUS_COLORS["Not Insured"]
 
     return (
         <div
@@ -689,17 +275,20 @@ function UnifiedStatusCell({
                         display: "flex",
                         alignItems: "center",
                         gap: "4px",
-                        border: object.status === "OutOfPolicy" ? "1px solid #9ca3af" : "none",
+                        border:
+                            object.status === "OutOfPolicy"
+                                ? "1px solid #9ca3af"
+                                : "none",
                     }}
                 >
                     {STATUS_TRANSLATIONS[object.status] || object.status}
                     {object.status === "Rejected" && object.declineReason && (
-                        <FaInfoCircle 
-                            size={10} 
-                            style={{ 
+                        <FaInfoCircle
+                            size={10}
+                            style={{
                                 opacity: 0.8,
-                                cursor: "help"
-                            }} 
+                                cursor: "help",
+                            }}
                         />
                     )}
                 </div>
@@ -714,39 +303,6 @@ interface UserInfo {
     role: "admin" | "user" | "editor"
     organization?: string
     organizations?: string[]
-}
-
-// Note: InsuredObjectFormState type is now imported from create_insured_object.tsx
-// Legacy type definition - should be removed
-type InsuredObjectFormState_LEGACY = {
-    objectType: ObjectType
-    waarde: number
-    organization: string
-    ingangsdatum: string
-    premiepromillage: number
-    eigenRisico: number
-    uitgangsdatum?: string
-    notitie?: string
-    
-    // Boat-specific fields (registry field names)
-    ligplaats?: string
-    aantalMotoren?: number
-    typeMotor?: string // Updated from typeMerkMotor
-    merkMotor?: string // New field
-    merkBoot?: string
-    typeBoot?: string
-    bouwjaar?: number
-    aantalVerzekerdeDagen?: number
-    totalePremieOverHetJaar?: number
-    totalePremieOverDeVerzekerdePeriode?: number
-    bootnummer?: string
-    motornummer?: string
-    cinNummer?: string
-    
-    // Trailer-specific fields (registry field names)
-    chassisnummer?: string // Updated from trailerRegistratienummer
-    
-    // Motor fields shared with boats
 }
 
 // Fetch user info from backend API
@@ -795,7 +351,9 @@ interface BrokerInfo {
 }
 
 // Fetch broker info from policies for the organization
-async function fetchBrokerInfoForOrganization(organizationName: string): Promise<BrokerInfo | null> {
+async function fetchBrokerInfoForOrganization(
+    organizationName: string
+): Promise<BrokerInfo | null> {
     try {
         const token = getIdToken()
         const headers: Record<string, string> = {
@@ -804,17 +362,22 @@ async function fetchBrokerInfoForOrganization(organizationName: string): Promise
         if (token) headers.Authorization = `Bearer ${token}`
 
         // Fetch policies for this organization
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.POLICY}?organization=${encodeURIComponent(organizationName)}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.POLICY}?organization=${encodeURIComponent(organizationName)}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) {
-            console.warn(`Failed to fetch policies for broker info: ${res.status} ${res.statusText}`)
+            console.warn(
+                `Failed to fetch policies for broker info: ${res.status} ${res.statusText}`
+            )
             return null
         }
-        
+
         const responseData = await res.json()
         const policies = responseData.policies || []
 
@@ -824,12 +387,15 @@ async function fetchBrokerInfoForOrganization(organizationName: string): Promise
 
         // Get broker info from the first policy (assuming same broker for organization)
         const firstPolicy = policies[0]
-        if (firstPolicy.makelaarsnaam && (firstPolicy.makelaarsemail || firstPolicy.makelaarstelefoon)) {
+        if (
+            firstPolicy.makelaarsnaam &&
+            (firstPolicy.makelaarsemail || firstPolicy.makelaarstelefoon)
+        ) {
             return {
                 name: firstPolicy.makelaarsnaam || "Onbekende Makelaar",
                 email: firstPolicy.makelaarsemail || "",
                 phone: firstPolicy.makelaarstelefoon || "",
-                company: "Verzekeringsmakelaar" // You might want to add this field to policies
+                company: "Verzekeringsmakelaar", // You might want to add this field to policies
             }
         }
 
@@ -840,178 +406,184 @@ async function fetchBrokerInfoForOrganization(organizationName: string): Promise
     }
 }
 
-// Helper functions for create form
-function getCurrentUserInfoForCreate_LEGACY(): UserInfo | null {
-    try {
-        const token = getIdToken()
-        if (!token) return null
-
-        const payload = JSON.parse(atob(token.split(".")[1]))
-        return {
-            sub: payload.sub,
-            role: "user", // Temporary default, will be updated by fetchUserInfo
-            organization: undefined,
-            organizations: [],
-        }
-    } catch (error) {
-        console.error("Failed to decode token:", error)
-        return null
-    }
-}
-
-async function fetchUserOrganizationsForCreate_LEGACY(userInfo: UserInfo): Promise<string[]> {
-    try {
-        const token = getIdToken()
-        if (!token) return []
-
-        // Admin can see all organizations
-        if (userInfo.role === "admin") {
-            const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-            })
-            if (!res.ok) return []
-            const data = await res.json()
-            return (data.organizations || []).map((org: any) => org.name)
-        }
-
-        // Non-admin users can only see their organizations
-        const userOrgs: string[] = []
-        if (userInfo.organization) userOrgs.push(userInfo.organization)
-        if (userInfo.organizations) userOrgs.push(...userInfo.organizations)
-        return [...new Set(userOrgs)] // Remove duplicates
-    } catch (error) {
-        console.error("Failed to fetch organizations:", error)
-        return []
-    }
-}
-
-// Note: getDefaultFormState function is now imported from create_insured_object.tsx
-// Legacy function - should be removed
-function getDefaultFormState_LEGACY(objectType: ObjectType): InsuredObjectFormState_LEGACY {
-    const baseState: InsuredObjectFormState_LEGACY = {
-        objectType,
-        waarde: 0,
-        organization: "",
-        ingangsdatum: "",
-        premiepromillage: 0,
-        eigenRisico: 0,
-        uitgangsdatum: "",
-        notitie: "",
-    }
-
-    // Add type-specific defaults
-    switch (objectType) {
-        case "boat":
-            return {
-                ...baseState,
-                ligplaats: "",
-                aantalMotoren: 1,
-                typeMotor: "",
-                merkMotor: "",
-                merkBoot: "",
-                typeBoot: "",
-                bouwjaar: new Date().getFullYear(),
-                aantalVerzekerdeDagen: 365,
-                totalePremieOverHetJaar: 0,
-                totalePremieOverDeVerzekerdePeriode: 0,
-                bootnummer: "",
-                motornummer: "",
-                cinNummer: "",
-            }
-        case "trailer":
-            return {
-                ...baseState,
-                chassisnummer: "",
-            }
-        case "motor":
-            return {
-                ...baseState,
-                typeMotor: "",
-                merkMotor: "",
-                motornummer: "",
-            }
-        default:
-            return baseState
-    }
-}
-
-
-function getFieldsFromSchema(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
+function getFieldsFromSchema(
+    schema: FieldSchema[] | null,
+    objectType: ObjectType
+): FieldSchema[] {
     console.log("🔍 LIST getFieldsFromSchema DEBUG START")
     console.log("Schema received:", schema)
     console.log("Object type:", objectType)
-    
+
     if (!schema) {
         console.log("❌ No schema provided, using fallback hardcoded fields")
         // Fallback to minimal required fields
         const commonFields: FieldSchema[] = [
-            { key: "waarde", label: "Waarde", type: "currency", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
-            { key: "ingangsdatum", label: "Ingangsdatum", type: "date", group: "basic", required: false, visible: true, sortable: true, width: "120px" },
-            { key: "notitie", label: "Notitie", type: "textarea", group: "metadata", required: false, visible: true, sortable: false, width: "200px" },
+            {
+                key: "waarde",
+                label: "Waarde",
+                type: "currency",
+                group: "basic",
+                required: true,
+                visible: true,
+                sortable: true,
+                width: "120px",
+            },
+            {
+                key: "ingangsdatum",
+                label: "Ingangsdatum",
+                type: "date",
+                group: "basic",
+                required: false,
+                visible: true,
+                sortable: true,
+                width: "120px",
+            },
+            {
+                key: "naam",
+                label: "Naam",
+                type: "text",
+                group: "basic",
+                required: false,
+                visible: true,
+                sortable: true,
+                width: "150px",
+            },
+            {
+                key: "notitie",
+                label: "Notitie",
+                type: "textarea",
+                group: "metadata",
+                required: false,
+                visible: true,
+                sortable: false,
+                width: "200px",
+            },
         ]
 
         let typeSpecificFields: FieldSchema[] = []
         switch (objectType) {
             case "boat":
                 typeSpecificFields = [
-                    { key: "merkBoot", label: "Merk Boot", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "typeBoot", label: "Type Boot", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    {
+                        key: "merkBoot",
+                        label: "Merk Boot",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "120px",
+                    },
+                    {
+                        key: "typeBoot",
+                        label: "Type Boot",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "120px",
+                    },
                 ]
                 break
             case "trailer":
                 typeSpecificFields = [
-                    { key: "chassisnummer", label: "Chassisnummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "130px" },
+                    {
+                        key: "chassisnummer",
+                        label: "Chassisnummer",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "130px",
+                    },
                 ]
                 break
             case "motor":
                 typeSpecificFields = [
-                    { key: "merkMotor", label: "Merk Motor", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "typeMotor", label: "Type Motor", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
-                    { key: "motornummer", label: "Motor Nummer", type: "text", group: "basic", required: true, visible: true, sortable: true, width: "120px" },
+                    {
+                        key: "merkMotor",
+                        label: "Merk Motor",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "120px",
+                    },
+                    {
+                        key: "typeMotor",
+                        label: "Type Motor",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "120px",
+                    },
+                    {
+                        key: "motornummer",
+                        label: "Motor Nummer",
+                        type: "text",
+                        group: "basic",
+                        required: true,
+                        visible: true,
+                        sortable: true,
+                        width: "120px",
+                    },
                 ]
                 break
         }
 
         const fallbackResult = [...typeSpecificFields, ...commonFields]
-        console.log("✅ Using fallback fields:", fallbackResult.map(f => ({ key: f.key, label: f.label })))
+        console.log(
+            "✅ Using fallback fields:",
+            fallbackResult.map((f) => ({ key: f.key, label: f.label }))
+        )
         console.log("🔍 LIST getFieldsFromSchema DEBUG END")
         return fallbackResult
     }
 
     console.log("📊 Total fields in schema:", schema.length)
-    console.log("📋 All schema fields:", schema.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
-    
+    console.log(
+        "📋 All schema fields:",
+        schema.map((f) => ({
+            key: f.key,
+            label: f.label,
+            objectTypes: f.objectTypes,
+            visible: f.visible,
+            inputType: f.inputType,
+        }))
+    )
+
     // Debug: Check if any fields have inputType
-    const fieldsWithInputType = schema.filter(f => f.inputType)
-    const fieldsWithoutInputType = schema.filter(f => !f.inputType)
-    console.log(`🔍 Fields WITH inputType: ${fieldsWithInputType.length}`, fieldsWithInputType.map(f => ({ key: f.key, inputType: f.inputType })))
-    console.log(`🔍 Fields WITHOUT inputType: ${fieldsWithoutInputType.length}`, fieldsWithoutInputType.map(f => f.key))
-    
+    const fieldsWithInputType = schema.filter((f) => f.inputType)
+    const fieldsWithoutInputType = schema.filter((f) => !f.inputType)
+    console.log(
+        `🔍 Fields WITH inputType: ${fieldsWithInputType.length}`,
+        fieldsWithInputType.map((f) => ({ key: f.key, inputType: f.inputType }))
+    )
+    console.log(
+        `🔍 Fields WITHOUT inputType: ${fieldsWithoutInputType.length}`,
+        fieldsWithoutInputType.map((f) => f.key)
+    )
+
     // For CREATE FORMS: Show ALL user input fields regardless of visible setting
-    const filteredFields = schema.filter(field => {
-        // Filter by object type
-        const matchesObjectType = !field.objectTypes || field.objectTypes.length === 0 || field.objectTypes.includes(objectType)
-        
-        // Only show user input fields (exclude system/auto fields)
-        const isUserField = field.inputType === 'user'
-        
-        // Exclude organization-specific fields from insured object forms
-        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
-        
-        console.log(`🔎 Field ${field.key}: matchesObjectType=${matchesObjectType}, isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}, visible=${field.visible}`)
-        
-        // IMPORTANT: Do NOT check field.visible here - create forms show all user input fields
-        return matchesObjectType && isUserField && isNotOrganizationField
-    })
-    
+    const filteredFields = getUserInputFieldsForObjectType(schema, objectType)
+
     console.log("✅ Final filtered fields:", filteredFields.length)
-    console.log("✅ Final fields:", filteredFields.map(f => ({ key: f.key, label: f.label, visible: f.visible, required: f.required })))
+    console.log(
+        "✅ Final fields:",
+        filteredFields.map((f) => ({
+            key: f.key,
+            label: f.label,
+            visible: f.visible,
+            required: f.required,
+        }))
+    )
     console.log("🔍 LIST getFieldsFromSchema DEBUG END")
-    
+
     return filteredFields
 }
 
@@ -1046,6 +618,7 @@ interface BaseInsuredObject {
     uitgangsdatum?: string // insuranceEndDate
     premiepromillage: number // premiumPerMille
     eigenRisico: number // deductible
+    naam?: string // name/title
     notitie?: string // notes
     declineReason?: string // reason for rejection
     createdAt: string
@@ -1057,7 +630,7 @@ interface BaseInsuredObject {
 interface InsuredObject extends BaseInsuredObject {
     // Allow any additional fields from dynamic schema
     [key: string]: any
-    
+
     // Common optional fields (for backwards compatibility)
     // Boat-specific fields (Registry field names - camelCase Dutch)
     ligplaats?: string
@@ -1100,9 +673,9 @@ function renderObjectCellValue(
     if (value === null || value === undefined) return "-"
 
     // Use schema type information if available
-    if ('type' in column) {
+    if ("type" in column) {
         const fieldSchema = column as FieldSchema
-        
+
         switch (fieldSchema.type) {
             case "currency":
                 return `€${Number(value).toLocaleString()}`
@@ -1154,7 +727,6 @@ function filterObjects(
     searchTerm: string,
     selectedOrganizations: Set<string>,
     organizations: string[],
-    selectedObjectTypes: Set<ObjectType>,
     isAdminUser: boolean = false,
     currentOrganization?: string | null
 ): InsuredObject[] {
@@ -1162,7 +734,7 @@ function filterObjects(
     if (!objects || !Array.isArray(objects)) {
         return []
     }
-    
+
     return objects.filter((object) => {
         // Organization-specific filter (when coming from organization page)
         if (currentOrganization) {
@@ -1179,12 +751,7 @@ function filterObjects(
             if (!matchesSearch) return false
         }
 
-        // Object type filter
-        if (selectedObjectTypes.size > 0 && selectedObjectTypes.size < 4) {
-            if (!selectedObjectTypes.has(object.objectType)) {
-                return false
-            }
-        }
+        // Object type filter removed - show all object types
 
         // Organization filter - only apply if we're in admin mode and have organization filters
         // Skip this if we already have a specific organization context
@@ -1205,10 +772,6 @@ function filterObjects(
     })
 }
 
-function isAdmin(userInfo: UserInfo | null): boolean {
-    return userInfo?.role === "admin"
-}
-
 // ——— Enhanced Search and Filter Bar ———
 function SearchAndFilterBar({
     searchTerm,
@@ -1218,8 +781,6 @@ function SearchAndFilterBar({
     organizations,
     selectedOrganizations,
     onOrganizationChange,
-    selectedObjectTypes,
-    onObjectTypeChange,
     showOrgFilter = true,
     userInfo,
     columns,
@@ -1231,23 +792,19 @@ function SearchAndFilterBar({
     organizations: string[]
     selectedOrganizations: Set<string>
     onOrganizationChange: (org: string) => void
-    selectedObjectTypes: Set<ObjectType>
-    onObjectTypeChange: (objectType: ObjectType) => void
     showOrgFilter?: boolean
     userInfo: UserInfo | null
     columns: FieldSchema[]
 }) {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [showOrgFilterDropdown, setShowOrgFilterDropdown] = useState(false)
-    const [showObjectTypeFilterDropdown, setShowObjectTypeFilterDropdown] =
-        useState(false)
+    // Object type filter removed
     const [columnButtonRef, setColumnButtonRef] =
         useState<HTMLButtonElement | null>(null)
     const [orgButtonRef, setOrgButtonRef] = useState<HTMLButtonElement | null>(
         null
     )
-    const [objectTypeButtonRef, setObjectTypeButtonRef] =
-        useState<HTMLButtonElement | null>(null)
+    // Object type button ref removed
     const [columnDropdownPosition, setColumnDropdownPosition] = useState({
         top: 0,
         left: 0,
@@ -1258,8 +815,7 @@ function SearchAndFilterBar({
         left: 0,
         useLeft: true,
     })
-    const [objectTypeDropdownPosition, setObjectTypeDropdownPosition] =
-        useState({ top: 0, left: 0, useLeft: true })
+    // Object type dropdown position removed
 
     // Calculate dropdown positions
     useEffect(() => {
@@ -1267,11 +823,11 @@ function SearchAndFilterBar({
             const rect = columnButtonRef.getBoundingClientRect()
             const dropdownWidth = 250 // minWidth from the dropdown
             const viewportWidth = window.innerWidth
-            
+
             // Check if there's enough space on the right
             const spaceOnRight = viewportWidth - rect.right
             const useLeft = spaceOnRight >= dropdownWidth
-            
+
             setColumnDropdownPosition({
                 top: rect.bottom + 8,
                 left: useLeft ? rect.left : rect.right - dropdownWidth,
@@ -1285,11 +841,11 @@ function SearchAndFilterBar({
             const rect = orgButtonRef.getBoundingClientRect()
             const dropdownWidth = 200 // estimated width for org dropdown
             const viewportWidth = window.innerWidth
-            
+
             // Check if there's enough space on the right
             const spaceOnRight = viewportWidth - rect.right
             const useLeft = spaceOnRight >= dropdownWidth
-            
+
             setOrgDropdownPosition({
                 top: rect.bottom + 8,
                 left: useLeft ? rect.left : rect.right - dropdownWidth,
@@ -1298,23 +854,7 @@ function SearchAndFilterBar({
         }
     }, [orgButtonRef, showOrgFilterDropdown])
 
-    useEffect(() => {
-        if (objectTypeButtonRef && showObjectTypeFilterDropdown) {
-            const rect = objectTypeButtonRef.getBoundingClientRect()
-            const dropdownWidth = 180 // estimated width for object type dropdown
-            const viewportWidth = window.innerWidth
-            
-            // Check if there's enough space on the right
-            const spaceOnRight = viewportWidth - rect.right
-            const useLeft = spaceOnRight >= dropdownWidth
-            
-            setObjectTypeDropdownPosition({
-                top: rect.bottom + 8,
-                left: useLeft ? rect.left : rect.right - dropdownWidth,
-                useLeft: useLeft,
-            })
-        }
-    }, [objectTypeButtonRef, showObjectTypeFilterDropdown])
+    // Object type filter useEffect removed
 
     // Removed toggleGroup function - no more basic/metadata grouping
 
@@ -1396,39 +936,7 @@ function SearchAndFilterBar({
                     </div>
                 )}
 
-                <div style={{ position: "relative" }}>
-                    <button
-                        ref={setObjectTypeButtonRef}
-                        onClick={() =>
-                            setShowObjectTypeFilterDropdown(
-                                !showObjectTypeFilterDropdown
-                            )
-                        }
-                        style={{
-                            padding: "12px 16px",
-                            backgroundColor: "#f3f4f6",
-                            color: "#374151",
-                            border: "none",
-                            borderRadius: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                            fontFamily: FONT_STACK,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                        }}
-                        onMouseOver={(e) =>
-                            (e.target.style.backgroundColor = "#e5e7eb")
-                        }
-                        onMouseOut={(e) =>
-                            (e.target.style.backgroundColor = "#f3f4f6")
-                        }
-                    >
-                        <FaBox size={14} />
-                        Object Typen ({selectedObjectTypes.size})
-                    </button>
-                </div>
+                {/* Object type filter button removed */}
 
                 <div style={{ position: "relative" }}>
                     <button
@@ -1574,140 +1082,7 @@ function SearchAndFilterBar({
                     document.body
                 )}
 
-            {/* Object Type Filter Dropdown */}
-            {showObjectTypeFilterDropdown &&
-                ReactDOM.createPortal(
-                    <>
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                zIndex: 999,
-                            }}
-                            onClick={() =>
-                                setShowObjectTypeFilterDropdown(false)
-                            }
-                        />
-                        <div
-                            style={{
-                                position: "fixed",
-                                top: `${objectTypeDropdownPosition.top}px`,
-                                left: `${objectTypeDropdownPosition.left}px`,
-                                backgroundColor: "#fff",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "8px",
-                                boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-                                padding: "8px",
-                                minWidth: "200px",
-                                maxHeight: "300px",
-                                overflowY: "auto",
-                                zIndex: 1000,
-                                fontFamily: FONT_STACK,
-                            }}
-                        >
-                            <div
-                                style={{
-                                    padding: "8px 0",
-                                    borderBottom: "1px solid #e5e7eb",
-                                    marginBottom: "8px",
-                                }}
-                            >
-                                <button
-                                    onClick={() => {
-                                        const allObjectTypes: ObjectType[] = [
-                                            "boat",
-                                            "trailer",
-                                            "motor",
-                                        ]
-                                        if (
-                                            selectedObjectTypes.size ===
-                                            allObjectTypes.length
-                                        ) {
-                                            allObjectTypes.forEach(
-                                                onObjectTypeChange
-                                            )
-                                        } else {
-                                            allObjectTypes.forEach((type) => {
-                                                if (
-                                                    !selectedObjectTypes.has(
-                                                        type
-                                                    )
-                                                ) {
-                                                    onObjectTypeChange(type)
-                                                }
-                                            })
-                                        }
-                                    }}
-                                    style={{
-                                        padding: "6px 12px",
-                                        backgroundColor: colors.primary,
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: "6px",
-                                        fontSize: "12px",
-                                        cursor: "pointer",
-                                        fontFamily: FONT_STACK,
-                                    }}
-                                >
-                                    {selectedObjectTypes.size === 3
-                                        ? "Alles Deselecteren"
-                                        : "Alles Selecteren"}
-                                </button>
-                            </div>
-                            {(["boat", "trailer", "motor"] as ObjectType[]).map(
-                                (objectType) => {
-                                    const config =
-                                        OBJECT_TYPE_CONFIG[objectType]
-                                    const IconComponent = config.icon
-                                    return (
-                                        <label
-                                            key={objectType}
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                padding: "6px 12px",
-                                                cursor: "pointer",
-                                                borderRadius: "6px",
-                                                fontSize: "14px",
-                                            }}
-                                            onMouseOver={(e) =>
-                                                (e.currentTarget.style.backgroundColor =
-                                                    "#f3f4f6")
-                                            }
-                                            onMouseOut={(e) =>
-                                                (e.currentTarget.style.backgroundColor =
-                                                    "transparent")
-                                            }
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedObjectTypes.has(
-                                                    objectType
-                                                )}
-                                                onChange={() =>
-                                                    onObjectTypeChange(
-                                                        objectType
-                                                    )
-                                                }
-                                                style={{ marginRight: "8px" }}
-                                            />
-                                            <IconComponent
-                                                size={16}
-                                                color={config.color}
-                                                style={{ marginRight: "8px" }}
-                                            />
-                                            {config.label}
-                                        </label>
-                                    )
-                                }
-                            )}
-                        </div>
-                    </>,
-                    document.body
-                )}
+            {/* Object Type Filter Dropdown completely removed */}
 
             {/* Column Filter Dropdown */}
             {showColumnFilter &&
@@ -1745,28 +1120,52 @@ function SearchAndFilterBar({
                                 <button
                                     onClick={() => {
                                         // Reset to organization's default visible columns
-                                        // Only consider non-organization columns
-                                        const availableColumns = columns.filter(col => {
-                                            return !col.objectTypes || !col.objectTypes.includes('organization')
-                                        })
-                                        
+                                        // Get ALL filterable columns from Field Registry (all object types)
+                                        const availableColumns =
+                                            getAllFilterableFields(columns)
+
                                         // Get columns that should be visible from organization schema
-                                        const visibleColumnsFromSchema = availableColumns
-                                            .filter(col => col.visible)
-                                            .map(col => col.key)
-                                        
-                                        // Fallback to essential columns if nothing is marked visible
-                                        const defaultColumns = visibleColumnsFromSchema.length > 0 
-                                            ? visibleColumnsFromSchema 
-                                            : ['objectType', 'status', 'waarde']
-                                        
+                                        // ADMIN BYPASS: Admins see all filterable fields regardless of visible:false
+                                        const visibleColumnsFromSchema =
+                                            userInfo && isAdmin(userInfo)
+                                                ? availableColumns.map(
+                                                      (col) => col.key
+                                                  ) // Admins see all filterable fields
+                                                : availableColumns
+                                                      .filter(
+                                                          (col) =>
+                                                              col.visible !==
+                                                              false
+                                                      )
+                                                      .map((col) => col.key) // Users respect visible:false
+
+                                        // Fallback to essential filterable columns if nothing is marked visible (only for users)
+                                        const defaultColumns =
+                                            visibleColumnsFromSchema.length > 0
+                                                ? visibleColumnsFromSchema
+                                                : availableColumns
+                                                      .filter((col) =>
+                                                          [
+                                                              "objectType",
+                                                              "status",
+                                                              "waarde",
+                                                          ].includes(col.key)
+                                                      )
+                                                      .map((col) => col.key)
+
                                         availableColumns.forEach((col) => {
-                                            if (defaultColumns.includes(col.key)) {
-                                                if (!visibleColumns.has(col.key)) {
+                                            if (
+                                                defaultColumns.includes(col.key)
+                                            ) {
+                                                if (
+                                                    !visibleColumns.has(col.key)
+                                                ) {
                                                     onToggleColumn(col.key)
                                                 }
                                             } else {
-                                                if (visibleColumns.has(col.key)) {
+                                                if (
+                                                    visibleColumns.has(col.key)
+                                                ) {
                                                     onToggleColumn(col.key)
                                                 }
                                             }
@@ -1787,40 +1186,47 @@ function SearchAndFilterBar({
                                 </button>
                             </div>
 
-                            {/* Simple list of all columns - filter out organization fields */}
-                            {columns
-                                .filter(col => {
-                                    // Filter out organization-specific fields
-                                    return !col.objectTypes || !col.objectTypes.includes('organization')
-                                })
+                            {/* List of filterable columns using Field Registry - admins see all, users respect visible:false */}
+                            {getAllFilterableFields(columns)
+                                .filter((col) =>
+                                    userInfo && isAdmin(userInfo)
+                                        ? true
+                                        : col.visible !== false
+                                )
                                 .map((col) => (
-                                <label
-                                    key={col.key}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        padding: "4px 12px",
-                                        cursor: "pointer",
-                                        fontSize: "13px",
-                                    }}
-                                    onMouseOver={(e) =>
-                                        (e.currentTarget.style.backgroundColor = "#f3f4f6")
-                                    }
-                                    onMouseOut={(e) =>
-                                        (e.currentTarget.style.backgroundColor = "transparent")
-                                    }
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={visibleColumns.has(col.key)}
-                                        onChange={() => onToggleColumn(col.key)}
+                                    <label
+                                        key={col.key}
                                         style={{
-                                            marginRight: "8px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            padding: "4px 12px",
+                                            cursor: "pointer",
+                                            fontSize: "13px",
                                         }}
-                                    />
-                                    {col.label}
-                                </label>
-                            ))}
+                                        onMouseOver={(e) =>
+                                            (e.currentTarget.style.backgroundColor =
+                                                "#f3f4f6")
+                                        }
+                                        onMouseOut={(e) =>
+                                            (e.currentTarget.style.backgroundColor =
+                                                "transparent")
+                                        }
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={visibleColumns.has(
+                                                col.key
+                                            )}
+                                            onChange={() =>
+                                                onToggleColumn(col.key)
+                                            }
+                                            style={{
+                                                marginRight: "8px",
+                                            }}
+                                        />
+                                        {col.label}
+                                    </label>
+                                ))}
                         </div>
                     </>,
                     document.body
@@ -1854,42 +1260,50 @@ function ActionDropdownMenu({
     const menuRef = React.useRef<HTMLDivElement>(null)
 
     // Check permissions
-    const canEdit = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : false
-    const canDelete = userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_DELETE') : false
+    const canEdit = userInfo
+        ? hasPermission(userInfo, "INSURED_OBJECT_UPDATE")
+        : false
+    const canDelete = userInfo
+        ? hasPermission(userInfo, "INSURED_OBJECT_DELETE")
+        : false
 
-    console.log('ActionDropdownMenu permissions:', { 
-        userInfo: !!userInfo, 
-        canEdit, 
+    console.log("ActionDropdownMenu permissions:", {
+        userInfo: !!userInfo,
+        canEdit,
         canDelete,
         userRole: userInfo?.role,
         objectId: object?.id,
-        hasUserInfo: !!userInfo
+        hasUserInfo: !!userInfo,
     })
 
-    console.log('ActionDropdownMenu detailed permissions:', {
-        'INSURED_OBJECT_UPDATE': userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_UPDATE') : 'no user',
-        'INSURED_OBJECT_DELETE': userInfo ? hasPermission(userInfo, 'INSURED_OBJECT_DELETE') : 'no user',
-        userRole: userInfo?.role
+    console.log("ActionDropdownMenu detailed permissions:", {
+        INSURED_OBJECT_UPDATE: userInfo
+            ? hasPermission(userInfo, "INSURED_OBJECT_UPDATE")
+            : "no user",
+        INSURED_OBJECT_DELETE: userInfo
+            ? hasPermission(userInfo, "INSURED_OBJECT_DELETE")
+            : "no user",
+        userRole: userInfo?.role,
     })
 
     // Don't render if user has no permissions
     if (!canEdit && !canDelete) {
-        console.log('ActionDropdownMenu: No permissions, returning null')
+        console.log("ActionDropdownMenu: No permissions, returning null")
         return null
     }
 
     // Calculate dropdown position when opening
     const handleToggle = () => {
-        console.log('ActionDropdownMenu handleToggle clicked, isOpen:', isOpen)
+        console.log("ActionDropdownMenu handleToggle clicked, isOpen:", isOpen)
         if (!isOpen && buttonRef.current) {
             const rect = buttonRef.current.getBoundingClientRect()
             const dropdownWidth = 120 // minWidth from the dropdown
             const viewportWidth = window.innerWidth
-            
+
             // Check if there's enough space on the right
             const spaceOnRight = viewportWidth - rect.right
             const useLeft = spaceOnRight >= dropdownWidth
-            
+
             setDropdownPosition({
                 top: rect.bottom + 2,
                 left: useLeft ? rect.left : rect.right - dropdownWidth,
@@ -1897,7 +1311,7 @@ function ActionDropdownMenu({
             })
         }
         setIsOpen(!isOpen)
-        console.log('ActionDropdownMenu setIsOpen to:', !isOpen)
+        console.log("ActionDropdownMenu setIsOpen to:", !isOpen)
     }
 
     // Close dropdown when clicking outside
@@ -1906,9 +1320,9 @@ function ActionDropdownMenu({
             const target = event.target as Node
             if (
                 isOpen &&
-                buttonRef.current && 
+                buttonRef.current &&
                 !buttonRef.current.contains(target) &&
-                menuRef.current && 
+                menuRef.current &&
                 !menuRef.current.contains(target)
             ) {
                 setIsOpen(false)
@@ -1916,18 +1330,18 @@ function ActionDropdownMenu({
         }
 
         if (isOpen) {
-            document.addEventListener('mousedown', handleClickOutside)
+            document.addEventListener("mousedown", handleClickOutside)
         }
-        
+
         return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
+            document.removeEventListener("mousedown", handleClickOutside)
         }
     }, [isOpen])
 
     const handleEdit = (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        console.log('ActionDropdownMenu handleEdit called with object:', object)
+        console.log("ActionDropdownMenu handleEdit called with object:", object)
         onEdit(object)
         setIsOpen(false)
     }
@@ -1935,7 +1349,10 @@ function ActionDropdownMenu({
     const handleDelete = (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        console.log('ActionDropdownMenu handleDelete called with object:', object)
+        console.log(
+            "ActionDropdownMenu handleDelete called with object:",
+            object
+        )
         onDelete(object)
         setIsOpen(false)
     }
@@ -1967,123 +1384,144 @@ function ActionDropdownMenu({
             >
                 <FaEllipsisV size={12} />
             </button>
-            
-            {isOpen && ReactDOM.createPortal(
-                <div
-                    ref={menuRef}
-                    style={{
-                        position: "fixed",
-                        top: `${dropdownPosition.top}px`,
-                        left: `${dropdownPosition.left}px`,
-                        backgroundColor: colors.white,
-                        border: `1px solid ${colors.gray200}`,
-                        borderRadius: "8px",
-                        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
-                        zIndex: 1000,
-                        minWidth: "140px",
-                        padding: "8px 0",
-                        fontFamily: FONT_STACK,
-                    }}
-                >
-                    {canEdit && (
-                        <>
-                        {console.log('Rendering edit button for object:', object?.id)}
-                        <button
-                            onClick={(e) => {
-                                console.log('Edit button clicked!', object?.id)
-                                handleEdit(e)
-                            }}
-                            style={{
-                                width: "100%",
-                                padding: "12px 16px",
-                                border: "none",
-                                backgroundColor: "transparent",
-                                cursor: "pointer",
-                                fontSize: "14px",
-                                fontWeight: "600",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                color: "#3b82f6",
-                                textAlign: "left",
-                                transition: "all 0.2s ease",
-                                fontFamily: FONT_STACK,
-                                borderRadius: "6px",
-                                boxShadow: "none",
-                            }}
-                            onMouseOver={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#f3f4f6"
-                                target.style.color = "#2563eb"
-                                target.style.transform = "translateX(2px)"
-                                target.style.boxShadow = "0 4px 8px rgba(59, 130, 246, 0.15)"
-                            }}
-                            onMouseOut={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "transparent"
-                                target.style.color = "#3b82f6"
-                                target.style.transform = "translateX(0)"
-                                target.style.boxShadow = "none"
-                            }}
-                        >
-                            <FaEdit size={14} color="currentColor" />
-                            Bewerken
-                        </button>
-                        </>
-                    )}
-                    {canDelete && (
-                        <>
-                        {console.log('Rendering delete button for object:', object?.id)}
-                        <button
-                            onClick={(e) => {
-                                console.log('Delete button clicked!', object?.id)
-                                handleDelete(e)
-                            }}
-                            style={{
-                                width: "100%",
-                                padding: "12px 16px",
-                                border: "none",
-                                backgroundColor: "transparent",
-                                cursor: "pointer",
-                                fontSize: "14px",
-                                fontWeight: "600",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                                color: "#dc2626",
-                                textAlign: "left",
-                                transition: "all 0.2s ease",
-                                fontFamily: FONT_STACK,
-                                borderRadius: "6px",
-                                boxShadow: "none",
-                            }}
-                            onMouseOver={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "#fef2f2"
-                                target.style.color = "#b91c1c"
-                                target.style.transform = "translateX(2px)"
-                                target.style.boxShadow = "0 4px 8px rgba(220, 38, 38, 0.15)"
-                            }}
-                            onMouseOut={(e) => {
-                                const target = e.target as HTMLElement
-                                target.style.backgroundColor = "transparent"
-                                target.style.color = "#dc2626"
-                                target.style.transform = "translateX(0)"
-                                target.style.boxShadow = "none"
-                            }}
-                        >
-                            <FaTrashAlt size={14} color="currentColor" />
-                            Verwijderen
-                        </button>
-                        </>
-                    )}
+
+            {isOpen &&
+                ReactDOM.createPortal(
+                    <div
+                        ref={menuRef}
+                        style={{
+                            position: "fixed",
+                            top: `${dropdownPosition.top}px`,
+                            left: `${dropdownPosition.left}px`,
+                            backgroundColor: colors.white,
+                            border: `1px solid ${colors.gray200}`,
+                            borderRadius: "8px",
+                            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.1)",
+                            zIndex: 1000,
+                            minWidth: "140px",
+                            padding: "8px 0",
+                            fontFamily: FONT_STACK,
+                        }}
+                    >
+                        {canEdit && (
+                            <>
+                                {console.log(
+                                    "Rendering edit button for object:",
+                                    object?.id
+                                )}
+                                <button
+                                    onClick={(e) => {
+                                        console.log(
+                                            "Edit button clicked!",
+                                            object?.id
+                                        )
+                                        handleEdit(e)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        border: "none",
+                                        backgroundColor: "transparent",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        color: "#3b82f6",
+                                        textAlign: "left",
+                                        transition: "all 0.2s ease",
+                                        fontFamily: FONT_STACK,
+                                        borderRadius: "6px",
+                                        boxShadow: "none",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        const target = e.target as HTMLElement
+                                        target.style.backgroundColor = "#f3f4f6"
+                                        target.style.color = "#2563eb"
+                                        target.style.transform =
+                                            "translateX(2px)"
+                                        target.style.boxShadow =
+                                            "0 4px 8px rgba(59, 130, 246, 0.15)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        const target = e.target as HTMLElement
+                                        target.style.backgroundColor =
+                                            "transparent"
+                                        target.style.color = "#3b82f6"
+                                        target.style.transform = "translateX(0)"
+                                        target.style.boxShadow = "none"
+                                    }}
+                                >
+                                    <FaEdit size={14} color="currentColor" />
+                                    Bewerken
+                                </button>
+                            </>
+                        )}
+                        {canDelete && (
+                            <>
+                                {console.log(
+                                    "Rendering delete button for object:",
+                                    object?.id
+                                )}
+                                <button
+                                    onClick={(e) => {
+                                        console.log(
+                                            "Delete button clicked!",
+                                            object?.id
+                                        )
+                                        handleDelete(e)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        border: "none",
+                                        backgroundColor: "transparent",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        color: "#dc2626",
+                                        textAlign: "left",
+                                        transition: "all 0.2s ease",
+                                        fontFamily: FONT_STACK,
+                                        borderRadius: "6px",
+                                        boxShadow: "none",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        const target = e.target as HTMLElement
+                                        target.style.backgroundColor = "#fef2f2"
+                                        target.style.color = "#b91c1c"
+                                        target.style.transform =
+                                            "translateX(2px)"
+                                        target.style.boxShadow =
+                                            "0 4px 8px rgba(220, 38, 38, 0.15)"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        const target = e.target as HTMLElement
+                                        target.style.backgroundColor =
+                                            "transparent"
+                                        target.style.color = "#dc2626"
+                                        target.style.transform = "translateX(0)"
+                                        target.style.boxShadow = "none"
+                                    }}
+                                >
+                                    <FaTrashAlt
+                                        size={14}
+                                        color="currentColor"
+                                    />
+                                    Verwijderen
+                                </button>
+                            </>
+                        )}
                     </div>,
-                document.body
-            )}
+                    document.body
+                )}
         </div>
     )
 }
-
 
 // ——— Modal Dialog Components ———
 function ConfirmDeleteDialog({
@@ -2198,18 +1636,22 @@ function EditInsuredObjectDialog({
     onClose,
     onSuccess,
     schema,
+    userInfo,
 }: {
     object: InsuredObject
     onClose: () => void
     onSuccess: () => void
     schema: FieldSchema[]
+    userInfo: UserInfo | null
 }) {
     const config = OBJECT_TYPE_CONFIG[object.objectType]
     const [form, setForm] = useState<InsuredObject>(object)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(config.useOrgConfig)
+    const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(
+        config.useOrgConfig
+    )
     const [orgConfig, setOrgConfig] = useState<Record<string, any> | null>(null)
 
     // Function to fetch organization configuration (only for boats)
@@ -2228,7 +1670,8 @@ function EditInsuredObjectDialog({
             if (response.ok) {
                 const data = await response.json()
                 // Use the new insured_object_fields_config structure
-                const orgConfig = data.organization.insured_object_fields_config?.boat
+                const orgConfig =
+                    data.organization.insured_object_fields_config?.boat
                 return orgConfig
             } else {
                 console.warn(
@@ -2356,19 +1799,10 @@ function EditInsuredObjectDialog({
         const val = form[key]
 
         // Get field schema information
-        const fieldSchema = schema?.find(field => field.key === key)
-        
-        // Skip system fields that shouldn't be edited
-        if (
-            key === "objectType" ||
-            key === "organization" ||
-            key === "id" ||
-            key === "status" ||
-            key === "createdAt" ||
-            key === "updatedAt" ||
-            key === "lastUpdatedBy"
-        )
-            return null
+        const fieldSchema = schema?.find((field) => field.key === key)
+
+        // Field filtering is now handled by getEditableFieldsForObjectType()
+        // No need for hardcoded exclusions - Field Registry controls this
 
         // Use schema type information if available, otherwise fall back to legacy logic
         let inputType = "text"
@@ -2381,7 +1815,7 @@ function EditInsuredObjectDialog({
             label = fieldSchema.label
             isRequired = fieldSchema.required
             isTextArea = fieldSchema.type === "textarea"
-            
+
             switch (fieldSchema.type) {
                 case "number":
                 case "currency":
@@ -2410,7 +1844,7 @@ function EditInsuredObjectDialog({
             // Legacy required field logic
             const commonRequired = [
                 "waarde",
-                "ingangsdatum", 
+                "ingangsdatum",
                 "premiepromillage",
                 "eigenRisico",
             ]
@@ -2422,7 +1856,7 @@ function EditInsuredObjectDialog({
             isRequired =
                 commonRequired.includes(key) ||
                 (typeSpecificRequired[object.objectType] || []).includes(key)
-                
+
             label = formatLabel(key)
         }
         const Component = isTextArea ? "textarea" : "input"
@@ -2500,8 +1934,15 @@ function EditInsuredObjectDialog({
     }
 
     const IconComponent = config.icon
-    const fieldsToRender = getUserInputFieldsForObjectType(schema, object.objectType)
-        .map(field => field.key)
+    // ADMIN BYPASS: Admin users can edit all user input fields, regular users only editable fields
+    // This allows admins to modify fields that are normally read-only for regular users
+    const fieldsToRender = isAdmin(userInfo)
+        ? getSchemaFieldsForObjectType(schema, object.objectType)
+              .filter((field) => field.inputType === "user") // Admins can edit all user input fields
+              .map((field) => field.key)
+        : getEditableFieldsForObjectType(schema, object.objectType).map(
+              (field) => field.key
+          )
 
     return (
         <div
@@ -2730,7 +2171,8 @@ function SuccessNotification({
                         padding: "10px 20px",
                     }}
                     onMouseOver={(e) =>
-                        (e.currentTarget.style.backgroundColor = colors.successHover)
+                        (e.currentTarget.style.backgroundColor =
+                            colors.successHover)
                     }
                     onMouseOut={(e) =>
                         (e.currentTarget.style.backgroundColor = colors.success)
@@ -2785,7 +2227,9 @@ function ErrorNotification({
                         padding: "10px 20px",
                     }}
                     onMouseOver={(e) => hover.primaryButton(e.currentTarget)}
-                    onMouseOut={(e) => hover.resetPrimaryButton(e.currentTarget)}
+                    onMouseOut={(e) =>
+                        hover.resetPrimaryButton(e.currentTarget)
+                    }
                 >
                     OK
                 </button>
@@ -2950,6 +2394,41 @@ async function fetchOrganizations(): Promise<string[]> {
     }
 }
 
+// Fetch full organization objects (with id and name) for logo display
+async function fetchFullOrganizations(): Promise<
+    Array<{ id: string; name: string }>
+> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const json = await res.json()
+
+        if (json.organizations && json.organizations.length > 0) {
+            return json.organizations
+                .map((org: any) => ({
+                    id: org.id,
+                    name: org.name || org.id,
+                }))
+                .filter((org: any) => org.id && org.name)
+        }
+        return []
+    } catch (error) {
+        console.error("Error fetching full organizations:", error)
+        return []
+    }
+}
+
 // ——— Auto Accept Rules Display Component ———
 interface AutoApprovalRule {
     name: string
@@ -2963,7 +2442,9 @@ interface AutoApprovalConfig {
     default_action: "pending" | "auto_approve"
 }
 
-async function fetchOrganizationAutoApprovalConfig(organizationName: string): Promise<AutoApprovalConfig | null> {
+async function fetchOrganizationAutoApprovalConfig(
+    organizationName: string
+): Promise<AutoApprovalConfig | null> {
     try {
         const token = getIdToken()
         const headers: Record<string, string> = {
@@ -2971,34 +2452,86 @@ async function fetchOrganizationAutoApprovalConfig(organizationName: string): Pr
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${encodeURIComponent(organizationName)}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${encodeURIComponent(organizationName)}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) {
-            console.warn(`Failed to fetch organization config: ${res.status} ${res.statusText}`)
+            console.warn(
+                `Failed to fetch organization config: ${res.status} ${res.statusText}`
+            )
             return null
         }
 
         const data = await res.json()
         return data.organization?.auto_approval_config || null
     } catch (error) {
-        console.error("Error fetching organization auto approval config:", error)
+        console.error(
+            "Error fetching organization auto approval config:",
+            error
+        )
         return null
     }
 }
 
-function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string }) {
+async function saveOrganizationAutoApprovalConfig(
+    organizationName: string,
+    config: AutoApprovalConfig
+): Promise<boolean> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.ORGANIZATION}/by-name/${encodeURIComponent(organizationName)}/auto-approval-config`,
+            {
+                method: "PUT",
+                headers,
+                body: JSON.stringify(config),
+                mode: "cors",
+            }
+        )
+
+        if (!res.ok) {
+            console.error(
+                `Failed to save organization auto approval config: ${res.status} ${res.statusText}`
+            )
+            return false
+        }
+
+        return true
+    } catch (error) {
+        console.error("Error saving organization auto approval config:", error)
+        return false
+    }
+}
+
+function AutoAcceptRulesDisplay({
+    organizationName,
+}: {
+    organizationName: string
+}) {
     const [isExpanded, setIsExpanded] = useState(false)
     const [config, setConfig] = useState<AutoApprovalConfig | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [isEditing, setIsEditing] = useState(false)
+    const [editingConfig, setEditingConfig] =
+        useState<AutoApprovalConfig | null>(null)
+    const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
         async function loadConfig() {
             setIsLoading(true)
-            const autoApprovalConfig = await fetchOrganizationAutoApprovalConfig(organizationName)
+            const autoApprovalConfig =
+                await fetchOrganizationAutoApprovalConfig(organizationName)
             setConfig(autoApprovalConfig)
             setIsLoading(false)
         }
@@ -3007,22 +2540,26 @@ function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string
 
     if (isLoading) {
         return (
-            <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px",
-                fontSize: "12px",
-                color: colors.gray500,
-            }}>
-                <div style={{
-                    width: "16px",
-                    height: "16px",
-                    border: `2px solid ${colors.gray300}`,
-                    borderTop: `2px solid ${colors.primary}`,
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                }} />
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px",
+                    fontSize: "12px",
+                    color: colors.gray500,
+                }}
+            >
+                <div
+                    style={{
+                        width: "16px",
+                        height: "16px",
+                        border: `2px solid ${colors.gray300}`,
+                        borderTop: `2px solid ${colors.primary}`,
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                    }}
+                />
                 <style>
                     {`
                         @keyframes spin {
@@ -3047,7 +2584,7 @@ function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string
     const getOperatorLabel = (operator: string) => {
         const operatorMap: Record<string, string> = {
             eq: "gelijk aan",
-            ne: "niet gelijk aan", 
+            ne: "niet gelijk aan",
             lt: "kleiner dan",
             le: "kleiner dan of gelijk aan",
             gt: "groter dan",
@@ -3058,7 +2595,7 @@ function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string
             contains: "bevat",
             starts_with: "begint met",
             ends_with: "eindigt met",
-            regex: "reguliere expressie"
+            regex: "reguliere expressie",
         }
         return operatorMap[operator] || operator
     }
@@ -3066,92 +2603,230 @@ function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string
     const formatConditionValue = (condition: any): string => {
         // Handle multi-value conditions (e.g., 'in', 'between')
         if (Array.isArray(condition.values) && condition.values.length > 0) {
-            if (condition.operator === 'between' && condition.values.length === 2) {
-                return `${condition.values[0]} en ${condition.values[1]}`;
+            if (
+                condition.operator === "between" &&
+                condition.values.length === 2
+            ) {
+                return `${condition.values[0]} en ${condition.values[1]}`
             }
-            return condition.values.join(', ');
+            return condition.values.join(", ")
         }
 
         // Handle single-value conditions from 'value' property
-        if (condition.value !== null && condition.value !== undefined && condition.value !== '') {
-            return String(condition.value);
+        if (
+            condition.value !== null &&
+            condition.value !== undefined &&
+            condition.value !== ""
+        ) {
+            return String(condition.value)
         }
 
         // Check if the condition has the value directly as a property with the field name
         // This handles cases where the backend might structure data differently
-        const knownKeys = ['operator', 'values', 'value'];
-        const otherKeys = Object.keys(condition).filter(k => !knownKeys.includes(k));
-        
+        const knownKeys = ["operator", "values", "value"]
+        const otherKeys = Object.keys(condition).filter(
+            (k) => !knownKeys.includes(k)
+        )
+
         for (const valueKey of otherKeys) {
-            const value = condition[valueKey];
-            if (value !== null && value !== undefined && value !== '') {
+            const value = condition[valueKey]
+            if (value !== null && value !== undefined && value !== "") {
                 // Handle arrays
                 if (Array.isArray(value)) {
-                    if (condition.operator === 'between' && value.length === 2) {
-                        return `${value[0]} en ${value[1]}`;
+                    if (
+                        condition.operator === "between" &&
+                        value.length === 2
+                    ) {
+                        return `${value[0]} en ${value[1]}`
                     }
-                    return value.join(', ');
+                    return value.join(", ")
                 }
                 // Handle single values (string or number)
-                return String(value);
+                return String(value)
             }
         }
 
         // Return debug info if no value found
-        console.warn('No value found for condition:', condition);
-        return '<geen waarde>';
-    };
+        console.warn("No value found for condition:", condition)
+        return "<geen waarde>"
+    }
 
-    const renderRule = (rule: AutoApprovalRule, index: number) => {
+    const duplicateRule = (rule: AutoApprovalRule) => {
+        if (!editingConfig) return
+
+        const duplicatedRule: AutoApprovalRule = {
+            ...rule,
+            name: `${rule.name} (Kopie)`,
+        }
+
+        setEditingConfig({
+            ...editingConfig,
+            rules: [...editingConfig.rules, duplicatedRule],
+        })
+    }
+
+    const deleteRule = (indexToDelete: number) => {
+        if (!editingConfig) return
+
+        setEditingConfig({
+            ...editingConfig,
+            rules: editingConfig.rules.filter(
+                (_, index) => index !== indexToDelete
+            ),
+        })
+    }
+
+    const updateRule = (ruleIndex: number, updatedRule: AutoApprovalRule) => {
+        if (!editingConfig) return
+
+        const updatedRules = [...editingConfig.rules]
+        updatedRules[ruleIndex] = updatedRule
+
+        setEditingConfig({
+            ...editingConfig,
+            rules: updatedRules,
+        })
+    }
+
+    const renderRule = (
+        rule: AutoApprovalRule,
+        index: number,
+        isLast: boolean = false
+    ) => {
         const conditionCount = Object.keys(rule.conditions).length
-        
+
         return (
-            <div key={index} style={{
-                padding: "12px",
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "6px",
-                marginBottom: "8px",
-            }}>
-                <div style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: colors.gray800,
-                    marginBottom: "6px",
-                }}>
+            <div
+                key={index}
+                style={{
+                    padding: "16px",
+                    backgroundColor: "#f8fafc",
+                    border: "2px solid #e2e8f0",
+                    borderRadius: "8px",
+                    marginBottom: isLast ? "12px" : "16px",
+                    position: "relative",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                }}
+            >
+                <div
+                    style={{
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: colors.gray800,
+                        marginBottom: "6px",
+                    }}
+                >
                     {rule.name}
                 </div>
-                <div style={{
-                    fontSize: "11px",
-                    color: colors.gray600,
-                    marginBottom: "8px",
-                }}>
-                    {conditionCount} voorwaarde{conditionCount !== 1 ? 'n' : ''} 
-                    {conditionCount > 1 && ` (${rule.logic === 'AND' ? 'alle moeten waar zijn' : 'één moet waar zijn'})`}
-                </div>
-                {Object.entries(rule.conditions).map(([fieldKey, condition], condIndex) => (
-                    <div key={condIndex} style={{
+                <div
+                    style={{
                         fontSize: "11px",
-                        color: colors.gray700,
-                        padding: "4px 8px",
-                        backgroundColor: colors.white,
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "4px",
-                        marginBottom: "4px",
-                        fontFamily: "monospace",
-                    }}>
-                        <strong>{fieldKey}</strong> {getOperatorLabel(condition.operator)} <strong>{formatConditionValue(condition)}</strong>
+                        color: colors.gray600,
+                        marginBottom: "8px",
+                    }}
+                >
+                    {conditionCount} voorwaarde{conditionCount !== 1 ? "n" : ""}
+                    {conditionCount > 1 &&
+                        ` (${rule.logic === "AND" ? "alle moeten waar zijn" : "één moet waar zijn"})`}
+                </div>
+                {Object.entries(rule.conditions).map(
+                    ([fieldKey, condition], condIndex) => (
+                        <div
+                            key={condIndex}
+                            style={{
+                                fontSize: "11px",
+                                color: colors.gray700,
+                                padding: "4px 8px",
+                                backgroundColor: colors.white,
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "4px",
+                                marginBottom: "4px",
+                                fontFamily: "monospace",
+                            }}
+                        >
+                            <strong>{fieldKey}</strong>{" "}
+                            {getOperatorLabel(condition.operator)}{" "}
+                            <strong>{formatConditionValue(condition)}</strong>
+                        </div>
+                    )
+                )}
+
+                {/* Action buttons - only show in editing mode */}
+                {isEditing && (
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: "8px",
+                            marginTop: "12px",
+                            paddingTop: "12px",
+                            borderTop: "1px solid #e5e7eb",
+                        }}
+                    >
+                        <button
+                            onClick={() => duplicateRule(rule)}
+                            style={{
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                backgroundColor: colors.primary,
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                transition: "all 0.2s",
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    colors.primaryHover
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    colors.primary
+                            }}
+                        >
+                            📋 Dupliceren
+                        </button>
+                        <button
+                            onClick={() => deleteRule(index)}
+                            style={{
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                backgroundColor: colors.error,
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                transition: "all 0.2s",
+                            }}
+                            onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    "#dc2626"
+                            }}
+                            onMouseOut={(e) => {
+                                e.currentTarget.style.backgroundColor =
+                                    colors.error
+                            }}
+                        >
+                            🗑️ Verwijderen
+                        </button>
                     </div>
-                ))}
+                )}
             </div>
         )
     }
 
     return (
-        <div style={{
-            display: "inline-block",
-            position: "relative",
-        }}>
+        <div
+            style={{
+                display: "inline-block",
+                position: "relative",
+            }}
+        >
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 style={{
@@ -3189,105 +2864,256 @@ function AutoAcceptRulesDisplay({ organizationName }: { organizationName: string
                     }
                 }}
             >
-                <span style={{
-                    display: "inline-block",
-                    width: "6px",
-                    height: "6px",
-                    borderRadius: "50%",
-                    backgroundColor: config.enabled ? "#059669" : "#6b7280",
-                }} />
+                <span
+                    style={{
+                        display: "inline-block",
+                        width: "6px",
+                        height: "6px",
+                        borderRadius: "50%",
+                        backgroundColor: config.enabled ? "#059669" : "#6b7280",
+                    }}
+                />
                 Goedkeuringsregels {config.enabled ? "actief" : "inactief"}
-                <span style={{
-                    fontSize: "10px",
-                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                }}>
+                <span
+                    style={{
+                        fontSize: "10px",
+                        transform: isExpanded
+                            ? "rotate(180deg)"
+                            : "rotate(0deg)",
+                        transition: "transform 0.2s",
+                    }}
+                >
                     ▼
                 </span>
             </button>
 
             {isExpanded && (
-                <div style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    minWidth: "320px",
-                    maxWidth: "500px",
-                    backgroundColor: colors.white,
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "8px",
-                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                    zIndex: 1000,
-                    marginTop: "4px",
-                    padding: "16px",
-                }}>
-                    <div style={{
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        color: colors.gray800,
-                        marginBottom: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                    }}>
-                        Auto-Goedkeuringsregels voor {organizationName}
-                        <div style={{
-                            fontSize: "10px",
-                            padding: "2px 6px",
-                            borderRadius: "10px",
-                            backgroundColor: config.enabled ? "#dcfce7" : "#f3f4f6",
-                            color: config.enabled ? "#166534" : "#6b7280",
-                            fontWeight: "500",
-                        }}>
-                            {config.enabled ? "ACTIEF" : "INACTIEF"}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        minWidth: "320px",
+                        maxWidth: "500px",
+                        backgroundColor: colors.white,
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                        zIndex: 1000,
+                        marginTop: "4px",
+                        padding: "16px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            color: colors.gray800,
+                            marginBottom: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            Auto-Goedkeuringsregels voor {organizationName}
+                            <div
+                                style={{
+                                    fontSize: "10px",
+                                    padding: "2px 6px",
+                                    borderRadius: "10px",
+                                    backgroundColor: config.enabled
+                                        ? "#dcfce7"
+                                        : "#f3f4f6",
+                                    color: config.enabled
+                                        ? "#166534"
+                                        : "#6b7280",
+                                    fontWeight: "500",
+                                }}
+                            >
+                                {config.enabled ? "ACTIEF" : "INACTIEF"}
+                            </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                            {isEditing ? (
+                                <>
+                                    <button
+                                        onClick={async () => {
+                                            if (editingConfig) {
+                                                setIsSaving(true)
+                                                const success =
+                                                    await saveOrganizationAutoApprovalConfig(
+                                                        organizationName,
+                                                        editingConfig
+                                                    )
+                                                if (success) {
+                                                    setConfig(editingConfig)
+                                                    setIsEditing(false)
+                                                    setEditingConfig(null)
+                                                } else {
+                                                    alert(
+                                                        "Kon regels niet opslaan. Probeer het opnieuw."
+                                                    )
+                                                }
+                                                setIsSaving(false)
+                                            }
+                                        }}
+                                        disabled={isSaving}
+                                        style={{
+                                            padding: "4px 8px",
+                                            fontSize: "11px",
+                                            backgroundColor: colors.success,
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            cursor: isSaving
+                                                ? "wait"
+                                                : "pointer",
+                                            opacity: isSaving ? 0.7 : 1,
+                                        }}
+                                    >
+                                        {isSaving ? "Opslaan..." : "💾 Opslaan"}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setIsEditing(false)
+                                            setEditingConfig(null)
+                                        }}
+                                        style={{
+                                            padding: "4px 8px",
+                                            fontSize: "11px",
+                                            backgroundColor: colors.gray400,
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: "4px",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        ❌ Annuleren
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        setIsEditing(true)
+                                        setEditingConfig(
+                                            config ? { ...config } : null
+                                        )
+                                    }}
+                                    style={{
+                                        padding: "4px 8px",
+                                        fontSize: "11px",
+                                        backgroundColor: colors.primary,
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: "4px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    ✏️ Bewerken
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     {!config.enabled ? (
-                        <div style={{
-                            padding: "12px",
-                            backgroundColor: "#fef3c7",
-                            border: "1px solid #fcd34d",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            color: "#92400e",
-                        }}>
-                            Auto-goedkeuring is uitgeschakeld. Alle boten vereisen handmatige beoordeling.
+                        <div
+                            style={{
+                                padding: "12px",
+                                backgroundColor: "#fef3c7",
+                                border: "1px solid #fcd34d",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                color: "#92400e",
+                            }}
+                        >
+                            Auto-goedkeuring is uitgeschakeld. Alle boten
+                            vereisen handmatige beoordeling.
                         </div>
                     ) : config.rules.length === 0 ? (
-                        <div style={{
-                            padding: "12px",
-                            backgroundColor: "#fef2f2",
-                            border: "1px solid #fca5a5",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            color: "#dc2626",
-                        }}>
-                            Geen regels geconfigureerd. Standaard actie: {config.default_action === "auto_approve" ? "automatisch goedkeuren" : "handmatige beoordeling"}.
+                        <div
+                            style={{
+                                padding: "12px",
+                                backgroundColor: "#fef2f2",
+                                border: "1px solid #fca5a5",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                color: "#dc2626",
+                            }}
+                        >
+                            Geen regels geconfigureerd. Standaard actie:{" "}
+                            {config.default_action === "auto_approve"
+                                ? "automatisch goedkeuren"
+                                : "handmatige beoordeling"}
+                            .
                         </div>
                     ) : (
                         <>
-                            <div style={{
-                                fontSize: "12px",
-                                color: colors.gray600,
-                                marginBottom: "12px",
-                                padding: "8px",
-                                backgroundColor: "#f1f5f9",
-                                borderRadius: "4px",
-                            }}>
-                                Boten worden automatisch goedgekeurd als ze voldoen aan <strong>één van de onderstaande regels</strong>:
+                            <div
+                                style={{
+                                    fontSize: "12px",
+                                    color: colors.gray600,
+                                    marginBottom: "12px",
+                                    padding: "8px",
+                                    backgroundColor: isEditing
+                                        ? "#fef3c7"
+                                        : "#f1f5f9",
+                                    borderRadius: "4px",
+                                    border: isEditing
+                                        ? "1px solid #fcd34d"
+                                        : "none",
+                                }}
+                            >
+                                {isEditing ? (
+                                    <>
+                                        <strong>Bewerkmodus:</strong> Klik op
+                                        "Dupliceren" om een regel te kopiëren of
+                                        "Verwijderen" om een regel te
+                                        verwijderen.
+                                    </>
+                                ) : (
+                                    <>
+                                        Boten worden automatisch goedgekeurd als
+                                        ze voldoen aan{" "}
+                                        <strong>
+                                            één van de onderstaande regels
+                                        </strong>
+                                        :
+                                    </>
+                                )}
                             </div>
-                            {config.rules.map(renderRule)}
-                            <div style={{
-                                fontSize: "11px",
-                                color: colors.gray600,
-                                marginTop: "8px",
-                                padding: "8px",
-                                backgroundColor: "#f8fafc",
-                                borderRadius: "4px",
-                                borderLeft: "3px solid #e2e8f0",
-                            }}>
-                                <strong>Standaard actie:</strong> Als geen regel overeenkomt → {config.default_action === "auto_approve" ? "automatisch goedkeuren" : "handmatige beoordeling"}
+                            {(isEditing
+                                ? editingConfig?.rules || []
+                                : config.rules
+                            ).map((rule, index, array) =>
+                                renderRule(
+                                    rule,
+                                    index,
+                                    index === array.length - 1
+                                )
+                            )}
+                            <div
+                                style={{
+                                    fontSize: "11px",
+                                    color: colors.gray600,
+                                    marginTop: "8px",
+                                    padding: "8px",
+                                    backgroundColor: "#f8fafc",
+                                    borderRadius: "4px",
+                                    borderLeft: "3px solid #e2e8f0",
+                                }}
+                            >
+                                <strong>Standaard actie:</strong> Als geen regel
+                                overeenkomt →{" "}
+                                {config.default_action === "auto_approve"
+                                    ? "automatisch goedkeuren"
+                                    : "handmatige beoordeling"}
                             </div>
                         </>
                     )}
@@ -3308,70 +3134,82 @@ function InsuredObjectList() {
     >(null)
     const [searchTerm, setSearchTerm] = useState("")
     const [brokerInfo, setBrokerInfo] = useState<BrokerInfo | null>(null)
-    
+
     // Uitgangsdatum management state
-    const [editingUitgangsdatum, setEditingUitgangsdatum] = useState<string | null>(null)
+    const [editingUitgangsdatum, setEditingUitgangsdatum] = useState<
+        string | null
+    >(null)
     const [showUitgangsdatumModal, setShowUitgangsdatumModal] = useState(false)
     const [selectedUitgangsdatum, setSelectedUitgangsdatum] = useState("")
-    const [uitgangsdatumError, setUitgangsdatumError] = useState<string | null>(null)
-    
+    const [uitgangsdatumError, setUitgangsdatumError] = useState<string | null>(
+        null
+    )
+
     // Uitgangsdatum validation function
-    const validateUitgangsdatum = (date: string): { isValid: boolean; error?: string } => {
+    const validateUitgangsdatum = (
+        date: string
+    ): { isValid: boolean; error?: string } => {
         const selectedDate = new Date(date)
         const today = new Date()
         const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
         const endOfYear = new Date(today.getFullYear(), 11, 31) // December 31st of current year
-        
+
         // Check if date is more than 1 week in the past
         if (selectedDate < oneWeekAgo) {
-            return { 
-                isValid: false, 
-                error: "Uitgangsdatum kan niet meer dan 1 week in het verleden liggen. Neem contact op met de beheerders." 
+            return {
+                isValid: false,
+                error: "Uitgangsdatum kan niet meer dan 1 week in het verleden liggen. Neem contact op met de beheerders.",
             }
         }
-        
+
         // Check if date is in the next year
         if (selectedDate.getFullYear() > today.getFullYear()) {
-            return { 
-                isValid: false, 
-                error: "Uitgangsdatum kan niet in het volgende jaar liggen. Neem contact op met de beheerders." 
+            return {
+                isValid: false,
+                error: "Uitgangsdatum kan niet in het volgende jaar liggen. Neem contact op met de beheerders.",
             }
         }
-        
+
         return { isValid: true }
     }
 
     // Dynamic schema hook
-    const { schema, loading: schemaLoading, error: schemaError } = useDynamicSchema(currentOrganization || undefined)
-    
+    const {
+        schema,
+        loading: schemaLoading,
+        error: schemaError,
+    } = useDynamicSchema(currentOrganization || undefined)
+
     // Use dynamic schema or fallback to empty array
     const COLUMNS = schema || []
-    
+
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set())
-    
-    // Update visible columns when schema changes - use organization's field visibility configuration
+
+    // Update visible columns when schema changes - use filterable fields from Field Registry
     useEffect(() => {
         if (COLUMNS.length > 0) {
-            // Use fields marked as visible in the organization's schema configuration
-            const visibleColumnsFromSchema = COLUMNS
-                .filter((col) => col.visible)
-                .map((col) => col.key)
-            
-            // If no columns are marked visible, fallback to essential columns
-            const columnsToShow = visibleColumnsFromSchema.length > 0 
-                ? visibleColumnsFromSchema 
-                : ['objectType', 'status', 'waarde']
-            
-            setVisibleColumns(new Set(columnsToShow))
+            // Get ALL filterable fields from Field Registry (all object types)
+            const filterableFields = getAllFilterableFields(COLUMNS)
+
+            // ADMIN BYPASS: Admins can see all filterable fields regardless of visible:false
+            // Regular users respect organization's visibility settings
+            const visibleFilterableFields = isAdmin(userInfo)
+                ? filterableFields // Admins see all filterable fields
+                : filterableFields.filter((field) => field.visible !== false) // Users respect visible:false
+            const visibleFilterableColumnKeys = visibleFilterableFields.map(
+                (field) => field.key
+            )
+
+            setVisibleColumns(new Set(visibleFilterableColumnKeys))
         }
-    }, [COLUMNS])
+    }, [COLUMNS, userInfo])
     const [organizations, setOrganizations] = useState<string[]>([])
+    const [fullOrganizations, setFullOrganizations] = useState<
+        Array<{ id: string; name: string }>
+    >([])
     const [selectedOrganizations, setSelectedOrganizations] = useState<
         Set<string>
     >(new Set())
-    const [selectedObjectTypes, setSelectedObjectTypes] = useState<
-        Set<ObjectType>
-    >(new Set(["boat", "trailer", "motor"]))
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [decliningObjectId, setDecliningObjectId] = useState<string | null>(
@@ -3384,57 +3222,101 @@ function InsuredObjectList() {
         null
     )
     const [showCreateForm, setShowCreateForm] = useState<boolean>(false)
-    
+
     // Print modal state
     const [showPrintModal, setShowPrintModal] = useState<boolean>(false)
-    const [selectedPrintObjects, setSelectedPrintObjects] = useState<Set<string>>(new Set())
-    const [selectedPrintFields, setSelectedPrintFields] = useState<Set<string>>(new Set())
+    const [selectedPrintObjects, setSelectedPrintObjects] = useState<
+        Set<string>
+    >(new Set())
+    const [selectedPrintFields, setSelectedPrintFields] = useState<Set<string>>(
+        new Set()
+    )
     const [includeTotals, setIncludeTotals] = useState<boolean>(true)
 
-    // Get insured object fields only (excluding organization fields)
+    // Get printable fields using Field Registry logic
+    // ADMIN BYPASS: Admin users can print ALL fields regardless of visible:false settings
     const printableFields = React.useMemo(() => {
-        // Filter columns to only include fields that are relevant to insured objects
-        // This excludes organization-specific fields
-        return COLUMNS.filter(field => {
-            // Exclude organization-only fields by checking objectTypes
-            const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
-            
-            // Include fields that are either user-input fields or commonly printed system fields
-            const isRelevantField = field.inputType === 'user' || 
-                                   field.inputType === 'system' || 
-                                   field.inputType === 'auto' ||
-                                   !field.inputType // fallback for fields without inputType
-            
-            return isNotOrganizationField && isRelevantField
-        })
-    }, [COLUMNS])
+        let fields
+        if (isAdmin(userInfo)) {
+            // Admins can print all user and system fields (exclude only auto fields like IDs)
+            // Admins ignore visible:false restrictions - they can see all fields
+            // Get fields from ALL object types for mixed printing
+            const allObjectTypes = ["boat", "trailer", "motor"]
+            const allFields = new Map<string, FieldSchema>()
+
+            // Get fields for each object type
+            for (const objectType of allObjectTypes) {
+                const objectFields = getSchemaFieldsForObjectType(
+                    schema,
+                    objectType
+                ).filter((field) => field.inputType !== "auto")
+                objectFields.forEach((field) => allFields.set(field.key, field))
+            }
+
+            // Also get fields that don't specify object types (generic fields)
+            const genericFields = getSchemaFieldsForObjectType(
+                schema,
+                undefined
+            ).filter((field) => field.inputType !== "auto")
+            genericFields.forEach((field) => allFields.set(field.key, field))
+
+            fields = Array.from(allFields.values())
+        } else {
+            // Regular users can only print fields marked as printable in field registry
+            // Regular users respect visible:false restrictions set by organization
+            // Get printable fields from ALL object types for mixed printing
+            const allObjectTypes = ["boat", "trailer", "motor"]
+            const allFields = new Map<string, FieldSchema>()
+
+            // Get printable fields for each object type
+            for (const objectType of allObjectTypes) {
+                const objectFields = getPrintableFieldsForObjectType(
+                    schema,
+                    objectType
+                ).filter((field) => field.visible !== false)
+                objectFields.forEach((field) => allFields.set(field.key, field))
+            }
+
+            // Also get generic printable fields
+            const genericFields = getPrintableFieldsForObjectType(
+                schema,
+                undefined
+            ).filter((field) => field.visible !== false)
+            genericFields.forEach((field) => allFields.set(field.key, field))
+
+            fields = Array.from(allFields.values())
+        }
+
+        return fields
+    }, [schema, userInfo])
 
     // PDF Generation Function
     const generatePDF = () => {
-        const selectedObjects = filteredObjects.filter(obj => selectedPrintObjects.has(obj.id))
-        const selectedFields = printableFields.filter(col => selectedPrintFields.has(col.key))
-        
-        // Calculate totals for selected objects
-        const totalWaarde = selectedObjects.reduce((sum, obj) => sum + (Number(obj.waarde) || 0), 0)
-        const totalPremieVerzekerdePeriode = selectedObjects.reduce((sum, obj) => {
-            const { periodPremium } = calculateObjectPremiums(obj)
-            return sum + periodPremium
-        }, 0)
-        const totalPremieJaar = selectedObjects.reduce((sum, obj) => {
-            const { yearlyPremium } = calculateObjectPremiums(obj)
-            return sum + yearlyPremium
-        }, 0)
-        
+        const selectedObjects = filteredObjects.filter((obj) =>
+            selectedPrintObjects.has(obj.id)
+        )
+        const selectedFields = printableFields.filter((col) =>
+            selectedPrintFields.has(col.key)
+        )
+
+        // Calculate enhanced totals for selected objects with status awareness
+        const enhancedTotals = calculateEnhancedTotals(
+            selectedObjects as EnhancedInsuredObject[]
+        )
+        const totalWaarde = enhancedTotals.totalValue
+        const totalPremieVerzekerdePeriode = enhancedTotals.totalPeriodPremium
+        const totalPremieJaar = enhancedTotals.totalYearlyPremium
+
         // Create a new window/tab for PDF content
-        const printWindow = window.open('', '_blank', 'width=800,height=600')
+        const printWindow = window.open("", "_blank", "width=800,height=600")
         if (!printWindow) {
-            alert('Popup geblokkeerd. Sta popups toe voor deze website.')
+            alert("Popup geblokkeerd. Sta popups toe voor deze website.")
             return
         }
 
-        const currentDate = new Date().toLocaleDateString('nl-NL')
-        const organizationName = currentOrganization || 'Alle organisaties'
-        
+        const currentDate = new Date().toLocaleDateString("nl-NL")
+        const organizationName = currentOrganization || "Alle organisaties"
+
         // Generate HTML content for PDF
         const htmlContent = `
 <!DOCTYPE html>
@@ -3560,59 +3442,82 @@ function InsuredObjectList() {
     <table>
         <thead>
             <tr>
-                ${selectedFields.map(field => `<th>${field.label}</th>`).join('')}
+                ${selectedFields.map((field) => `<th>${field.label}</th>`).join("")}
             </tr>
         </thead>
         <tbody>
-            ${selectedObjects.map(obj => `
+            ${selectedObjects
+                .map(
+                    (obj) => `
                 <tr>
-                    ${selectedFields.map(field => {
-                        let value = obj[field.key as keyof typeof obj]
-                        
-                        // Format specific fields
-                        if (field.key === 'waarde' || field.key === 'totalePremieOverHetJaar' || field.key === 'totalePremieOverDeVerzekerdePeriode') {
-                            const numValue = Number(value) || 0
-                            value = numValue.toLocaleString('nl-NL', { 
-                                style: 'currency', 
-                                currency: 'EUR',
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 0
-                            })
-                        } else if (field.key === 'premiepromillage') {
-                            const numValue = Number(value) || 0
-                            value = numValue.toFixed(2) + '‰'
-                        }
-                        
-                        return `<td>${value || '-'}</td>`
-                    }).join('')}
+                    ${selectedFields
+                        .map((field) => {
+                            let value = obj[field.key as keyof typeof obj]
+
+                            // Format specific fields
+                            if (
+                                field.key === "waarde" ||
+                                field.key === "totalePremieOverHetJaar" ||
+                                field.key ===
+                                    "totalePremieOverDeVerzekerdePeriode"
+                            ) {
+                                const numValue = Number(value) || 0
+                                value = numValue.toLocaleString("nl-NL", {
+                                    style: "currency",
+                                    currency: "EUR",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 0,
+                                })
+                            } else if (field.key === "premiepromillage") {
+                                const numValue = Number(value) || 0
+                                value = numValue.toFixed(2) + "‰"
+                            }
+
+                            return `<td>${value || "-"}</td>`
+                        })
+                        .join("")}
                 </tr>
-            `).join('')}
+            `
+                )
+                .join("")}
         </tbody>
     </table>
 
-    ${includeTotals ? `
+    ${
+        includeTotals
+            ? `
     <div class="totals">
-        <h3>Totaaloverzicht</h3>
+        <h3>Totaaloverzicht (Status-bewuste berekening)</h3>
         <div class="totals-grid">
             <div class="totals-item">
-                <div class="totals-label">Totale waarde</div>
-                <div class="totals-value currency">€${totalWaarde.toLocaleString('nl-NL')}</div>
+                <div class="totals-label">Totale waarde van de verzekerde objecten</div>
+                <div class="totals-value currency">€${totalWaarde.toLocaleString("nl-NL")}</div>
             </div>
             <div class="totals-item">
-                <div class="totals-label">Totale premie (jaar)</div>
-                <div class="totals-value currency">€${Math.round(totalPremieJaar).toLocaleString('nl-NL')}</div>
+                <div class="totals-label">Premie verzekerde periode (verzekerd + buiten polis)</div>
+                <div class="totals-value currency">€${Math.round(totalPremieVerzekerdePeriode).toLocaleString("nl-NL")}</div>
             </div>
             <div class="totals-item">
-                <div class="totals-label">Totale premie (verzekerde periode)</div>
-                <div class="totals-value currency">€${Math.round(totalPremieVerzekerdePeriode).toLocaleString('nl-NL')}</div>
+                <div class="totals-label">Jaarpremie (verzekerd + buiten polis)</div>
+                <div class="totals-value currency">€${Math.round(totalPremieJaar).toLocaleString("nl-NL")}</div>
             </div>
             <div class="totals-item">
-                <div class="totals-label">Aantal objecten</div>
-                <div class="totals-value">${selectedObjects.length}</div>
+                <div class="totals-label">Status verdeling</div>
+                <div class="totals-value">
+                    Verzekerd: ${enhancedTotals.insuredCount}<br>
+                    Buiten polis: ${enhancedTotals.outsidePolicyCount}<br>
+                    In behandeling: ${enhancedTotals.pendingCount}<br>
+                    Afgewezen: ${enhancedTotals.rejectedCount}
+                </div>
             </div>
         </div>
+        <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
+            * Alleen objecten met status "Verzekerd" en "Buiten polis" worden meegerekend in premieberekeningen
+        </div>
     </div>
-    ` : ''}
+    `
+            : ""
+    }
 
     <script>
         window.onload = function() {
@@ -3633,7 +3538,7 @@ function InsuredObjectList() {
 
         printWindow.document.write(htmlContent)
         printWindow.document.close()
-        
+
         // Close the modal
         setShowPrintModal(false)
     }
@@ -3659,15 +3564,7 @@ function InsuredObjectList() {
         setSelectedOrganizations(newSelected)
     }
 
-    const toggleObjectType = (objectType: ObjectType) => {
-        const newSelected = new Set(selectedObjectTypes)
-        if (newSelected.has(objectType)) {
-            newSelected.delete(objectType)
-        } else {
-            newSelected.add(objectType)
-        }
-        setSelectedObjectTypes(newSelected)
-    }
+    // Object type filter removed
 
     // Load data and parse URL parameters
     useEffect(() => {
@@ -3716,6 +3613,10 @@ function InsuredObjectList() {
                 const orgs = await fetchOrganizations()
                 setOrganizations(orgs)
                 setSelectedOrganizations(new Set(orgs)) // Select all by default
+
+                // Also load full organization objects for logo display
+                const fullOrgs = await fetchFullOrganizations()
+                setFullOrganizations(fullOrgs)
             } catch (err) {
                 console.error("Failed to load organizations:", err)
             }
@@ -3744,7 +3645,10 @@ function InsuredObjectList() {
         async function loadBrokerInfo() {
             if (currentOrganization) {
                 try {
-                    const brokerData = await fetchBrokerInfoForOrganization(currentOrganization)
+                    const brokerData =
+                        await fetchBrokerInfoForOrganization(
+                            currentOrganization
+                        )
                     setBrokerInfo(brokerData)
                 } catch (error) {
                     console.error("Failed to fetch broker info:", error)
@@ -3789,21 +3693,27 @@ function InsuredObjectList() {
 
             const data = await res.json()
             console.log(`Received data:`, data)
-            
+
             // More robust data parsing with null safety
             let objectsList: InsuredObject[] = []
             if (Array.isArray(data)) {
                 objectsList = data
-            } else if (data && typeof data === 'object' && Array.isArray(data.items)) {
+            } else if (
+                data &&
+                typeof data === "object" &&
+                Array.isArray(data.items)
+            ) {
                 objectsList = data.items
             } else {
-                console.warn('Unexpected API response format:', data)
+                console.warn("Unexpected API response format:", data)
                 objectsList = []
             }
-            
+
             console.log(`Setting objects: ${objectsList.length} items`)
             // Update all objects with calculated premium values for consistency
-            const objectsWithCalculatedPremiums = objectsList.map(obj => updateObjectWithCalculatedPremiums(obj))
+            const objectsWithCalculatedPremiums = objectsList.map((obj) =>
+                updateObjectWithCalculatedPremiums(obj)
+            )
             setObjects(objectsWithCalculatedPremiums)
         } catch (err: any) {
             console.error("Error in fetchObjects:", err)
@@ -3815,67 +3725,67 @@ function InsuredObjectList() {
 
     // Role-aware filtering with organization-specific context
     // Debug logging to understand objects state
-    console.log('Objects state before filtering:', objects, typeof objects, Array.isArray(objects))
-    
-    const filteredObjects = objects && Array.isArray(objects)
-        ? filterObjects(
-              objects,
-              searchTerm,
-              selectedOrganizations,
-              organizations,
-              selectedObjectTypes,
-              isAdmin(userInfo),
-              currentOrganization // Pass current organization for filtering
-          ).map(obj => updateObjectWithCalculatedPremiums(obj)) // Ensure calculated fields are up-to-date
-        : []
+    console.log(
+        "Objects state before filtering:",
+        objects,
+        typeof objects,
+        Array.isArray(objects)
+    )
+
+    const filteredObjects =
+        objects && Array.isArray(objects)
+            ? filterObjects(
+                  objects,
+                  searchTerm,
+                  selectedOrganizations,
+                  organizations,
+                  isAdmin(userInfo),
+                  currentOrganization // Pass current organization for filtering
+              ).map((obj) => updateObjectWithCalculatedPremiums(obj)) // Ensure calculated fields are up-to-date
+            : []
 
     const getVisibleColumnsList = () => {
-        // Define the desired column order: actions, type, status, waarde, brand, model/type, CIN nummer
+        // Define the desired column order: actions, type, status, waarde, naam, brand, model/type, CIN nummer
         const columnOrder = [
-            'objectType',    // type
-            'status',        // status  
-            'waarde',        // waarde
-            'brand',         // Unified brand/merk
-            'type',          // Unified model/type
-            'cinNummer',     // CIN nummer
+            "objectType", // type
+            "status", // status
+            "waarde", // waarde
+            "naam", // custom name
+            "brand", // Unified brand/merk
+            "type", // Unified model/type
+            "cinNummer", // CIN nummer
             // All other fields follow in their original order
         ]
-        
-        // Filter columns based on visibility and data availability
+
+        // Filter columns based on visibility and filterable flag from field registry
+        // REMOVED data availability filtering to show ALL filterable fields
         const filteredColumns = COLUMNS.filter((col) => {
             if (!visibleColumns.has(col.key)) return false
-            
-            // Hide columns that have no data in the current filtered set
-            const columnHasData = filteredObjects.some(obj => {
-                const value = obj[col.key as keyof InsuredObject]
-                return value !== null && value !== undefined && value !== ''
-            })
-            
-            // Always show essential columns even if empty
-            const essentialColumns = ['objectType', 'status', 'waarde', 'merkBoot', 'typeBoot', 'merkMotor', 'typeMotor', 'chassisnummer', 'uitgangsdatum']
-            if (essentialColumns.includes(col.key)) {
-                return true
-            }
-            
-            return columnHasData
+
+            // Only show columns that are filterable according to field registry
+            if (!col.filterable) return false
+
+            // Show all filterable fields regardless of whether they have data
+            // This allows users to filter by any filterable field from the Field Registry
+            return true
         })
-        
+
         // Sort columns based on the desired order
         return filteredColumns.sort((a, b) => {
             const aIndex = columnOrder.indexOf(a.key)
             const bIndex = columnOrder.indexOf(b.key)
-            
+
             // If both columns are in the order list, sort by their position
             if (aIndex !== -1 && bIndex !== -1) {
                 return aIndex - bIndex
             }
-            
+
             // If only 'a' is in the order list, it comes first
             if (aIndex !== -1) return -1
-            
+
             // If only 'b' is in the order list, it comes first
             if (bIndex !== -1) return 1
-            
+
             // If neither is in the order list, maintain original order (by key alphabetically)
             return a.key.localeCompare(b.key)
         })
@@ -3885,12 +3795,12 @@ function InsuredObjectList() {
 
     // Action handlers
     const handleEdit = useCallback((object: InsuredObject) => {
-        console.log('handleEdit called with object:', object)
+        console.log("handleEdit called with object:", object)
         setEditingObject(object)
     }, [])
 
     const handleDelete = useCallback((object: InsuredObject) => {
-        console.log('handleDelete called with object:', object)
+        console.log("handleDelete called with object:", object)
         setDeletingObject(object)
     }, [])
 
@@ -4004,12 +3914,17 @@ function InsuredObjectList() {
     )
 
     // Uitgangsdatum handlers
-    const handleUitgangsdatumClick = useCallback((objectId: string, currentDate?: string) => {
-        setEditingUitgangsdatum(objectId)
-        setSelectedUitgangsdatum(currentDate || new Date().toISOString().split('T')[0])
-        setUitgangsdatumError(null)
-        setShowUitgangsdatumModal(true)
-    }, [])
+    const handleUitgangsdatumClick = useCallback(
+        (objectId: string, currentDate?: string) => {
+            setEditingUitgangsdatum(objectId)
+            setSelectedUitgangsdatum(
+                currentDate || new Date().toISOString().split("T")[0]
+            )
+            setUitgangsdatumError(null)
+            setShowUitgangsdatumModal(true)
+        },
+        []
+    )
 
     const handleUitgangsdatumCancel = useCallback(() => {
         setEditingUitgangsdatum(null)
@@ -4038,36 +3953,49 @@ function InsuredObjectList() {
                         Authorization: `Bearer ${token}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         uitgangsdatum: selectedUitgangsdatum,
-                        status: "OutOfPolicy" 
+                        status: "OutOfPolicy",
                     }),
                 }
             )
 
             if (!res.ok) {
-                throw new Error(`Failed to update: ${res.status} ${res.statusText}`)
+                throw new Error(
+                    `Failed to update: ${res.status} ${res.statusText}`
+                )
             }
 
             // Show success message
-            setSuccessMessage("Uitgangsdatum successfully set - object is now out of policy")
+            setSuccessMessage(
+                "Uitgangsdatum successfully set - object is now out of policy"
+            )
 
             // Refresh the list
             await fetchObjects()
-            
+
             // Close modal
             handleUitgangsdatumCancel()
         } catch (err: any) {
-            setUitgangsdatumError(err.message || "Failed to update uitgangsdatum")
+            setUitgangsdatumError(
+                err.message || "Failed to update uitgangsdatum"
+            )
         }
-    }, [editingUitgangsdatum, selectedUitgangsdatum, validateUitgangsdatum, handleUitgangsdatumCancel])
+    }, [
+        editingUitgangsdatum,
+        selectedUitgangsdatum,
+        validateUitgangsdatum,
+        handleUitgangsdatumCancel,
+    ])
 
     if (isLoading || schemaLoading) {
         return (
             <div style={{ padding: "40px", textAlign: "center" }}>
                 <div style={styles.spinner} />
                 <div style={{ marginTop: "16px", color: colors.gray600 }}>
-                    {schemaLoading ? "Loading schema configuration..." : "Loading insured objects..."}
+                    {schemaLoading
+                        ? "Loading schema configuration..."
+                        : "Loading insured objects..."}
                 </div>
             </div>
         )
@@ -4097,8 +4025,21 @@ function InsuredObjectList() {
 
     const userRole = userInfo?.role || "user"
 
+    // Check if current user can perform any actions (for showing Actions column)
+    const canPerformActions = userInfo ? (
+        hasPermission(userInfo, "INSURED_OBJECT_UPDATE") ||
+        hasPermission(userInfo, "INSURED_OBJECT_DELETE")
+    ) : false
+
     return (
-        <div style={{ padding: "24px", backgroundColor: "#f8fafc", minHeight: "100vh", fontFamily: FONT_STACK }}>
+        <div
+            style={{
+                padding: "24px",
+                backgroundColor: "#f8fafc",
+                minHeight: "100vh",
+                fontFamily: FONT_STACK,
+            }}
+        >
             {/* Back Navigation (when viewing specific organization) */}
             {currentOrganization && (
                 <div style={{ marginBottom: "16px" }}>
@@ -4122,10 +4063,14 @@ function InsuredObjectList() {
                             transition: "all 0.2s",
                         }}
                         onMouseOver={(e) => {
-                            (e.target as HTMLButtonElement).style.backgroundColor = "#e5e7eb"
+                            ;(
+                                e.target as HTMLButtonElement
+                            ).style.backgroundColor = "#e5e7eb"
                         }}
                         onMouseOut={(e) => {
-                            (e.target as HTMLButtonElement).style.backgroundColor = "#f3f4f6"
+                            ;(
+                                e.target as HTMLButtonElement
+                            ).style.backgroundColor = "#f3f4f6"
                         }}
                     >
                         <FaArrowLeft size={12} />
@@ -4144,6 +4089,8 @@ function InsuredObjectList() {
                 />
             </div>
 
+            {/* Logo banners removed - logo integrated into table header instead */}
+
             <div
                 style={{
                     backgroundColor: "#fff",
@@ -4152,6 +4099,7 @@ function InsuredObjectList() {
                     overflow: "hidden",
                 }}
             >
+                {/* Logo moved to main title area */}
                 {/* Header */}
                 <div
                     style={{
@@ -4171,29 +4119,88 @@ function InsuredObjectList() {
                             style={{
                                 display: "flex",
                                 alignItems: "center",
-                                gap: "8px",
+                                gap: "16px",
                             }}
                         >
-                            {userRole === "admin" && (
-                                <FaUserShield size={20} color={colors.primary} />
-                            )}
-                            {userRole === "editor" && (
-                                <FaUserEdit size={20} color={colors.primary} />
-                            )}
-                            {userRole === "user" && (
-                                <FaUser size={20} color={colors.gray500} />
-                            )}
-                            <h1
+                            <div
                                 style={{
-                                    fontSize: "32px",
-                                    fontWeight: "600",
-                                    color: "#1f2937",
-                                    margin: 0,
-                                    letterSpacing: "-0.025em",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
                                 }}
                             >
-                                Vloot Beheer
-                            </h1>
+                                {userRole === "admin" && (
+                                    <FaUserShield
+                                        size={20}
+                                        color={colors.primary}
+                                    />
+                                )}
+                                {userRole === "editor" && (
+                                    <FaUserEdit
+                                        size={20}
+                                        color={colors.primary}
+                                    />
+                                )}
+                                {userRole === "user" && (
+                                    <FaUser size={20} color={colors.gray500} />
+                                )}
+                                <h1
+                                    style={{
+                                        fontSize: "32px",
+                                        fontWeight: "600",
+                                        color: "#1f2937",
+                                        margin: 0,
+                                        letterSpacing: "-0.025em",
+                                    }}
+                                >
+                                    Vloot Beheer
+                                </h1>
+                            </div>
+                            {/* Logo next to main title */}
+                            {userInfo &&
+                                fullOrganizations.length > 0 &&
+                                (() => {
+                                    // Determine which organization to show logo for
+                                    let targetOrg = null
+
+                                    if (currentOrganization) {
+                                        // Find matching organization when specific org is selected
+                                        targetOrg =
+                                            fullOrganizations.find(
+                                                (org) =>
+                                                    org.name ===
+                                                    currentOrganization
+                                            ) ||
+                                            fullOrganizations.find(
+                                                (org) =>
+                                                    org.name &&
+                                                    currentOrganization &&
+                                                    org.name
+                                                        .toLowerCase()
+                                                        .trim() ===
+                                                        currentOrganization
+                                                            .toLowerCase()
+                                                            .trim()
+                                            )
+                                    } else if (
+                                        isUser(userInfo) &&
+                                        fullOrganizations.length === 1
+                                    ) {
+                                        // Show logo for single-org users
+                                        targetOrg = fullOrganizations[0]
+                                    }
+
+                                    if (!targetOrg) return null
+
+                                    return (
+                                        <LogoDisplay
+                                            organizationId={targetOrg.id}
+                                            organizationName={targetOrg.name}
+                                            size="large"
+                                            showFallback={false}
+                                        />
+                                    )
+                                })()}
                         </div>
                         <div
                             style={{
@@ -4213,20 +4220,28 @@ function InsuredObjectList() {
                             >
                                 {filteredObjects.length} objecten
                             </div>
-                            <PrintOverviewButton onPrintClick={() => setShowPrintModal(true)} />
-                            <CreateObjectButton onCreateClick={() => setShowCreateForm(true)} />
+                            <PrintOverviewButton
+                                onPrintClick={() => setShowPrintModal(true)}
+                            />
+                            <CreateObjectButton
+                                onCreateClick={() => setShowCreateForm(true)}
+                            />
                         </div>
                     </div>
 
                     {/* Auto Accept Rules Display - only show when viewing specific organization */}
                     {currentOrganization && (
-                        <div style={{
-                            marginTop: "16px",
-                            marginBottom: "8px",
-                            display: "flex",
-                            justifyContent: "flex-start",
-                        }}>
-                            <AutoAcceptRulesDisplay organizationName={currentOrganization} />
+                        <div
+                            style={{
+                                marginTop: "16px",
+                                marginBottom: "8px",
+                                display: "flex",
+                                justifyContent: "flex-start",
+                            }}
+                        >
+                            <AutoAcceptRulesDisplay
+                                organizationName={currentOrganization}
+                            />
                         </div>
                     )}
 
@@ -4238,8 +4253,7 @@ function InsuredObjectList() {
                         organizations={organizations}
                         selectedOrganizations={selectedOrganizations}
                         onOrganizationChange={toggleOrganization}
-                        selectedObjectTypes={selectedObjectTypes}
-                        onObjectTypeChange={toggleObjectType}
+                        // Object type filter props removed
                         showOrgFilter={
                             isAdmin(userInfo) && !currentOrganization
                         }
@@ -4272,21 +4286,22 @@ function InsuredObjectList() {
                             }}
                         >
                             <tr>
-                                {/* Actions Column */}
-                                <th
-                                    style={{
-                                        padding: "12px 8px",
-                                        textAlign: "left",
-                                        borderBottom: "2px solid #e2e8f0",
-                                        fontWeight: "600",
-                                        color: "#475569",
-                                        fontSize: "13px",
-                                        width: "100px",
-                                    }}
-                                >
-                                    Actions
-                                </th>
-
+                                {/* Actions Column - only show if user can perform actions */}
+                                {canPerformActions && (
+                                    <th
+                                        style={{
+                                            padding: "12px 8px",
+                                            textAlign: "left",
+                                            borderBottom: "2px solid #e2e8f0",
+                                            fontWeight: "600",
+                                            color: "#475569",
+                                            fontSize: "13px",
+                                            width: "100px",
+                                        }}
+                                    >
+                                        Actions
+                                    </th>
+                                )}
 
                                 {/* Dynamic columns */}
                                 {visibleColumnsList.map((col) => (
@@ -4323,42 +4338,50 @@ function InsuredObjectList() {
                                             object.status === "OutOfPolicy"
                                                 ? "#f9fafb"
                                                 : index % 2 === 0
-                                                    ? "#ffffff"
-                                                    : "#f8fafc",
-                                        opacity: object.status === "OutOfPolicy" ? 0.6 : 1,
-                                        transition: "background-color 0.2s, opacity 0.2s",
+                                                  ? "#ffffff"
+                                                  : "#f8fafc",
+                                        opacity:
+                                            object.status === "OutOfPolicy"
+                                                ? 0.6
+                                                : 1,
+                                        transition:
+                                            "background-color 0.2s, opacity 0.2s",
                                     }}
                                     onMouseOver={(e) => {
                                         if (object.status !== "OutOfPolicy") {
-                                            e.currentTarget.style.backgroundColor = "#f1f5f9"
+                                            e.currentTarget.style.backgroundColor =
+                                                "#f1f5f9"
                                         }
                                     }}
                                     onMouseOut={(e) => {
-                                        const originalBg = object.status === "OutOfPolicy"
-                                            ? "#f9fafb"
-                                            : index % 2 === 0
-                                                ? "#ffffff"
-                                                : "#f8fafc"
-                                        e.currentTarget.style.backgroundColor = originalBg
+                                        const originalBg =
+                                            object.status === "OutOfPolicy"
+                                                ? "#f9fafb"
+                                                : index % 2 === 0
+                                                  ? "#ffffff"
+                                                  : "#f8fafc"
+                                        e.currentTarget.style.backgroundColor =
+                                            originalBg
                                     }}
                                 >
-                                    {/* Actions cell */}
-                                    <td
-                                        style={{
-                                            padding: "12px 8px",
-                                            borderBottom: "1px solid #f1f5f9",
-                                            whiteSpace: "nowrap",
-                                            textAlign: "right",
-                                        }}
-                                    >
-                                        <ActionDropdownMenu
-                                            object={object}
-                                            onEdit={handleEdit}
-                                            onDelete={handleDelete}
-                                            userInfo={userInfo}
-                                        />
-                                    </td>
-
+                                    {/* Actions cell - only show if user can perform actions */}
+                                    {canPerformActions && (
+                                        <td
+                                            style={{
+                                                padding: "12px 8px",
+                                                borderBottom: "1px solid #f1f5f9",
+                                                whiteSpace: "nowrap",
+                                                textAlign: "right",
+                                            }}
+                                        >
+                                            <ActionDropdownMenu
+                                                object={object}
+                                                onEdit={handleEdit}
+                                                onDelete={handleDelete}
+                                                userInfo={userInfo}
+                                            />
+                                        </td>
+                                    )}
 
                                     {/* Dynamic data cells */}
                                     {visibleColumnsList.map((col) => {
@@ -4425,91 +4448,153 @@ function InsuredObjectList() {
 
                                         // Special handling for uitgangsdatum column to make it clickable
                                         if (col.key === "uitgangsdatum") {
-                                            const cellValue = object.uitgangsdatum
-                                            const hasValue = cellValue && cellValue.trim() !== ""
-                                            
+                                            const cellValue =
+                                                object.uitgangsdatum
+                                            const hasValue =
+                                                cellValue &&
+                                                cellValue.trim() !== ""
+
                                             return (
                                                 <td
                                                     key={col.key}
                                                     style={{
                                                         padding: "12px 8px",
-                                                        borderBottom: "1px solid #f1f5f9",
+                                                        borderBottom:
+                                                            "1px solid #f1f5f9",
                                                         color: "#374151",
                                                         fontSize: "13px",
                                                         lineHeight: "1.3",
-                                                        cursor: object.status !== "OutOfPolicy" ? "pointer" : "default",
+                                                        cursor:
+                                                            object.status !==
+                                                            "OutOfPolicy"
+                                                                ? "pointer"
+                                                                : "default",
                                                     }}
                                                     onClick={() => {
-                                                        if (object.status !== "OutOfPolicy") {
-                                                            handleUitgangsdatumClick(object.id, cellValue)
+                                                        if (
+                                                            object.status !==
+                                                            "OutOfPolicy"
+                                                        ) {
+                                                            handleUitgangsdatumClick(
+                                                                object.id,
+                                                                cellValue
+                                                            )
                                                         }
                                                     }}
                                                     onMouseOver={(e) => {
-                                                        if (object.status !== "OutOfPolicy" && !hasValue) {
-                                                            const div = e.currentTarget.querySelector('div')
+                                                        if (
+                                                            object.status !==
+                                                                "OutOfPolicy" &&
+                                                            !hasValue
+                                                        ) {
+                                                            const div =
+                                                                e.currentTarget.querySelector(
+                                                                    "div"
+                                                                )
                                                             if (div) {
-                                                                div.style.backgroundColor = "#bfdbfe"
-                                                                div.style.borderColor = "#1d4ed8"
-                                                                div.style.transform = "scale(1.02)"
+                                                                div.style.backgroundColor =
+                                                                    "#bfdbfe"
+                                                                div.style.borderColor =
+                                                                    "#1d4ed8"
+                                                                div.style.transform =
+                                                                    "scale(1.02)"
                                                             }
                                                         }
                                                     }}
                                                     onMouseOut={(e) => {
-                                                        if (object.status !== "OutOfPolicy" && !hasValue) {
-                                                            const div = e.currentTarget.querySelector('div')
+                                                        if (
+                                                            object.status !==
+                                                                "OutOfPolicy" &&
+                                                            !hasValue
+                                                        ) {
+                                                            const div =
+                                                                e.currentTarget.querySelector(
+                                                                    "div"
+                                                                )
                                                             if (div) {
-                                                                div.style.backgroundColor = "#dbeafe"
-                                                                div.style.borderColor = "#3b82f6"
-                                                                div.style.transform = "scale(1)"
+                                                                div.style.backgroundColor =
+                                                                    "#dbeafe"
+                                                                div.style.borderColor =
+                                                                    colors.primary
+                                                                div.style.transform =
+                                                                    "scale(1)"
                                                             }
                                                         }
                                                     }}
                                                     title={
-                                                        object.status !== "OutOfPolicy" 
+                                                        object.status !==
+                                                        "OutOfPolicy"
                                                             ? "Klik om uitgangsdatum in te stellen"
                                                             : "Uitgangsdatum is al ingesteld"
                                                     }
                                                 >
                                                     <div
                                                         style={{
-                                                            padding: hasValue ? "6px 12px" : "8px 16px",
+                                                            padding: hasValue
+                                                                ? "6px 12px"
+                                                                : "8px 16px",
                                                             borderRadius: "8px",
-                                                            backgroundColor: 
-                                                                object.status !== "OutOfPolicy" 
-                                                                    ? (hasValue ? "#f8fafc" : "#dbeafe")
+                                                            backgroundColor:
+                                                                object.status !==
+                                                                "OutOfPolicy"
+                                                                    ? hasValue
+                                                                        ? "#f8fafc"
+                                                                        : "#dbeafe"
                                                                     : "transparent",
-                                                            border: 
-                                                                object.status !== "OutOfPolicy" && !hasValue
+                                                            border:
+                                                                object.status !==
+                                                                    "OutOfPolicy" &&
+                                                                !hasValue
                                                                     ? "1px solid #3b82f6"
                                                                     : hasValue
-                                                                        ? "1px solid #e5e7eb"
-                                                                        : "none",
-                                                            color: 
-                                                                object.status !== "OutOfPolicy"
-                                                                    ? (hasValue ? "#374151" : "#1d4ed8")
+                                                                      ? "1px solid #e5e7eb"
+                                                                      : "none",
+                                                            color:
+                                                                object.status !==
+                                                                "OutOfPolicy"
+                                                                    ? hasValue
+                                                                        ? "#374151"
+                                                                        : "#1d4ed8"
                                                                     : "#d1d5db",
-                                                            fontWeight: hasValue ? "normal" : "500",
-                                                            fontSize: hasValue ? "13px" : "12px",
-                                                            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+                                                            fontWeight: hasValue
+                                                                ? "normal"
+                                                                : "500",
+                                                            fontSize: hasValue
+                                                                ? "13px"
+                                                                : "12px",
+                                                            fontFamily:
+                                                                "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
                                                             textAlign: "center",
-                                                            minWidth: hasValue ? "auto" : "160px",
-                                                            transition: "all 0.2s ease",
-                                                            opacity: object.status === "OutOfPolicy" ? 0.8 : 1,
+                                                            minWidth: hasValue
+                                                                ? "auto"
+                                                                : "160px",
+                                                            transition:
+                                                                "all 0.2s ease",
+                                                            opacity:
+                                                                object.status ===
+                                                                "OutOfPolicy"
+                                                                    ? 0.8
+                                                                    : 1,
                                                         }}
                                                     >
                                                         {hasValue
-                                                            ? new Date(cellValue).toLocaleDateString()
-                                                            : object.status !== "OutOfPolicy"
-                                                                ? "Klik hier om een uitgangsdatum aan te geven"
-                                                                : "-"
-                                                        }
+                                                            ? new Date(
+                                                                  cellValue
+                                                              ).toLocaleDateString()
+                                                            : object.status !==
+                                                                "OutOfPolicy"
+                                                              ? "Klik hier om een uitgangsdatum aan te geven"
+                                                              : "-"}
                                                     </div>
                                                 </td>
                                             )
                                         }
 
                                         // Regular cell rendering using direct field access
-                                        const cellValue = object[col.key as keyof InsuredObject]
+                                        const cellValue =
+                                            object[
+                                                col.key as keyof InsuredObject
+                                            ]
 
                                         return (
                                             <td
@@ -4526,7 +4611,10 @@ function InsuredObjectList() {
                                                 }}
                                                 title={String(cellValue ?? "-")}
                                             >
-                                                {renderObjectCellValue(col, cellValue)}
+                                                {renderObjectCellValue(
+                                                    col,
+                                                    cellValue
+                                                )}
                                             </td>
                                         )
                                     })}
@@ -4537,8 +4625,11 @@ function InsuredObjectList() {
                 </div>
             </div>
 
-            {/* Totals Display */}
-            <TotalsDisplay objects={filteredObjects} />
+            {/* Enhanced Totals Display with Status-Aware Calculations */}
+            <EnhancedTotalsDisplay
+                objects={filteredObjects as EnhancedInsuredObject[]}
+                showBreakdown={true}
+            />
 
             {/* Notifications */}
             {successMessage &&
@@ -4631,6 +4722,7 @@ function InsuredObjectList() {
                                 )
                             }}
                             schema={COLUMNS}
+                            userInfo={userInfo}
                         />
                     </>,
                     document.body
@@ -4660,409 +4752,617 @@ function InsuredObjectList() {
                 )}
 
             {showCreateForm && (
-                <CreateObjectModal 
-                    onClose={() => setShowCreateForm(false)} 
+                <CreateObjectModal
+                    onClose={() => setShowCreateForm(false)}
                     onOrganizationSelect={setCurrentOrganization}
                 />
             )}
 
             {/* Uitgangsdatum Confirmation Modal */}
-            {showUitgangsdatumModal && ReactDOM.createPortal(
-                <>
-                    <div
-                        style={styles.modalOverlay}
-                        onClick={handleUitgangsdatumCancel}
-                    >
+            {showUitgangsdatumModal &&
+                ReactDOM.createPortal(
+                    <>
                         <div
-                            style={{
-                                ...styles.modal,
-                                width: "400px",
-                                maxWidth: "90vw",
-                                padding: "24px",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
+                            style={styles.modalOverlay}
+                            onClick={handleUitgangsdatumCancel}
                         >
-                            <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", fontWeight: "600", color: colors.gray800, fontFamily: FONT_STACK }}>
-                                Uitgangsdatum instellen
-                            </h3>
-                            
-                            <p style={{ ...styles.description, margin: "0 0 16px 0" }}>
-                                Door het instellen van een uitgangsdatum wordt de status automatisch gewijzigd naar "Buiten Polis". Dit betekent dat het object niet meer onder het beleid valt.
-                            </p>
-
-                            <div style={{ marginBottom: "16px" }}>
-                                <label style={styles.label}>
-                                    Uitgangsdatum:
-                                </label>
-                                <input
-                                    type="date"
-                                    value={selectedUitgangsdatum}
-                                    onChange={(e) => {
-                                        setSelectedUitgangsdatum(e.target.value)
-                                        setUitgangsdatumError(null) // Clear error when user changes date
-                                    }}
+                            <div
+                                style={{
+                                    ...styles.modal,
+                                    width: "400px",
+                                    maxWidth: "90vw",
+                                    padding: "24px",
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <h3
                                     style={{
-                                        ...styles.input,
-                                        border: uitgangsdatumError ? `1px solid ${colors.error}` : `1px solid ${colors.gray300}`,
+                                        margin: "0 0 16px 0",
+                                        fontSize: "18px",
+                                        fontWeight: "600",
+                                        color: colors.gray800,
+                                        fontFamily: FONT_STACK,
                                     }}
-                                />
-                            </div>
+                                >
+                                    Uitgangsdatum instellen
+                                </h3>
 
-                            {uitgangsdatumError && (
-                                <div style={{
-                                    ...styles.errorAlert,
-                                    marginBottom: "16px",
-                                }}>
-                                    {uitgangsdatumError}
+                                <p
+                                    style={{
+                                        ...styles.description,
+                                        margin: "0 0 16px 0",
+                                    }}
+                                >
+                                    Door het instellen van een uitgangsdatum
+                                    wordt de status automatisch gewijzigd naar
+                                    "Buiten Polis". Dit betekent dat het object
+                                    niet meer onder het beleid valt.
+                                </p>
+
+                                <div style={{ marginBottom: "16px" }}>
+                                    <label style={styles.label}>
+                                        Uitgangsdatum:
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={selectedUitgangsdatum}
+                                        onChange={(e) => {
+                                            setSelectedUitgangsdatum(
+                                                e.target.value
+                                            )
+                                            setUitgangsdatumError(null) // Clear error when user changes date
+                                        }}
+                                        style={{
+                                            ...styles.input,
+                                            border: uitgangsdatumError
+                                                ? `1px solid ${colors.error}`
+                                                : `1px solid ${colors.gray300}`,
+                                        }}
+                                    />
                                 </div>
-                            )}
 
-                            <div style={styles.buttonGroup}>
-                                <button
-                                    onClick={handleUitgangsdatumCancel}
-                                    style={{
-                                        fontFamily: FONT_STACK,
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                        borderRadius: "6px",
-                                        padding: "10px 16px",
-                                        border: "1px solid",
-                                        cursor: "pointer",
-                                        transition: "all 0.15s ease",
-                                        outline: "none",
-                                        backgroundColor: "#f3f4f6",
-                                        color: "#374151",
-                                        borderColor: "#d1d5db",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#e5e7eb"
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#f3f4f6"
-                                    }}
-                                >
-                                    Annuleren
-                                </button>
-                                <button
-                                    onClick={handleUitgangsdatumConfirm}
-                                    style={{
-                                        fontFamily: FONT_STACK,
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                        borderRadius: "6px",
-                                        padding: "10px 16px",
-                                        border: "1px solid",
-                                        cursor: "pointer",
-                                        transition: "all 0.15s ease",
-                                        outline: "none",
-                                        backgroundColor: "#3b82f6",
-                                        color: "#ffffff",
-                                        borderColor: "#3b82f6",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#2563eb"
-                                        e.currentTarget.style.borderColor = "#2563eb"
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = "#3b82f6"
-                                        e.currentTarget.style.borderColor = "#3b82f6"
-                                    }}
-                                >
-                                    Bevestigen
-                                </button>
+                                {uitgangsdatumError && (
+                                    <div
+                                        style={{
+                                            ...styles.errorAlert,
+                                            marginBottom: "16px",
+                                        }}
+                                    >
+                                        {uitgangsdatumError}
+                                    </div>
+                                )}
+
+                                <div style={styles.buttonGroup}>
+                                    <button
+                                        onClick={handleUitgangsdatumCancel}
+                                        style={{
+                                            fontFamily: FONT_STACK,
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            borderRadius: "6px",
+                                            padding: "10px 16px",
+                                            border: "1px solid",
+                                            cursor: "pointer",
+                                            transition: "all 0.15s ease",
+                                            outline: "none",
+                                            backgroundColor: "#f3f4f6",
+                                            color: "#374151",
+                                            borderColor: "#d1d5db",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                "#e5e7eb"
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                "#f3f4f6"
+                                        }}
+                                    >
+                                        Annuleren
+                                    </button>
+                                    <button
+                                        onClick={handleUitgangsdatumConfirm}
+                                        style={{
+                                            fontFamily: FONT_STACK,
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            borderRadius: "6px",
+                                            padding: "10px 16px",
+                                            border: "1px solid",
+                                            cursor: "pointer",
+                                            transition: "all 0.15s ease",
+                                            outline: "none",
+                                            backgroundColor: colors.primary,
+                                            color: "#ffffff",
+                                            borderColor: colors.primary,
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                "#2563eb"
+                                            e.currentTarget.style.borderColor =
+                                                "#2563eb"
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.primary
+                                            e.currentTarget.style.borderColor =
+                                                colors.primary
+                                        }}
+                                    >
+                                        Bevestigen
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </>,
-                document.body
-            )}
+                    </>,
+                    document.body
+                )}
 
             {/* Print Modal */}
-            {showPrintModal && ReactDOM.createPortal(
-                <>
-                    <div
-                        style={styles.modalOverlay}
-                        onClick={() => setShowPrintModal(false)}
-                    >
+            {showPrintModal &&
+                ReactDOM.createPortal(
+                    <>
                         <div
-                            style={{
-                                ...styles.modal,
-                                width: "800px",
-                                maxWidth: "90vw",
-                                maxHeight: "90vh",
-                                padding: "24px",
-                            }}
-                            onClick={(e) => e.stopPropagation()}
+                            style={styles.modalOverlay}
+                            onClick={() => setShowPrintModal(false)}
                         >
-                            <h3 style={{ 
-                                margin: "0 0 24px 0", 
-                                fontSize: "20px", 
-                                fontWeight: "600", 
-                                color: colors.gray800, 
-                                fontFamily: FONT_STACK 
-                            }}>
-                                Print Overzicht
-                            </h3>
+                            <div
+                                style={{
+                                    ...styles.modal,
+                                    width: "800px",
+                                    maxWidth: "90vw",
+                                    maxHeight: "90vh",
+                                    padding: "24px",
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <h3
+                                    style={{
+                                        margin: "0 0 24px 0",
+                                        fontSize: "20px",
+                                        fontWeight: "600",
+                                        color: colors.gray800,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                >
+                                    Print Overzicht
+                                </h3>
 
-                            <div style={{ marginBottom: "24px" }}>
-                                <h4 style={{ 
-                                    margin: "0 0 12px 0", 
-                                    fontSize: "16px", 
-                                    fontWeight: "500", 
-                                    color: colors.gray700,
-                                    fontFamily: FONT_STACK 
-                                }}>
-                                    Selecteer objecten ({filteredObjects.length} beschikbaar)
-                                </h4>
-                                
-                                <div style={{ 
-                                    display: "flex", 
-                                    gap: "12px", 
-                                    marginBottom: "16px" 
-                                }}>
-                                    <button
-                                        onClick={() => setSelectedPrintObjects(new Set(filteredObjects.map(obj => obj.id)))}
+                                <div style={{ marginBottom: "24px" }}>
+                                    <h4
                                         style={{
-                                            ...styles.secondaryButton,
-                                            padding: "6px 12px",
-                                            fontSize: "12px",
+                                            margin: "0 0 12px 0",
+                                            fontSize: "16px",
+                                            fontWeight: "500",
+                                            color: colors.gray700,
+                                            fontFamily: FONT_STACK,
                                         }}
                                     >
-                                        Alles selecteren
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedPrintObjects(new Set())}
+                                        Selecteer objecten (
+                                        {filteredObjects.length} beschikbaar)
+                                    </h4>
+
+                                    <div
                                         style={{
-                                            ...styles.secondaryButton,
-                                            padding: "6px 12px",
-                                            fontSize: "12px",
+                                            display: "flex",
+                                            gap: "12px",
+                                            marginBottom: "16px",
                                         }}
                                     >
-                                        Alles deselecteren
-                                    </button>
-                                </div>
+                                        <button
+                                            onClick={() =>
+                                                setSelectedPrintObjects(
+                                                    new Set(
+                                                        filteredObjects.map(
+                                                            (obj) => obj.id
+                                                        )
+                                                    )
+                                                )
+                                            }
+                                            style={{
+                                                ...styles.secondaryButton,
+                                                padding: "6px 12px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
+                                            Alles selecteren
+                                        </button>
+                                        <button
+                                            onClick={() =>
+                                                setSelectedPrintObjects(
+                                                    new Set()
+                                                )
+                                            }
+                                            style={{
+                                                ...styles.secondaryButton,
+                                                padding: "6px 12px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
+                                            Alles deselecteren
+                                        </button>
+                                    </div>
 
-                                <div style={{
-                                    maxHeight: "200px",
-                                    overflowY: "auto",
-                                    border: `1px solid ${colors.gray200}`,
-                                    borderRadius: "8px",
-                                    padding: "12px",
-                                    backgroundColor: colors.gray50
-                                }}>
-                                    {filteredObjects.map(obj => (
-                                        <div key={obj.id} style={{ 
-                                            display: "flex", 
-                                            alignItems: "center", 
-                                            gap: "8px", 
-                                            marginBottom: "8px" 
-                                        }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedPrintObjects.has(obj.id)}
-                                                onChange={(e) => {
-                                                    const newSelected = new Set(selectedPrintObjects)
-                                                    if (e.target.checked) {
-                                                        newSelected.add(obj.id)
-                                                    } else {
-                                                        newSelected.delete(obj.id)
-                                                    }
-                                                    setSelectedPrintObjects(newSelected)
+                                    <div
+                                        style={{
+                                            maxHeight: "200px",
+                                            overflowY: "auto",
+                                            border: `1px solid ${colors.gray200}`,
+                                            borderRadius: "8px",
+                                            padding: "12px",
+                                            backgroundColor: colors.gray50,
+                                        }}
+                                    >
+                                        {filteredObjects.map((obj) => (
+                                            <div
+                                                key={obj.id}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                    marginBottom: "8px",
                                                 }}
-                                                style={{ cursor: "pointer" }}
-                                            />
-                                            <span style={{ 
-                                                fontSize: "14px", 
-                                                color: colors.gray700,
-                                                fontFamily: FONT_STACK 
-                                            }}>
-                                                {(() => {
-                                                    const objectType = obj.objectType || "onbekend"
-                                                    
-                                                    // Use actual available field names based on object type
-                                                    let brand = ""
-                                                    let type = ""
-                                                    let identifier = ""
-                                                    
-                                                    if (objectType === "boot") {
-                                                        brand = obj.merkBoot || "Onbekend merk"
-                                                        type = obj.typeBoot || "Onbekend type"
-                                                        identifier = obj.bootnummer || obj.cinNummer || ""
-                                                    } else if (objectType === "motor") {
-                                                        brand = obj.merkMotor || "Onbekend merk"  
-                                                        type = obj.typeMotor || "Onbekend type"
-                                                        identifier = obj.motornummer || obj.motorSerienummer || ""
-                                                    } else if (objectType === "trailer") {
-                                                        brand = obj.merkTrailer || "Onbekend merk"
-                                                        type = obj.typeTrailer || "Onbekend type"
-                                                        identifier = obj.chassisnummer || ""
-                                                    } else {
-                                                        // Fallback: try any available brand/type field
-                                                        brand = obj.merkBoot || obj.merkMotor || obj.merkTrailer || "Onbekend merk"
-                                                        type = obj.typeBoot || obj.typeMotor || obj.typeTrailer || "Onbekend type"
-                                                        identifier = obj.bootnummer || obj.motornummer || obj.chassisnummer || obj.cinNummer || ""
-                                                    }
-                                                    
-                                                    const typeLabel = objectType === "boot" ? "boot" : objectType === "motor" ? "motor" : objectType === "trailer" ? "trailer" : objectType
-                                                    
-                                                    return `${brand} ${type} (${typeLabel})${identifier ? ` - ${identifier}` : ""}`
-                                                })()}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPrintObjects.has(
+                                                        obj.id
+                                                    )}
+                                                    onChange={(e) => {
+                                                        const newSelected =
+                                                            new Set(
+                                                                selectedPrintObjects
+                                                            )
+                                                        if (e.target.checked) {
+                                                            newSelected.add(
+                                                                obj.id
+                                                            )
+                                                        } else {
+                                                            newSelected.delete(
+                                                                obj.id
+                                                            )
+                                                        }
+                                                        setSelectedPrintObjects(
+                                                            newSelected
+                                                        )
+                                                    }}
+                                                    style={{
+                                                        cursor: "pointer",
+                                                    }}
+                                                />
+                                                <span
+                                                    style={{
+                                                        fontSize: "14px",
+                                                        color: colors.gray700,
+                                                        fontFamily: FONT_STACK,
+                                                    }}
+                                                >
+                                                    {(() => {
+                                                        const objectType =
+                                                            obj.objectType ||
+                                                            "onbekend"
 
-                            <div style={{ marginBottom: "24px" }}>
-                                <h4 style={{ 
-                                    margin: "0 0 12px 0", 
-                                    fontSize: "16px", 
-                                    fontWeight: "500", 
-                                    color: colors.gray700,
-                                    fontFamily: FONT_STACK 
-                                }}>
-                                    Selecteer velden
-                                </h4>
-                                
-                                <div style={{ 
-                                    display: "flex", 
-                                    gap: "12px", 
-                                    marginBottom: "16px" 
-                                }}>
-                                    <button
-                                        onClick={() => setSelectedPrintFields(new Set(printableFields.map(col => col.key)))}
+                                                        // Use actual available field names based on object type
+                                                        let brand = ""
+                                                        let type = ""
+                                                        let identifier = ""
+                                                        const naam =
+                                                            obj.naam || ""
+
+                                                        if (
+                                                            objectType ===
+                                                            "boat"
+                                                        ) {
+                                                            brand =
+                                                                obj.merkBoot ||
+                                                                "Onbekend merk"
+                                                            type =
+                                                                obj.typeBoot ||
+                                                                "Onbekend type"
+                                                            identifier =
+                                                                obj.bootnummer ||
+                                                                obj.cinNummer ||
+                                                                ""
+                                                        } else if (
+                                                            objectType ===
+                                                            "motor"
+                                                        ) {
+                                                            brand =
+                                                                obj.merkMotor ||
+                                                                "Onbekend merk"
+                                                            type =
+                                                                obj.typeMotor ||
+                                                                "Onbekend type"
+                                                            identifier =
+                                                                obj.motornummer ||
+                                                                obj.motorSerienummer ||
+                                                                ""
+                                                        } else if (
+                                                            objectType ===
+                                                            "trailer"
+                                                        ) {
+                                                            brand =
+                                                                obj.merkTrailer ||
+                                                                "Onbekend merk"
+                                                            type =
+                                                                obj.typeTrailer ||
+                                                                "Onbekend type"
+                                                            identifier =
+                                                                obj.chassisnummer ||
+                                                                ""
+                                                        } else {
+                                                            // Fallback: try any available brand/type field
+                                                            brand =
+                                                                obj.merkBoot ||
+                                                                obj.merkMotor ||
+                                                                obj.merkTrailer ||
+                                                                "Onbekend merk"
+                                                            type =
+                                                                obj.typeBoot ||
+                                                                obj.typeMotor ||
+                                                                obj.typeTrailer ||
+                                                                "Onbekend type"
+                                                            identifier =
+                                                                obj.bootnummer ||
+                                                                obj.motornummer ||
+                                                                obj.chassisnummer ||
+                                                                obj.cinNummer ||
+                                                                ""
+                                                        }
+
+                                                        const typeLabel =
+                                                            objectType ===
+                                                            "boat"
+                                                                ? "boot"
+                                                                : objectType ===
+                                                                    "motor"
+                                                                  ? "motor"
+                                                                  : objectType ===
+                                                                      "trailer"
+                                                                    ? "trailer"
+                                                                    : objectType
+
+                                                        // Include naam in the display if it exists
+                                                        const nameDisplay = naam
+                                                            ? `${naam} - `
+                                                            : ""
+
+                                                        return `${nameDisplay}${brand} ${type} (${typeLabel})${identifier ? ` - ${identifier}` : ""}`
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: "24px" }}>
+                                    <h4
                                         style={{
-                                            ...styles.secondaryButton,
-                                            padding: "6px 12px",
-                                            fontSize: "12px",
+                                            margin: "0 0 12px 0",
+                                            fontSize: "16px",
+                                            fontWeight: "500",
+                                            color: colors.gray700,
+                                            fontFamily: FONT_STACK,
                                         }}
                                     >
-                                        Alle velden
+                                        Selecteer velden
+                                    </h4>
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: "12px",
+                                            marginBottom: "16px",
+                                        }}
+                                    >
+                                        <button
+                                            onClick={() =>
+                                                setSelectedPrintFields(
+                                                    new Set(
+                                                        printableFields.map(
+                                                            (col) => col.key
+                                                        )
+                                                    )
+                                                )
+                                            }
+                                            style={{
+                                                ...styles.secondaryButton,
+                                                padding: "6px 12px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
+                                            Alle velden
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const basicFields = [
+                                                    "objectType",
+                                                    "merkBoot",
+                                                    "typeBoot",
+                                                    "merkMotor",
+                                                    "typeMotor",
+                                                    "waarde",
+                                                    "premiepromillage",
+                                                    "status",
+                                                ]
+                                                setSelectedPrintFields(
+                                                    new Set(
+                                                        basicFields.filter(
+                                                            (field) =>
+                                                                printableFields.some(
+                                                                    (col) =>
+                                                                        col.key ===
+                                                                        field
+                                                                )
+                                                        )
+                                                    )
+                                                )
+                                            }}
+                                            style={{
+                                                ...styles.secondaryButton,
+                                                padding: "6px 12px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
+                                            Basis velden
+                                        </button>
+                                        <button
+                                            onClick={() =>
+                                                setSelectedPrintFields(
+                                                    new Set()
+                                                )
+                                            }
+                                            style={{
+                                                ...styles.secondaryButton,
+                                                padding: "6px 12px",
+                                                fontSize: "12px",
+                                            }}
+                                        >
+                                            Geen velden
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            maxHeight: "150px",
+                                            overflowY: "auto",
+                                            border: `1px solid ${colors.gray200}`,
+                                            borderRadius: "8px",
+                                            padding: "12px",
+                                            backgroundColor: colors.gray50,
+                                            display: "grid",
+                                            gridTemplateColumns:
+                                                "repeat(auto-fill, minmax(200px, 1fr))",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        {printableFields.map((col) => (
+                                            <div
+                                                key={col.key}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPrintFields.has(
+                                                        col.key
+                                                    )}
+                                                    onChange={(e) => {
+                                                        const newSelected =
+                                                            new Set(
+                                                                selectedPrintFields
+                                                            )
+                                                        if (e.target.checked) {
+                                                            newSelected.add(
+                                                                col.key
+                                                            )
+                                                        } else {
+                                                            newSelected.delete(
+                                                                col.key
+                                                            )
+                                                        }
+                                                        setSelectedPrintFields(
+                                                            newSelected
+                                                        )
+                                                    }}
+                                                    style={{
+                                                        cursor: "pointer",
+                                                    }}
+                                                />
+                                                <span
+                                                    style={{
+                                                        fontSize: "13px",
+                                                        color: colors.gray700,
+                                                        fontFamily: FONT_STACK,
+                                                    }}
+                                                >
+                                                    {col.label}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: "24px" }}>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={includeTotals}
+                                            onChange={(e) =>
+                                                setIncludeTotals(
+                                                    e.target.checked
+                                                )
+                                            }
+                                            style={{ cursor: "pointer" }}
+                                        />
+                                        <span
+                                            style={{
+                                                fontSize: "14px",
+                                                color: colors.gray700,
+                                                fontFamily: FONT_STACK,
+                                            }}
+                                        >
+                                            Totaaloverzicht toevoegen
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div style={styles.buttonGroup}>
+                                    <button
+                                        onClick={() => setShowPrintModal(false)}
+                                        style={styles.secondaryButton}
+                                    >
+                                        Annuleren
                                     </button>
                                     <button
                                         onClick={() => {
-                                            const basicFields = ['objectType', 'merkBoot', 'typeBoot', 'merkMotor', 'typeMotor', 'waarde', 'premiepromillage', 'status']
-                                            setSelectedPrintFields(new Set(basicFields.filter(field => printableFields.some(col => col.key === field))))
+                                            if (
+                                                selectedPrintObjects.size === 0
+                                            ) {
+                                                alert(
+                                                    "Selecteer minimaal één object om te printen."
+                                                )
+                                                return
+                                            }
+                                            if (
+                                                selectedPrintFields.size === 0
+                                            ) {
+                                                alert(
+                                                    "Selecteer minimaal één veld om te printen."
+                                                )
+                                                return
+                                            }
+                                            generatePDF()
                                         }}
                                         style={{
-                                            ...styles.secondaryButton,
-                                            padding: "6px 12px",
-                                            fontSize: "12px",
+                                            ...styles.primaryButton,
+                                            opacity:
+                                                selectedPrintObjects.size ===
+                                                    0 ||
+                                                selectedPrintFields.size === 0
+                                                    ? 0.6
+                                                    : 1,
                                         }}
                                     >
-                                        Basis velden
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedPrintFields(new Set())}
-                                        style={{
-                                            ...styles.secondaryButton,
-                                            padding: "6px 12px",
-                                            fontSize: "12px",
-                                        }}
-                                    >
-                                        Geen velden
+                                        <FaPrint size={14} />
+                                        PDF Genereren
                                     </button>
                                 </div>
-
-                                <div style={{
-                                    maxHeight: "150px",
-                                    overflowY: "auto",
-                                    border: `1px solid ${colors.gray200}`,
-                                    borderRadius: "8px",
-                                    padding: "12px",
-                                    backgroundColor: colors.gray50,
-                                    display: "grid",
-                                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                                    gap: "8px"
-                                }}>
-                                    {printableFields.map(col => (
-                                        <div key={col.key} style={{ 
-                                            display: "flex", 
-                                            alignItems: "center", 
-                                            gap: "8px" 
-                                        }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedPrintFields.has(col.key)}
-                                                onChange={(e) => {
-                                                    const newSelected = new Set(selectedPrintFields)
-                                                    if (e.target.checked) {
-                                                        newSelected.add(col.key)
-                                                    } else {
-                                                        newSelected.delete(col.key)
-                                                    }
-                                                    setSelectedPrintFields(newSelected)
-                                                }}
-                                                style={{ cursor: "pointer" }}
-                                            />
-                                            <span style={{ 
-                                                fontSize: "13px", 
-                                                color: colors.gray700,
-                                                fontFamily: FONT_STACK 
-                                            }}>
-                                                {col.label}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div style={{ marginBottom: "24px" }}>
-                                <div style={{ 
-                                    display: "flex", 
-                                    alignItems: "center", 
-                                    gap: "8px" 
-                                }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={includeTotals}
-                                        onChange={(e) => setIncludeTotals(e.target.checked)}
-                                        style={{ cursor: "pointer" }}
-                                    />
-                                    <span style={{ 
-                                        fontSize: "14px", 
-                                        color: colors.gray700,
-                                        fontFamily: FONT_STACK 
-                                    }}>
-                                        Totaaloverzicht toevoegen
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div style={styles.buttonGroup}>
-                                <button
-                                    onClick={() => setShowPrintModal(false)}
-                                    style={styles.secondaryButton}
-                                >
-                                    Annuleren
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (selectedPrintObjects.size === 0) {
-                                            alert("Selecteer minimaal één object om te printen.")
-                                            return
-                                        }
-                                        if (selectedPrintFields.size === 0) {
-                                            alert("Selecteer minimaal één veld om te printen.")
-                                            return
-                                        }
-                                        generatePDF()
-                                    }}
-                                    style={{
-                                        ...styles.primaryButton,
-                                        opacity: (selectedPrintObjects.size === 0 || selectedPrintFields.size === 0) ? 0.6 : 1
-                                    }}
-                                >
-                                    <FaPrint size={14} />
-                                    PDF Genereren
-                                </button>
                             </div>
                         </div>
-                    </div>
-                </>,
-                document.body
-            )}
-            </div>
+                    </>,
+                    document.body
+                )}
+        </div>
     )
 }
 
@@ -5072,10 +5372,11 @@ function InsuredObjectList() {
 // utility functions, preventing discrepancies between individual object values and totals.
 
 // Helper function to calculate insurance period in days
-const calculateInsurancePeriod = (obj: InsuredObject): number => {
+// Legacy function - replaced by enhanced version in utils/premiumCalculations.ts
+const calculateInsurancePeriod_LEGACY = (obj: InsuredObject): number => {
     const startDate = obj.ingangsdatum ? new Date(obj.ingangsdatum) : new Date()
     let endDate: Date
-    
+
     if (obj.uitgangsdatum && obj.uitgangsdatum.trim() !== "") {
         endDate = new Date(obj.uitgangsdatum)
     } else {
@@ -5083,232 +5384,640 @@ const calculateInsurancePeriod = (obj: InsuredObject): number => {
         const currentYear = new Date().getFullYear()
         endDate = new Date(currentYear, 11, 31) // December 31st
     }
-    
+
     // Calculate difference in days
     const timeDifference = endDate.getTime() - startDate.getTime()
-    const daysDifference = Math.max(1, Math.ceil(timeDifference / (1000 * 3600 * 24)))
-    
+    const daysDifference = Math.max(
+        1,
+        Math.ceil(timeDifference / (1000 * 3600 * 24))
+    )
+
     return daysDifference
 }
 
 // Helper function to calculate individual premiums consistently
-const calculateObjectPremiums = (obj: InsuredObject) => {
+// Legacy function - replaced by enhanced version in utils/premiumCalculations.ts
+const calculateObjectPremiums_LEGACY = (obj: InsuredObject) => {
     const waarde = Number(obj.waarde) || 0
     const promillage = Number(obj.premiepromillage) || 0
-    const yearlyPremium = waarde * promillage / 1000
-    
+    const yearlyPremium = (waarde * promillage) / 1000
+
     // Calculate actual period premium based on days
-    const periodDays = calculateInsurancePeriod(obj)
+    const periodDays = calculateInsurancePeriod_LEGACY(obj)
     const periodPremium = yearlyPremium * (periodDays / 365)
-    
+
     return {
         yearlyPremium,
         periodPremium,
-        periodDays
+        periodDays,
     }
 }
 
 // Function to update object with calculated premium values
-const updateObjectWithCalculatedPremiums = (obj: InsuredObject): InsuredObject => {
-    const { yearlyPremium, periodPremium, periodDays } = calculateObjectPremiums(obj)
-    
+// Legacy function - replaced by enhanced version in utils/premiumCalculations.ts
+const updateObjectWithCalculatedPremiums_LEGACY = (
+    obj: InsuredObject
+): InsuredObject => {
+    const { yearlyPremium, periodPremium, periodDays } =
+        calculateObjectPremiums_LEGACY(obj)
+
     return {
         ...obj,
         totalePremieOverHetJaar: yearlyPremium,
         totalePremieOverDeVerzekerdePeriode: periodPremium,
-        aantalVerzekerdeDagen: periodDays
+        aantalVerzekerdeDagen: periodDays,
     }
 }
 
 // ——— Totals Display Component ———
-function TotalsDisplay({ 
-    objects, 
-    label 
-}: { 
-    objects: InsuredObject[], 
-    label?: string 
+function TotalsDisplay({
+    objects,
+    label,
+}: {
+    objects: InsuredObject[]
+    label?: string
 }) {
     if (!objects || objects.length === 0) {
         return null
     }
 
     // Use useMemo to recalculate totals efficiently when objects change
-    const { totalWaarde, totalPremieVerzekerdePeriode, totalPremieJaar, difference, percentageDifference } = React.useMemo(() => {
-        console.log('🧮 Recalculating totals for', objects.length, 'objects')
-        
+    const {
+        totalWaarde,
+        totalPremieVerzekerdePeriode,
+        totalPremieJaar,
+        difference,
+        percentageDifference,
+    } = React.useMemo(() => {
+        console.log("🧮 Recalculating totals for", objects.length, "objects")
+
         const totalWaarde = objects.reduce((sum, obj) => {
             return sum + (Number(obj.waarde) || 0)
         }, 0)
-        
+
         const totalPremieVerzekerdePeriode = objects.reduce((sum, obj) => {
             const { periodPremium } = calculateObjectPremiums(obj)
             return sum + periodPremium
         }, 0)
-        
+
         const totalPremieJaar = objects.reduce((sum, obj) => {
             const { yearlyPremium } = calculateObjectPremiums(obj)
             return sum + yearlyPremium
         }, 0)
-        
+
         // Calculate difference and percentage
         const difference = totalPremieJaar - totalPremieVerzekerdePeriode
-        const percentageDifference = totalPremieJaar > 0 ? ((difference / totalPremieJaar) * 100) : 0
+        const percentageDifference =
+            totalPremieJaar > 0 ? (difference / totalPremieJaar) * 100 : 0
 
-        console.log('💰 Calculated totals:', {
+        console.log("💰 Calculated totals:", {
             totalWaarde: totalWaarde.toLocaleString(),
             totalPremieJaar: Math.round(totalPremieJaar).toLocaleString(),
-            totalPremieVerzekerdePeriode: Math.round(totalPremieVerzekerdePeriode).toLocaleString(),
+            totalPremieVerzekerdePeriode: Math.round(
+                totalPremieVerzekerdePeriode
+            ).toLocaleString(),
             difference: Math.round(Math.abs(difference)).toLocaleString(),
-            percentageDifference: percentageDifference.toFixed(1) + '%'
+            percentageDifference: percentageDifference.toFixed(1) + "%",
         })
-        
+
         return {
             totalWaarde,
             totalPremieVerzekerdePeriode,
             totalPremieJaar,
             difference,
-            percentageDifference
+            percentageDifference,
         }
     }, [objects]) // Recalculate when objects array changes
 
     return (
-        <div style={{
-            margin: "16px 0",
-            padding: "16px",
-            backgroundColor: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            fontFamily: FONT_STACK,
-        }}>
-            <div style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "12px"
-            }}>
-                <h3 style={{
-                    margin: 0,
-                    fontSize: "16px",
-                    fontWeight: "600",
-                    color: "#1f2937"
-                }}>
+        <div
+            style={{
+                margin: "16px 0",
+                padding: "16px",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                fontFamily: FONT_STACK,
+            }}
+        >
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                }}
+            >
+                <h3
+                    style={{
+                        margin: 0,
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: "#1f2937",
+                    }}
+                >
                     {label || "Totaaloverzicht"}
                 </h3>
-                <div style={{
-                    marginLeft: "12px",
-                    fontSize: "14px",
-                    color: "#6b7280",
-                    backgroundColor: "#e5e7eb",
-                    padding: "4px 8px",
-                    borderRadius: "4px"
-                }}>
+                <div
+                    style={{
+                        marginLeft: "12px",
+                        fontSize: "14px",
+                        color: "#6b7280",
+                        backgroundColor: "#e5e7eb",
+                        padding: "4px 8px",
+                        borderRadius: "4px",
+                    }}
+                >
                     {objects.length} objecten
                 </div>
             </div>
-            
-            <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                gap: "16px"
-            }}>
-                <div style={{
-                    padding: "12px",
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "6px"
-                }}>
-                    <div style={{
-                        fontSize: "13px",
-                        color: "#6b7280",
-                        marginBottom: "4px",
-                        fontWeight: "500"
-                    }}>
+
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                    gap: "16px",
+                }}
+            >
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "6px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "13px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                            fontWeight: "500",
+                        }}
+                    >
                         Totale waarde
                     </div>
-                    <div style={{
-                        fontSize: "18px",
-                        fontWeight: "600",
-                        color: "#1f2937"
-                    }}>
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "600",
+                            color: "#1f2937",
+                        }}
+                    >
                         €{totalWaarde.toLocaleString()}
                     </div>
                 </div>
-                
-                <div style={{
-                    padding: "12px",
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "6px"
-                }}>
-                    <div style={{
-                        fontSize: "13px",
-                        color: "#6b7280",
-                        marginBottom: "4px",
-                        fontWeight: "500"
-                    }}>
+
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "6px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "13px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                            fontWeight: "500",
+                        }}
+                    >
                         Totale premie over de verzekerde periode
                     </div>
-                    <div style={{
-                        fontSize: "18px",
-                        fontWeight: "600",
-                        color: colors.primary
-                    }}>
-                        €{Math.round(totalPremieVerzekerdePeriode).toLocaleString()}
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "600",
+                            color: colors.primary,
+                        }}
+                    >
+                        €
+                        {Math.round(
+                            totalPremieVerzekerdePeriode
+                        ).toLocaleString()}
                     </div>
                 </div>
-                
-                <div style={{
-                    padding: "12px",
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "6px"
-                }}>
-                    <div style={{
-                        fontSize: "13px",
-                        color: "#6b7280",
-                        marginBottom: "4px",
-                        fontWeight: "500"
-                    }}>
+
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "6px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "13px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                            fontWeight: "500",
+                        }}
+                    >
                         Totale premie over het jaar
                     </div>
-                    <div style={{
-                        fontSize: "18px",
-                        fontWeight: "600",
-                        color: colors.secondary
-                    }}>
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "600",
+                            color: colors.primary,
+                        }}
+                    >
                         €{Math.round(totalPremieJaar).toLocaleString()}
                     </div>
                 </div>
-                
-                <div style={{
-                    padding: "12px",
-                    backgroundColor: difference > 0 ? "#fef3f2" : "#f0fdf4",
-                    border: `1px solid ${difference > 0 ? "#fecaca" : "#bbf7d0"}`,
-                    borderRadius: "6px"
-                }}>
-                    <div style={{
-                        fontSize: "13px",
-                        color: "#6b7280",
-                        marginBottom: "4px",
-                        fontWeight: "500"
-                    }}>
+
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: difference > 0 ? "#fef3f2" : "#f0fdf4",
+                        border: `1px solid ${difference > 0 ? "#fecaca" : "#bbf7d0"}`,
+                        borderRadius: "6px",
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: "13px",
+                            color: "#6b7280",
+                            marginBottom: "4px",
+                            fontWeight: "500",
+                        }}
+                    >
                         Verschil (jaar - periode)
                     </div>
-                    <div style={{
-                        fontSize: "18px",
-                        fontWeight: "600",
-                        color: difference > 0 ? "#dc2626" : "#16a34a"
-                    }}>
+                    <div
+                        style={{
+                            fontSize: "18px",
+                            fontWeight: "600",
+                            color: difference > 0 ? "#dc2626" : "#16a34a",
+                        }}
+                    >
                         €{Math.round(Math.abs(difference)).toLocaleString()}
                     </div>
-                    <div style={{
-                        fontSize: "12px",
-                        color: difference > 0 ? "#dc2626" : "#16a34a",
-                        marginTop: "2px"
-                    }}>
-                        {difference > 0 ? "+" : ""}{percentageDifference.toFixed(1)}%
+                    <div
+                        style={{
+                            fontSize: "12px",
+                            color: difference > 0 ? "#dc2626" : "#16a34a",
+                            marginTop: "2px",
+                        }}
+                    >
+                        {difference > 0 ? "+" : ""}
+                        {percentageDifference.toFixed(1)}%
                     </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+// ——— Logo Display Components ———
+
+// Types
+interface LogoData {
+    organizationId: string
+    logoData?: string
+    fileName?: string
+    uploadedAt?: string
+    fileSize?: number
+}
+
+interface LogoDisplayProps {
+    organizationId?: string
+    organizationName?: string
+    size?: "small" | "medium" | "large"
+    showFallback?: boolean
+    style?: React.CSSProperties
+    className?: string
+}
+
+// Size Configurations
+const SIZE_CONFIG = {
+    small: {
+        width: 32,
+        height: 32,
+        fontSize: 12,
+        iconSize: 12,
+    },
+    medium: {
+        width: 48,
+        height: 48,
+        fontSize: 14,
+        iconSize: 16,
+    },
+    large: {
+        width: 80,
+        height: 80,
+        fontSize: 16,
+        iconSize: 24,
+    },
+}
+
+// API Functions
+async function getOrganizationLogo(
+    organizationId: string
+): Promise<LogoData | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const response = await fetch(
+            `${API_BASE_URL}/neptunus/organization/${organizationId}/logo`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
+
+        if (response.status === 404) {
+            return null // No logo found
+        }
+
+        if (!response.ok) {
+            return null // Failed to load, show fallback
+        }
+
+        const logoData = await response.json()
+        return logoData
+    } catch (error) {
+        console.warn("Failed to load organization logo:", error)
+        return null
+    }
+}
+
+// Logo Display Component
+function LogoDisplay({
+    organizationId,
+    organizationName = "Organization",
+    size = "medium",
+    showFallback = true,
+    style = {},
+    className = "",
+}: LogoDisplayProps) {
+    const [logoData, setLogoData] = useState<LogoData | null>(null)
+    const [loading, setLoading] = useState(!!organizationId)
+    const [error, setError] = useState(false)
+
+    const config = SIZE_CONFIG[size]
+
+    // Load logo when organizationId changes
+    useEffect(() => {
+        if (!organizationId) {
+            setLogoData(null)
+            setLoading(false)
+            return
+        }
+
+        let isMounted = true
+
+        const loadLogo = async () => {
+            try {
+                setLoading(true)
+                setError(false)
+                const logo = await getOrganizationLogo(organizationId)
+                if (isMounted) {
+                    setLogoData(logo)
+                }
+            } catch (err) {
+                if (isMounted) {
+                    setError(true)
+                    setLogoData(null)
+                }
+            } finally {
+                if (isMounted) {
+                    setLoading(false)
+                }
+            }
+        }
+
+        loadLogo()
+
+        return () => {
+            isMounted = false
+        }
+    }, [organizationId])
+
+    // Base container style
+    const containerStyle: React.CSSProperties = {
+        width: config.width,
+        height: config.height,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "6px",
+        overflow: "hidden",
+        backgroundColor: colors.gray100,
+        border: `1px solid ${colors.gray200}`,
+        fontFamily: FONT_STACK,
+        ...style,
+    }
+
+    // Loading state
+    if (loading) {
+        return (
+            <div
+                style={{
+                    ...containerStyle,
+                    backgroundColor: colors.gray50,
+                }}
+                className={className}
+            >
+                <div
+                    style={{
+                        fontSize: config.fontSize - 2,
+                        color: colors.gray400,
+                        animation: "pulse 2s infinite",
+                    }}
+                >
+                    ...
+                </div>
+            </div>
+        )
+    }
+
+    // Logo found - display it
+    if (logoData?.logoData) {
+        const logoSrc = `data:image/png;base64,${logoData.logoData}`
+
+        return (
+            <div
+                style={containerStyle}
+                className={className}
+                title={`${organizationName} logo`}
+            >
+                <img
+                    src={logoSrc}
+                    alt={`${organizationName} logo`}
+                    style={{
+                        maxWidth: "100%",
+                        maxHeight: "100%",
+                        objectFit: "contain",
+                    }}
+                    onError={() => setError(true)}
+                />
+            </div>
+        )
+    }
+
+    // No logo or error - show fallback if enabled
+    if (showFallback) {
+        return (
+            <div
+                style={{
+                    ...containerStyle,
+                    backgroundColor: colors.gray100,
+                    flexDirection: "column",
+                    gap: size === "large" ? "4px" : "2px",
+                }}
+                className={className}
+                title={organizationName}
+            >
+                <FaBuilding size={config.iconSize} color={colors.gray400} />
+                {size === "large" && (
+                    <div
+                        style={{
+                            fontSize: config.fontSize - 4,
+                            color: colors.gray500,
+                            textAlign: "center",
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            lineHeight: 1,
+                        }}
+                    >
+                        {organizationName}
+                    </div>
+                )}
+            </div>
+        )
+    }
+
+    // No fallback - return nothing
+    return null
+}
+
+// Logo Banner Component
+function LogoBanner({
+    organizationId,
+    organizationName,
+    showForSingleOrg = true,
+    showForMultiOrg = false,
+}: {
+    organizationId?: string
+    organizationName?: string
+    showForSingleOrg?: boolean
+    showForMultiOrg?: boolean
+}) {
+    // Context-dependent display logic
+    const shouldShow = showForSingleOrg || showForMultiOrg
+
+    if (!shouldShow || !organizationId) {
+        return null
+    }
+
+    return (
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "12px 16px",
+                backgroundColor: colors.white,
+                border: `1px solid ${colors.gray200}`,
+                borderRadius: "8px",
+                marginBottom: "16px",
+            }}
+        >
+            <LogoDisplay
+                organizationId={organizationId}
+                organizationName={organizationName}
+                size="medium"
+                showFallback={true}
+            />
+            <div>
+                <div
+                    style={{
+                        fontSize: "16px",
+                        fontWeight: "600",
+                        color: colors.gray900,
+                        marginBottom: "2px",
+                    }}
+                >
+                    {organizationName}
+                </div>
+                <div
+                    style={{
+                        fontSize: "13px",
+                        color: colors.gray500,
+                    }}
+                >
+                    Organisatie overzicht
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// Fleet Overview Logo Component
+function FleetLogoHeader({
+    organizations,
+    showLogos = true,
+}: {
+    organizations: Array<{ id: string; name: string }>
+    showLogos?: boolean
+}) {
+    if (!showLogos || organizations.length === 0) {
+        return null
+    }
+
+    return (
+        <div
+            style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "12px",
+                padding: "16px",
+                backgroundColor: colors.gray50,
+                border: `1px solid ${colors.gray200}`,
+                borderRadius: "8px",
+                marginBottom: "16px",
+            }}
+        >
+            {organizations.map((org) => (
+                <div
+                    key={org.id}
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "8px 12px",
+                        backgroundColor: colors.white,
+                        border: `1px solid ${colors.gray200}`,
+                        borderRadius: "6px",
+                    }}
+                >
+                    <LogoDisplay
+                        organizationId={org.id}
+                        organizationName={org.name}
+                        size="small"
+                        showFallback={true}
+                    />
+                    <span
+                        style={{
+                            fontSize: "14px",
+                            color: colors.gray700,
+                            fontWeight: "500",
+                        }}
+                    >
+                        {org.name}
+                    </span>
+                </div>
+            ))}
         </div>
     )
 }

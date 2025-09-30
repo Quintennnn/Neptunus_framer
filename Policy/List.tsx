@@ -3,10 +3,25 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override, Frame } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { FaEdit, FaTrashAlt, FaSearch, FaFilter, FaFileContract, FaArrowLeft, FaBuilding, FaUsers, FaClipboardList, FaPlus, FaClock } from "react-icons/fa"
-import { NewPolicyButton, PolicyActionButtons } from "../components/InsuranceButtons.tsx"
-import { UserInfoBanner } from "../components/UserInfoBanner"
-
+import {
+    FaEdit,
+    FaTrashAlt,
+    FaSearch,
+    FaFilter,
+    FaFileContract,
+    FaArrowLeft,
+    FaBuilding,
+    FaUsers,
+    FaClipboardList,
+    FaPlus,
+    FaClock,
+} from "react-icons/fa"
+import {
+    NewPolicyButton,
+    PolicyActionButtons,
+} from "../components/InsuranceButtons.tsx"
+import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
+import { colors } from "../Theme.tsx"
 // ——— Constants & Helpers ———
 const API_BASE_URL = "https://dev.api.hienfeld.io"
 const POLICY_PATH = "/neptunus/policy"
@@ -99,7 +114,10 @@ function isBroker(userInfo: UserInfo | null): boolean {
 }
 
 // Check if user has access to an organization
-function hasOrganizationAccess(userInfo: UserInfo | null, organization: string): boolean {
+function hasOrganizationAccess(
+    userInfo: UserInfo | null,
+    organization: string
+): boolean {
     if (!userInfo) return false
     if (isAdmin(userInfo)) return true // Admins can see everything
     if (userInfo.organization === organization) return true
@@ -135,14 +153,14 @@ async function fetchPolicies(userInfo: UserInfo | null): Promise<any[]> {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const json = await res.json()
     let policies = json.policies || []
-    
+
     // Filter policies based on user role and organization access
     if (userInfo && !isAdmin(userInfo)) {
-        policies = policies.filter((policy: any) => 
+        policies = policies.filter((policy: any) =>
             hasOrganizationAccess(userInfo, policy.organization)
         )
     }
-    
+
     return policies
 }
 
@@ -153,16 +171,20 @@ async function fetchPendingCount(): Promise<number> {
             "Content-Type": "application/json",
         }
         if (token) headers.Authorization = `Bearer ${token}`
-        
-        const res = await fetch(`${API_BASE_URL}${INSURED_OBJECT_PATH}?status=Pending`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
-        
+
+        const res = await fetch(
+            `${API_BASE_URL}${INSURED_OBJECT_PATH}?status=Pending`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
+
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const data = await res.json()
-        const result = data.items || data.objects || data.insuredObjects || data || []
+        const result =
+            data.items || data.objects || data.insuredObjects || data || []
         return Array.isArray(result) ? result.length : 0
     } catch (error) {
         console.error("Error fetching pending count:", error)
@@ -312,7 +334,8 @@ function ConfirmDeleteDialog({
                     lineHeight: "1.5",
                 }}
             >
-                Weet je zeker dat je deze polis wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
+                Weet je zeker dat je deze polis wilt verwijderen? Deze actie kan
+                niet ongedaan worden gemaakt.
             </div>
             <div
                 style={{
@@ -426,26 +449,28 @@ function CreatePolicyForm({
                             "Content-Type": "application/json",
                             Authorization: `Bearer ${getIdToken()}`,
                         },
-                    })
+                    }),
                 ])
 
                 if (orgsResponse.ok && policiesResponse.ok) {
                     const orgsData = await orgsResponse.json()
                     const policiesData = await policiesResponse.json()
-                    
+
                     const allOrganizations = orgsData.organizations || []
                     const existingPolicies = policiesData.policies || []
-                    
+
                     // Get organization names that already have policies
                     const organizationsWithPolicies = new Set(
-                        existingPolicies.map((policy: any) => policy.organization)
+                        existingPolicies.map(
+                            (policy: any) => policy.organization
+                        )
                     )
-                    
+
                     // Filter out organizations that already have policies
                     const availableOrganizations = allOrganizations.filter(
                         (org: any) => !organizationsWithPolicies.has(org.name)
                     )
-                    
+
                     setOrganizations(availableOrganizations)
                 } else {
                     console.error("Failed to fetch organizations or policies")
@@ -462,7 +487,9 @@ function CreatePolicyForm({
         fetchOrganizationsAndPolicies()
     }, [])
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    ) => {
         const { name, value } = e.target
         setForm((prev) => ({ ...prev, [name]: value }))
     }
@@ -471,13 +498,13 @@ function CreatePolicyForm({
         e.preventDefault()
         setError(null)
         setSuccess(null)
-        
+
         // Validate that organization is selected
         if (!form.organization) {
             setError("Selecteer een organisatie")
             return
         }
-        
+
         try {
             const res = await fetch(`${API_BASE_URL}${POLICY_PATH}`, {
                 method: "POST",
@@ -487,12 +514,12 @@ function CreatePolicyForm({
                 },
                 body: JSON.stringify(form),
             })
-            
+
             if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.message || "Failed to create policy")
             }
-            
+
             setSuccess("Polis succesvol aangemaakt!")
             setTimeout(() => {
                 refresh()
@@ -521,8 +548,17 @@ function CreatePolicyForm({
                 fontFamily: FONT_STACK,
             }}
         >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Nieuwe Polis Aanmaken</h2>
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 24,
+                }}
+            >
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+                    Nieuwe Polis Aanmaken
+                </h2>
                 <button
                     onClick={onClose}
                     style={{
@@ -538,14 +574,29 @@ function CreatePolicyForm({
             </div>
 
             <form onSubmit={handleSubmit}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr",
+                        gap: 20,
+                    }}
+                >
                     {Object.entries(form).map(([key, val]) => {
-                        const label = key === "organization" ? "Organisatie" : key
-                            .replace(/_/g, " ")
-                            .replace(/^\w/, (c) => c.toUpperCase())
+                        const label =
+                            key === "organization"
+                                ? "Organisatie"
+                                : key
+                                      .replace(/_/g, " ")
+                                      .replace(/^\w/, (c) => c.toUpperCase())
 
                         return (
-                            <div key={key} style={{ display: "flex", flexDirection: "column" }}>
+                            <div
+                                key={key}
+                                style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                }}
+                            >
                                 <label
                                     htmlFor={key}
                                     style={{
@@ -555,7 +606,12 @@ function CreatePolicyForm({
                                         color: "#374151",
                                     }}
                                 >
-                                    {label} {key === "organization" && <span style={{ color: "#ef4444" }}>*</span>}
+                                    {label}{" "}
+                                    {key === "organization" && (
+                                        <span style={{ color: "#ef4444" }}>
+                                            *
+                                        </span>
+                                    )}
                                 </label>
                                 {key === "organization" ? (
                                     <select
@@ -572,20 +628,32 @@ function CreatePolicyForm({
                                             fontSize: 14,
                                             fontFamily: FONT_STACK,
                                             transition: "border-color 0.2s",
-                                            backgroundColor: loadingOrganizations ? "#f9fafb" : "#fff",
+                                            backgroundColor:
+                                                loadingOrganizations
+                                                    ? "#f9fafb"
+                                                    : "#fff",
                                         }}
-                                        onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
-                                        onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+                                        onFocus={(e) =>
+                                            (e.target.style.borderColor =
+                                                colors.primary)
+                                        }
+                                        onBlur={(e) =>
+                                            (e.target.style.borderColor =
+                                                "#d1d5db")
+                                        }
                                     >
                                         <option value="">
-                                            {loadingOrganizations 
-                                                ? "Organisaties laden..." 
-                                                : organizations.length === 0 
-                                                    ? "Alle organisaties hebben al een polis" 
-                                                    : "Selecteer een organisatie"}
+                                            {loadingOrganizations
+                                                ? "Organisaties laden..."
+                                                : organizations.length === 0
+                                                  ? "Alle organisaties hebben al een polis"
+                                                  : "Selecteer een organisatie"}
                                         </option>
                                         {organizations.map((org) => (
-                                            <option key={org.id} value={org.name}>
+                                            <option
+                                                key={org.id}
+                                                value={org.name}
+                                            >
                                                 {org.name}
                                             </option>
                                         ))}
@@ -605,8 +673,14 @@ function CreatePolicyForm({
                                             fontFamily: FONT_STACK,
                                             transition: "border-color 0.2s",
                                         }}
-                                        onFocus={(e) => e.target.style.borderColor = "#3b82f6"}
-                                        onBlur={(e) => e.target.style.borderColor = "#d1d5db"}
+                                        onFocus={(e) =>
+                                            (e.target.style.borderColor =
+                                                colors.primary)
+                                        }
+                                        onBlur={(e) =>
+                                            (e.target.style.borderColor =
+                                                "#d1d5db")
+                                        }
                                     />
                                 )}
                             </div>
@@ -615,32 +689,43 @@ function CreatePolicyForm({
                 </div>
 
                 {error && (
-                    <div style={{
-                        marginTop: 16,
-                        padding: 12,
-                        backgroundColor: "#fef2f2",
-                        color: "#dc2626",
-                        borderRadius: 8,
-                        fontSize: 14,
-                    }}>
+                    <div
+                        style={{
+                            marginTop: 16,
+                            padding: 12,
+                            backgroundColor: "#fef2f2",
+                            color: "#dc2626",
+                            borderRadius: 8,
+                            fontSize: 14,
+                        }}
+                    >
                         {error}
                     </div>
                 )}
 
                 {success && (
-                    <div style={{
-                        marginTop: 16,
-                        padding: 12,
-                        backgroundColor: "#f0fdf4",
-                        color: "#16a34a",
-                        borderRadius: 8,
-                        fontSize: 14,
-                    }}>
+                    <div
+                        style={{
+                            marginTop: 16,
+                            padding: 12,
+                            backgroundColor: "#f0fdf4",
+                            color: "#16a34a",
+                            borderRadius: 8,
+                            fontSize: 14,
+                        }}
+                    >
                         {success}
                     </div>
                 )}
 
-                <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: 12,
+                        marginTop: 24,
+                        justifyContent: "flex-end",
+                    }}
+                >
                     <button
                         type="button"
                         onClick={onClose}
@@ -708,14 +793,17 @@ function EditPolicyForm({
     useEffect(() => {
         async function fetchOrganizations() {
             try {
-                const res = await fetch(`${API_BASE_URL}/neptunus/organization`, {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${getIdToken()}`,
-                    },
-                })
-                
+                const res = await fetch(
+                    `${API_BASE_URL}/neptunus/organization`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${getIdToken()}`,
+                        },
+                    }
+                )
+
                 if (res.ok) {
                     const data = await res.json()
                     setOrganizations(data.organizations || [])
@@ -730,11 +818,13 @@ function EditPolicyForm({
                 setLoadingOrganizations(false)
             }
         }
-        
+
         fetchOrganizations()
     }, [])
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    ) => {
         const { name, value } = e.target
         setError(null)
         setSuccess(null)
@@ -866,7 +956,10 @@ function EditPolicyForm({
                                     color: "#374151",
                                 }}
                             >
-                                {label} {key === "organization" && <span style={{ color: "#ef4444" }}>*</span>}
+                                {label}{" "}
+                                {key === "organization" && (
+                                    <span style={{ color: "#ef4444" }}>*</span>
+                                )}
                             </label>
                             {key === "organization" ? (
                                 <select
@@ -883,15 +976,24 @@ function EditPolicyForm({
                                         fontSize: "14px",
                                         fontFamily: FONT_STACK,
                                         transition: "border-color 0.2s",
-                                        backgroundColor: loadingOrganizations ? "#f9fafb" : "#fff",
-                                        cursor: loadingOrganizations ? "wait" : "pointer",
+                                        backgroundColor: loadingOrganizations
+                                            ? "#f9fafb"
+                                            : "#fff",
+                                        cursor: loadingOrganizations
+                                            ? "wait"
+                                            : "pointer",
                                     }}
-                                    onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                                    onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                                    onFocus={(e) =>
+                                        (e.target.style.borderColor =
+                                            colors.primary)
+                                    }
+                                    onBlur={(e) =>
+                                        (e.target.style.borderColor = "#d1d5db")
+                                    }
                                 >
                                     <option value="">
-                                        {loadingOrganizations 
-                                            ? "Organisaties laden..." 
+                                        {loadingOrganizations
+                                            ? "Organisaties laden..."
                                             : "Selecteer een organisatie"}
                                     </option>
                                     {organizations.map((org) => (
@@ -916,7 +1018,8 @@ function EditPolicyForm({
                                         transition: "border-color 0.2s",
                                     }}
                                     onFocus={(e) =>
-                                        (e.target.style.borderColor = "#3b82f6")
+                                        (e.target.style.borderColor =
+                                            colors.primary)
                                     }
                                     onBlur={(e) =>
                                         (e.target.style.borderColor = "#d1d5db")
@@ -1152,7 +1255,7 @@ function SearchAndFilterBar({
                             transition: "border-color 0.2s",
                         }}
                         onFocus={(e) =>
-                            (e.target.style.borderColor = "#3b82f6")
+                            (e.target.style.borderColor = colors.primary)
                         }
                         onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
                     />
@@ -1422,7 +1525,7 @@ export function PolicyPageOverride(): Override {
             const basicUserInfo = getUserInfo()
             if (basicUserInfo) {
                 setUserInfo(basicUserInfo)
-                
+
                 // Fetch detailed user info from backend
                 const detailedUserInfo = await fetchUserInfo(basicUserInfo.sub)
                 if (detailedUserInfo) {
@@ -1431,7 +1534,7 @@ export function PolicyPageOverride(): Override {
             }
             setIsLoadingUserInfo(false)
         }
-        
+
         loadUserInfo()
     }, [])
 
@@ -1572,95 +1675,155 @@ export function PolicyPageOverride(): Override {
                             }}
                         >
                             {[
-                                { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
-                                { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
-                                { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending_overview" },
-                                { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
-                                { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                            ].filter((tab) => {
-                                // Hide pending, users and changelog tabs for regular users
-                                if (userInfo?.role === "user" && (tab.key === "pending" || tab.key === "users" || tab.key === "changelog")) {
-                                    return false
-                                }
-                                return true
-                            }).map((tab) => {
-                                const isActive = tab.key === "policies"
-                                const Icon = tab.icon
-                                
-                                return (
-                                    <button
-                                        key={tab.key}
-                                        onClick={() => {
-                                            if (!isActive) {
-                                                window.location.href = tab.href
-                                            }
-                                        }}
-                                        style={{
-                                            padding: "16px 24px",
-                                            backgroundColor: isActive ? "#3b82f6" : "#ffffff",
-                                            color: isActive ? "white" : "#6b7280",
-                                            border: isActive ? "none" : "2px solid #e5e7eb",
-                                            borderRadius: "12px",
-                                            fontSize: "15px",
-                                            fontWeight: "600",
-                                            cursor: isActive ? "default" : "pointer",
-                                            fontFamily: FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                            minHeight: "48px",
-                                            boxShadow: isActive 
-                                                ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
-                                                : "0 2px 4px rgba(0,0,0,0.05)",
-                                            transform: isActive ? "translateY(-1px)" : "none",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            if (!isActive) {
-                                                const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#f8fafc"
-                                                target.style.borderColor = "#3b82f6"
-                                                target.style.color = "#3b82f6"
-                                                target.style.transform = "translateY(-1px)"
-                                                target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
-                                            }
-                                        }}
-                                        onMouseOut={(e) => {
-                                            if (!isActive) {
-                                                const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#ffffff"
-                                                target.style.borderColor = "#e5e7eb"
-                                                target.style.color = "#6b7280"
-                                                target.style.transform = "none"
-                                                target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
-                                            }
-                                        }}
-                                    >
-                                        <Icon size={14} />
-                                        {tab.label}
-                                        {/* Pending count badge */}
-                                        {tab.key === "pending" && pendingCount > 0 && (
-                                            <span
-                                                style={{
-                                                    backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
-                                                    color: "white",
-                                                    borderRadius: "10px",
-                                                    padding: "2px 6px",
-                                                    fontSize: "12px",
-                                                    fontWeight: "700",
-                                                    minWidth: "18px",
-                                                    textAlign: "center",
-                                                    marginLeft: "4px",
-                                                }}
-                                            >
-                                                {pendingCount}
-                                            </span>
-                                        )}
-                                    </button>
-                                )
-                            })}
+                                {
+                                    key: "organizations",
+                                    label: "Organisaties",
+                                    icon: FaBuilding,
+                                    href: "/organizations",
+                                },
+                                {
+                                    key: "policies",
+                                    label: "Polissen",
+                                    icon: FaFileContract,
+                                    href: "/policies",
+                                },
+                                {
+                                    key: "pending",
+                                    label: "Pending Items",
+                                    icon: FaClock,
+                                    href: "/pending_overview",
+                                },
+                                {
+                                    key: "users",
+                                    label: "Gebruikers",
+                                    icon: FaUsers,
+                                    href: "/users",
+                                },
+                                {
+                                    key: "changelog",
+                                    label: "Wijzigingslogboek",
+                                    icon: FaClipboardList,
+                                    href: "/changelog",
+                                },
+                            ]
+                                .filter((tab) => {
+                                    // Hide pending, users and changelog tabs for regular users
+                                    if (
+                                        userInfo?.role === "user" &&
+                                        (tab.key === "pending" ||
+                                            tab.key === "users" ||
+                                            tab.key === "changelog")
+                                    ) {
+                                        return false
+                                    }
+                                    return true
+                                })
+                                .map((tab) => {
+                                    const isActive = tab.key === "policies"
+                                    const Icon = tab.icon
+
+                                    return (
+                                        <button
+                                            key={tab.key}
+                                            onClick={() => {
+                                                if (!isActive) {
+                                                    window.location.href =
+                                                        tab.href
+                                                }
+                                            }}
+                                            style={{
+                                                padding: "16px 24px",
+                                                backgroundColor: isActive
+                                                    ? colors.navigationActive
+                                                    : colors.navigationInactive,
+                                                color: isActive
+                                                    ? "white"
+                                                    : colors.gray500,
+                                                border: isActive
+                                                    ? "none"
+                                                    : `2px solid ${colors.navigationInactiveBorder}`,
+                                                borderRadius: "12px",
+                                                fontSize: "15px",
+                                                fontWeight: "600",
+                                                cursor: isActive
+                                                    ? "default"
+                                                    : "pointer",
+                                                fontFamily: FONT_STACK,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                transition: "all 0.2s",
+                                                minHeight: "48px",
+                                                boxShadow: isActive
+                                                    ? "0 2px 8px rgba(59, 130, 246, 0.15)"
+                                                    : "0 2px 4px rgba(0,0,0,0.05)",
+                                                transform: isActive
+                                                    ? "translateY(-1px)"
+                                                    : "none",
+                                            }}
+                                            onMouseOver={(e) => {
+                                                if (!isActive) {
+                                                    const target =
+                                                        e.target as HTMLElement
+                                                    target.style.backgroundColor =
+                                                        colors.navigationInactiveHover
+                                                    target.style.borderColor =
+                                                        colors.navigationActive
+                                                    target.style.color =
+                                                        colors.navigationActive
+                                                    target.style.transform =
+                                                        "translateY(-1px)"
+                                                    target.style.boxShadow =
+                                                        "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                                }
+                                            }}
+                                            onMouseOut={(e) => {
+                                                if (!isActive) {
+                                                    const target =
+                                                        e.target as HTMLElement
+                                                    target.style.backgroundColor =
+                                                        colors.navigationInactive
+                                                    target.style.borderColor =
+                                                        colors.navigationInactiveBorder
+                                                    target.style.color =
+                                                        colors.gray500
+                                                    target.style.transform =
+                                                        "none"
+                                                    target.style.boxShadow =
+                                                        "0 2px 4px rgba(0,0,0,0.05)"
+                                                }
+                                            }}
+                                        >
+                                            <Icon size={14} />
+                                            {tab.label}
+                                            {/* Pending count badge */}
+                                            {tab.key === "pending" &&
+                                                pendingCount > 0 && (
+                                                    <span
+                                                        style={{
+                                                            backgroundColor:
+                                                                isActive
+                                                                    ? "rgba(255,255,255,0.3)"
+                                                                    : "#dc2626",
+                                                            color: "white",
+                                                            borderRadius:
+                                                                "10px",
+                                                            padding: "2px 6px",
+                                                            fontSize: "12px",
+                                                            fontWeight: "700",
+                                                            minWidth: "18px",
+                                                            textAlign: "center",
+                                                            marginLeft: "4px",
+                                                        }}
+                                                    >
+                                                        {pendingCount}
+                                                    </span>
+                                                )}
+                                        </button>
+                                    )
+                                })}
                         </div>
-                        
+
                         <div
                             style={{
                                 padding: "24px",
@@ -1682,7 +1845,7 @@ export function PolicyPageOverride(): Override {
                                         gap: "16px",
                                     }}
                                 >
-<div
+                                    <div
                                         style={{
                                             display: "flex",
                                             alignItems: "center",
@@ -1704,11 +1867,19 @@ export function PolicyPageOverride(): Override {
                                                 letterSpacing: "-0.025em",
                                             }}
                                         >
-                                            {isAdmin(userInfo) ? "Polis Beheer" : "Mijn Polissen"}
+                                            {isAdmin(userInfo)
+                                                ? "Polis Beheer"
+                                                : "Mijn Polissen"}
                                         </h1>
                                     </div>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "16px",
+                                    }}
+                                >
                                     <div
                                         style={{
                                             fontSize: "14px",
@@ -1725,7 +1896,9 @@ export function PolicyPageOverride(): Override {
                                         onClick={() => {
                                             setShowCreateForm(true)
                                         }}
-                                        resourceOrganization={userInfo?.organization}
+                                        resourceOrganization={
+                                            userInfo?.organization
+                                        }
                                     />
                                 </div>
                             </div>
@@ -1836,8 +2009,13 @@ export function PolicyPageOverride(): Override {
                                                     onDelete={() => {
                                                         confirmDelete(policy.id)
                                                     }}
-                                                    resourceOrganization={policy.organization}
-                                                    policyStatus={policy.status || "active"}
+                                                    resourceOrganization={
+                                                        policy.organization
+                                                    }
+                                                    policyStatus={
+                                                        policy.status ||
+                                                        "active"
+                                                    }
                                                 />
                                             </td>
                                             {visibleColumnsList.map((col) => {

@@ -1,5 +1,6 @@
 import React, { useState, createContext, useContext } from "react"
 import { Override } from "framer"
+import { determineRedirectPath } from "../utils"
 
 // --- AWS Cognito constants ---
 const COGNITO_CLIENT_ID = "di3vf3gteg48eqk0fdpu1b75a"
@@ -56,7 +57,7 @@ interface LoginContextType {
         idToken: string
         accessToken: string
         refreshToken: string
-    }): void
+    }): Promise<void>
 }
 
 const defaultContext: LoginContextType = {
@@ -69,7 +70,7 @@ const defaultContext: LoginContextType = {
     idToken: "",
     accessToken: "",
     refreshToken: "",
-    setTokens: () => {},
+    setTokens: async () => {},
 }
 
 const LoginContext = createContext<LoginContextType>(defaultContext)
@@ -87,7 +88,7 @@ export function loginProvider(): Override {
     const [accessToken, setAccessToken] = useState("")
     const [refreshToken, setRefreshToken] = useState("")
 
-    const setTokens = (tokens: {
+    const setTokens = async (tokens: {
         idToken: string
         accessToken: string
         refreshToken: string
@@ -101,6 +102,13 @@ export function loginProvider(): Override {
             sessionStorage.setItem("accessToken", tokens.accessToken)
             sessionStorage.setItem("refreshToken", tokens.refreshToken)
 
+            // Extract userId from JWT and store it
+            const decoded = decodeJWT(tokens.idToken)
+            if (decoded?.sub) {
+                sessionStorage.setItem('userId', decoded.sub)
+                console.log('→ [sessionStorage] userId:', decoded.sub)
+            }
+
             console.log(
                 "→ [sessionStorage] idToken:",
                 sessionStorage.getItem("idToken")
@@ -113,6 +121,21 @@ export function loginProvider(): Override {
                 "→ [sessionStorage] refreshToken:",
                 sessionStorage.getItem("refreshToken")
             )
+
+            // If this setTokens is called in a login context, implement smart redirect
+            // This acts as a fallback for any legacy login flows
+            try {
+                const redirectPath = await determineRedirectPath()
+                console.log(`Smart redirect determined: ${redirectPath}`)
+                // Only redirect if we're currently on a login page to avoid unwanted redirects
+                if (window.location.pathname === '/login_old' || window.location.pathname === '/login') {
+                    console.log('Redirecting from login page...')
+                    window.location.href = `https://neptunus.framer.website${redirectPath}`
+                }
+            } catch (error) {
+                console.error('Error determining redirect path:', error)
+                // Fallback to default behavior if there's an error
+            }
         }
     }
 

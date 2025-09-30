@@ -34,8 +34,12 @@ import {
     FaSort,
     FaSortUp,
     FaSortDown,
+    FaGlobe,
+    FaSave,
+    FaDownload,
+    FaCopy,
 } from "react-icons/fa"
-import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
+import { colors, styles, hover, animations, FONT_STACK } from "../theme.tsx"
 import {
     API_BASE_URL,
     API_PATHS,
@@ -44,8 +48,29 @@ import {
     formatSuccessMessage,
     validateRequired,
     validateStringLength,
+    validatePromillage,
+    normalizePromillageValue,
+    validateCurrencyValue,
+    OwnRiskCalculationMethod,
+    OwnRiskConfig,
+    calculateOwnRisk,
+    validateOwnRiskConfig,
+    formatOwnRiskDisplay,
 } from "../Utils.tsx"
+import {
+    canEditOrganizationAddress,
+    canEditOrganizationFieldConfig,
+    canEditOrganizationAcceptanceRules,
+    isAdmin,
+    isEditor,
+    isUser,
+} from "../Rbac.tsx"
 import { OrganizationForm } from "./Create.tsx"
+import {
+    GlobalRulesManager,
+    GlobalRuleTemplate,
+} from "../components/GlobalRulesManager.tsx"
+import { LogoManager } from "../components/LogoManager.tsx"
 
 // ——— User Role Detection ———
 interface UserInfo {
@@ -115,14 +140,6 @@ function getCurrentUserInfo(): UserInfo | null {
 }
 
 // Check if user is admin
-function isAdmin(userInfo: UserInfo | null): boolean {
-    return userInfo?.role === "admin"
-}
-
-// Check if user is broker/editor
-function isBroker(userInfo: UserInfo | null): boolean {
-    return userInfo?.role === "editor"
-}
 
 // Check if user has access to an organization
 function hasOrganizationAccess(
@@ -313,6 +330,62 @@ function ConfirmDeleteDialog({
 
 // Available operators for different field types
 const OPERATORS = {
+    // Numeric fields (number, currency)
+    number: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "lt", label: "Kleiner dan" },
+        { value: "le", label: "Kleiner dan of gelijk aan" },
+        { value: "gt", label: "Groter dan" },
+        { value: "ge", label: "Groter dan of gelijk aan" },
+        { value: "between", label: "Tussen" },
+    ],
+    currency: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "lt", label: "Kleiner dan" },
+        { value: "le", label: "Kleiner dan of gelijk aan" },
+        { value: "gt", label: "Groter dan" },
+        { value: "ge", label: "Groter dan of gelijk aan" },
+        { value: "between", label: "Tussen" },
+    ],
+    // Text fields
+    text: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "in", label: "In lijst" },
+        { value: "not_in", label: "Niet in lijst" },
+        { value: "contains", label: "Bevat" },
+        { value: "starts_with", label: "Begint met" },
+        { value: "ends_with", label: "Eindigt met" },
+        { value: "regex", label: "Reguliere expressie" },
+    ],
+    textarea: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "contains", label: "Bevat" },
+        { value: "starts_with", label: "Begint met" },
+        { value: "ends_with", label: "Eindigt met" },
+        { value: "regex", label: "Reguliere expressie" },
+    ],
+    // Dropdown fields
+    dropdown: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "in", label: "In lijst" },
+        { value: "not_in", label: "Niet in lijst" },
+    ],
+    // Date fields
+    date: [
+        { value: "eq", label: "Gelijk aan" },
+        { value: "ne", label: "Niet gelijk aan" },
+        { value: "lt", label: "Voor" },
+        { value: "le", label: "Voor of op" },
+        { value: "gt", label: "Na" },
+        { value: "ge", label: "Na of op" },
+        { value: "between", label: "Tussen" },
+    ],
+    // Backward compatibility - fallback to these if type not found
     numeric: [
         { value: "eq", label: "Gelijk aan" },
         { value: "ne", label: "Niet gelijk aan" },
@@ -336,6 +409,267 @@ const OPERATORS = {
 
 // Note: Field types are now obtained from the dynamic schema instead of hardcoded mapping
 
+// Conflict detection removed - rules now use priority ordering instead
+// The following functions are kept for potential future use but are currently unused:
+
+function validateAllRules(rules: any[]): any[] {
+    const conflicts: any[] = []
+
+    for (let i = 0; i < rules.length; i++) {
+        for (let j = i + 1; j < rules.length; j++) {
+            const rule1Conflicts = findConflictingRules(
+                rules[i],
+                rules[j],
+                i,
+                j
+            )
+            conflicts.push(...rule1Conflicts)
+        }
+    }
+
+    return conflicts
+}
+
+function findConflictingRules(
+    rule1: any,
+    rule2: any,
+    index1: number,
+    index2: number
+): ConflictInfo[] {
+    const conflicts: ConflictInfo[] = []
+
+    // Check for conflicts between conditions on the same fields
+    for (const fieldKey in rule1.conditions) {
+        if (rule2.conditions[fieldKey]) {
+            const conflict = detectConditionConflict(
+                fieldKey,
+                rule1.conditions[fieldKey],
+                rule2.conditions[fieldKey],
+                index1,
+                index2
+            )
+            if (conflict) {
+                conflicts.push(conflict)
+            }
+        }
+    }
+
+    return conflicts
+}
+
+function detectConditionConflict(
+    fieldKey: string,
+    condition1: any,
+    condition2: any,
+    ruleIndex1: number,
+    ruleIndex2: number
+): ConflictInfo | null {
+    const op1 = condition1.operator
+    const op2 = condition2.operator
+
+    // Same field, same operator conflicts
+    if (op1 === op2) {
+        if (op1 === "eq" && condition1.value !== condition2.value) {
+            return null // Different exact values is not a conflict
+        }
+        if (op1 === "eq" && condition1.value === condition2.value) {
+            return {
+                ruleIndex1,
+                ruleIndex2,
+                fieldKey,
+                conflictType: "duplicate_exact",
+                message: `Beide regels vereisen exact dezelfde waarde voor ${fieldKey}: "${condition1.value}"`,
+            }
+        }
+    }
+
+    // Contradictory exact value conflicts
+    if ((op1 === "eq" && op2 === "ne") || (op1 === "ne" && op2 === "eq")) {
+        if (condition1.value === condition2.value) {
+            return {
+                ruleIndex1,
+                ruleIndex2,
+                fieldKey,
+                conflictType: "contradictory_exact",
+                message: `Regel ${ruleIndex1 + 1} vereist ${fieldKey} = "${condition1.value}", maar Regel ${ruleIndex2 + 1} vereist ${fieldKey} ≠ "${condition2.value}"`,
+            }
+        }
+    }
+
+    // Numeric range conflicts
+    if (isNumericOperator(op1) && isNumericOperator(op2)) {
+        return detectNumericConflict(
+            fieldKey,
+            condition1,
+            condition2,
+            ruleIndex1,
+            ruleIndex2
+        )
+    }
+
+    // List conflicts (in/not_in)
+    if (isListOperator(op1) && isListOperator(op2)) {
+        return detectListConflict(
+            fieldKey,
+            condition1,
+            condition2,
+            ruleIndex1,
+            ruleIndex2
+        )
+    }
+
+    return null
+}
+
+function isNumericOperator(operator: string): boolean {
+    return ["lt", "le", "gt", "ge", "between"].includes(operator)
+}
+
+function isListOperator(operator: string): boolean {
+    return ["in", "not_in"].includes(operator)
+}
+
+function detectNumericConflict(
+    fieldKey: string,
+    condition1: any,
+    condition2: any,
+    ruleIndex1: number,
+    ruleIndex2: number
+): ConflictInfo | null {
+    const op1 = condition1.operator
+    const op2 = condition2.operator
+
+    // Handle between operator ranges
+    if (op1 === "between" && op2 === "between") {
+        const range1 = condition1.range || {}
+        const range2 = condition2.range || {}
+
+        if (
+            range1.min != null &&
+            range1.max != null &&
+            range2.min != null &&
+            range2.max != null
+        ) {
+            // Check for overlapping ranges
+            if (!(range1.max < range2.min || range2.max < range1.min)) {
+                return {
+                    ruleIndex1,
+                    ruleIndex2,
+                    fieldKey,
+                    conflictType: "overlapping_ranges",
+                    message: `Overlappende bereiken voor ${fieldKey}: Regel ${ruleIndex1 + 1} (${range1.min}-${range1.max}) overlapt met Regel ${ruleIndex2 + 1} (${range2.min}-${range2.max})`,
+                }
+            }
+        }
+    }
+
+    // Handle impossible range in between
+    if (op1 === "between") {
+        const range = condition1.range || {}
+        if (range.min != null && range.max != null && range.min > range.max) {
+            return {
+                ruleIndex1,
+                ruleIndex2: ruleIndex1,
+                fieldKey,
+                conflictType: "impossible_range",
+                message: `Onmogelijk bereik voor ${fieldKey} in Regel ${ruleIndex1 + 1}: minimum (${range.min}) is groter dan maximum (${range.max})`,
+            }
+        }
+    }
+
+    // Handle contradictory numeric conditions
+    if ((op1 === "gt" || op1 === "ge") && (op2 === "lt" || op2 === "le")) {
+        const val1 = condition1.value
+        const val2 = condition2.value
+        if (val1 != null && val2 != null) {
+            if (
+                (op1 === "gt" && op2 === "lt" && val1 >= val2) ||
+                (op1 === "gt" && op2 === "le" && val1 >= val2) ||
+                (op1 === "ge" && op2 === "lt" && val1 >= val2) ||
+                (op1 === "ge" && op2 === "le" && val1 > val2)
+            ) {
+                return {
+                    ruleIndex1,
+                    ruleIndex2,
+                    fieldKey,
+                    conflictType: "contradictory_numeric",
+                    message: `Tegenstrijdige numerieke voorwaarden voor ${fieldKey}: Regel ${ruleIndex1 + 1} (${op1} ${val1}) vs Regel ${ruleIndex2 + 1} (${op2} ${val2})`,
+                }
+            }
+        }
+    }
+
+    // Handle redundant numeric conditions
+    if (op1 === op2 && ["gt", "ge", "lt", "le"].includes(op1)) {
+        const val1 = condition1.value
+        const val2 = condition2.value
+        if (val1 != null && val2 != null) {
+            if ((op1 === "gt" || op1 === "ge") && val1 < val2) {
+                return {
+                    ruleIndex1,
+                    ruleIndex2,
+                    fieldKey,
+                    conflictType: "redundant_numeric",
+                    message: `Redundante voorwaarden voor ${fieldKey}: Regel ${ruleIndex2 + 1} (${op2} ${val2}) maakt Regel ${ruleIndex1 + 1} (${op1} ${val1}) overbodig`,
+                }
+            }
+            if ((op1 === "lt" || op1 === "le") && val1 > val2) {
+                return {
+                    ruleIndex1,
+                    ruleIndex2,
+                    fieldKey,
+                    conflictType: "redundant_numeric",
+                    message: `Redundante voorwaarden voor ${fieldKey}: Regel ${ruleIndex2 + 1} (${op2} ${val2}) maakt Regel ${ruleIndex1 + 1} (${op1} ${val1}) overbodig`,
+                }
+            }
+        }
+    }
+
+    return null
+}
+
+function detectListConflict(
+    fieldKey: string,
+    condition1: any,
+    condition2: any,
+    ruleIndex1: number,
+    ruleIndex2: number
+): ConflictInfo | null {
+    const op1 = condition1.operator
+    const op2 = condition2.operator
+    const values1 = condition1.values || []
+    const values2 = condition2.values || []
+
+    // Check for in/not_in conflicts
+    if (op1 === "in" && op2 === "not_in") {
+        const overlap = values1.filter((v) => values2.includes(v))
+        if (overlap.length > 0) {
+            return {
+                ruleIndex1,
+                ruleIndex2,
+                fieldKey,
+                conflictType: "list_contradiction",
+                message: `Tegenstrijdige lijst voorwaarden voor ${fieldKey}: Regel ${ruleIndex1 + 1} vereist waarde in [${values1.join(", ")}], maar Regel ${ruleIndex2 + 1} verbiedt [${overlap.join(", ")}]`,
+            }
+        }
+    }
+
+    if (op1 === "not_in" && op2 === "in") {
+        const overlap = values2.filter((v) => values1.includes(v))
+        if (overlap.length > 0) {
+            return {
+                ruleIndex1,
+                ruleIndex2,
+                fieldKey,
+                conflictType: "list_contradiction",
+                message: `Tegenstrijdige lijst voorwaarden voor ${fieldKey}: Regel ${ruleIndex2 + 1} vereist waarde in [${values2.join(", ")}], maar Regel ${ruleIndex1 + 1} verbiedt [${overlap.join(", ")}]`,
+            }
+        }
+    }
+
+    return null
+}
+
 function AutoApprovalTab({
     config,
     onChange,
@@ -346,11 +680,46 @@ function AutoApprovalTab({
     org: any
 }) {
     const [availableFields, setAvailableFields] = useState<
-        Array<{ key: string; label: string; type: string }>
+        Array<{ key: string; label: string; type: string; options?: string[] }>
     >([])
     const { schema: dynamicSchema, loading: schemaLoading } = useDynamicSchema(
         org?.name
     )
+
+    // Global rules management state
+    const [showGlobalRulesManager, setShowGlobalRulesManager] = useState(false)
+    const [showSaveAsGlobal, setShowSaveAsGlobal] = useState(false)
+    const [showLoadFromGlobal, setShowLoadFromGlobal] = useState(false)
+
+    // Get current user info for role-based access control
+    const currentUser = getCurrentUserInfo()
+
+    // Global rules handlers
+    const handleLoadFromGlobal = (template: GlobalRuleTemplate) => {
+        if (template.ruleConfig) {
+            onChange(template.ruleConfig)
+        }
+        setShowLoadFromGlobal(false)
+    }
+
+    const handleSaveAsGlobal = (template: GlobalRuleTemplate) => {
+        // Template saved successfully, you could show a success message here
+        setShowSaveAsGlobal(false)
+    }
+
+    const handleDuplicateRule = (ruleIndex: number) => {
+        const ruleToDuplicate = config.rules[ruleIndex]
+        const duplicatedRule = {
+            ...ruleToDuplicate,
+            name: `${ruleToDuplicate.name} (Kopie)`,
+            priority: config.rules.length + 1,
+        }
+
+        onChange({
+            ...config,
+            rules: [...config.rules, duplicatedRule],
+        })
+    }
 
     // Extract required fields from organization configuration using dynamic schema
     useEffect(() => {
@@ -376,10 +745,8 @@ function AutoApprovalTab({
                 .map((field) => ({
                     key: field.key,
                     label: field.label,
-                    type:
-                        field.type === "currency" || field.type === "number"
-                            ? "numeric"
-                            : "string",
+                    type: field.type, // Preserve original type: dropdown, date, currency, number, text
+                    options: field.options || [], // Add dropdown options from schema
                 }))
 
             setAvailableFields(requiredFields)
@@ -392,15 +759,38 @@ function AutoApprovalTab({
         }
     }, [org, dynamicSchema, schemaLoading])
 
+    // Ensure rules have priority field (backward compatibility)
+    useEffect(() => {
+        if (config.rules && config.rules.length > 0) {
+            let needsUpdate = false
+            const rulesWithPriority = config.rules.map(
+                (rule: any, index: number) => {
+                    if (typeof rule.priority !== "number") {
+                        needsUpdate = true
+                        return { ...rule, priority: index + 1 }
+                    }
+                    return rule
+                }
+            )
+
+            if (needsUpdate) {
+                onChange({ ...config, rules: rulesWithPriority })
+            }
+        }
+    }, [config.rules?.length]) // Only trigger when number of rules changes
+
     const addRule = () => {
         const newRule = {
             name: `Rule ${config.rules.length + 1}`,
+            priority: config.rules.length + 1, // Add explicit priority
             conditions: {},
             logic: "AND",
             pricing: {
                 premium_promille: 5.0,
-                eigen_risico: 250
-            }
+                eigen_risico_method: "fixed",
+                eigen_risico: 250,
+                eigen_risico_percentage: 0,
+            },
         }
         onChange({
             ...config,
@@ -418,22 +808,69 @@ function AutoApprovalTab({
     }
 
     const deleteRule = (index: number) => {
+        const newRules = config.rules.filter((_: any, i: number) => i !== index)
+        // Reorder priorities after deletion
+        const reorderedRules = newRules.map((rule: any, i: number) => ({
+            ...rule,
+            priority: i + 1,
+        }))
         onChange({
             ...config,
-            rules: config.rules.filter((_: any, i: number) => i !== index),
+            rules: reorderedRules,
+        })
+    }
+
+    const reorderRules = (dragIndex: number, hoverIndex: number) => {
+        const draggedRule = config.rules[dragIndex]
+        const newRules = [...config.rules]
+
+        // Remove dragged item
+        newRules.splice(dragIndex, 1)
+        // Insert at new position
+        newRules.splice(hoverIndex, 0, draggedRule)
+
+        // Update priorities based on new order
+        const reorderedRules = newRules.map((rule: any, i: number) => ({
+            ...rule,
+            priority: i + 1,
+        }))
+
+        onChange({
+            ...config,
+            rules: reorderedRules,
         })
     }
 
     const addCondition = (ruleIndex: number, fieldKey: string) => {
         const rule = config.rules[ruleIndex]
         const field = availableFields.find((f) => f.key === fieldKey)
-        const fieldType = field?.type || "string"
-        const defaultOperator = fieldType === "numeric" ? "lt" : "eq"
+        const fieldType = field?.type || "text"
 
+        // Get default operator based on field type
+        const getDefaultOperator = (type: string) => {
+            switch (type) {
+                case "number":
+                case "currency":
+                    return "lt"
+                case "dropdown":
+                    return "eq"
+                case "date":
+                    return "gt"
+                case "text":
+                case "textarea":
+                default:
+                    return "eq"
+            }
+        }
+
+        const defaultOperator = getDefaultOperator(fieldType)
+
+        // Initialize condition with proper default values
         const newCondition = {
             operator: defaultOperator,
-            value: fieldType === "numeric" ? 0 : "",
+            value: fieldType === "number" || fieldType === "currency" ? 0 : "",
             values: [],
+            range: { min: null, max: null }, // For between operations
         }
 
         const updatedRule = {
@@ -504,6 +941,11 @@ function AutoApprovalTab({
                     het voldoet aan <em>één van de regels</em> (OF-logica).
                     Binnen elke regel kun je kiezen of alle voorwaarden moeten
                     kloppen (EN) of slechts één voorwaarde (OF).
+                    <br />
+                    <strong>Voorwaarden:</strong> In het tabje Boot velden
+                    configuratie kun je verplichte velden velden instellen.{" "}
+                    <strong>Alleen</strong> deze velden zijn beschikbaar als
+                    voorwaarde.
                 </p>
 
                 <label
@@ -543,26 +985,114 @@ function AutoApprovalTab({
                         >
                             Goedkeurings regels
                         </h4>
-                        <button
-                            type="button"
-                            onClick={addRule}
+                        <div
                             style={{
-                                ...styles.primaryButton,
-                                padding: "8px 12px",
-                                fontSize: 12,
-                                borderRadius: 6,
+                                display: "flex",
+                                gap: "8px",
+                                flexWrap: "wrap",
                             }}
-                            onMouseOver={(e) =>
-                                hover.primaryButton(e.target as HTMLElement)
-                            }
-                            onMouseOut={(e) =>
-                                hover.resetPrimaryButton(
-                                    e.target as HTMLElement
-                                )
-                            }
                         >
-                            + Regel Toevoegen
-                        </button>
+                            {/* Global Rules Management (Admin Only) */}
+                            {isAdmin(currentUser) && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setShowGlobalRulesManager(true)
+                                    }
+                                    style={{
+                                        ...styles.secondaryButton,
+                                        padding: "6px 10px",
+                                        fontSize: 11,
+                                        borderRadius: 4,
+                                        backgroundColor: colors.info,
+                                        color: "white",
+                                        border: "none",
+                                    }}
+                                    title="Beheer globale templates (alleen admin)"
+                                >
+                                    <FaGlobe
+                                        size={10}
+                                        style={{ marginRight: "4px" }}
+                                    />
+                                    Globale Templates
+                                </button>
+                            )}
+
+                            {/* Save As Template (All Users) */}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowSaveAsGlobal(true)
+                                }
+                                disabled={
+                                    !config.rules ||
+                                    config.rules.length === 0
+                                }
+                                style={{
+                                    ...styles.secondaryButton,
+                                    padding: "6px 10px",
+                                    fontSize: 11,
+                                    borderRadius: 4,
+                                    backgroundColor:
+                                        config.rules?.length > 0
+                                            ? colors.success
+                                            : colors.gray400,
+                                    color: "white",
+                                    border: "none",
+                                }}
+                                title="Sla huidige regels op als globale template"
+                            >
+                                <FaSave
+                                    size={10}
+                                    style={{ marginRight: "4px" }}
+                                />
+                                Opslaan als Template
+                            </button>
+
+                            {/* Load from Global Template (All Users) */}
+                            <button
+                                type="button"
+                                onClick={() => setShowLoadFromGlobal(true)}
+                                style={{
+                                    ...styles.secondaryButton,
+                                    padding: "6px 10px",
+                                    fontSize: 11,
+                                    borderRadius: 4,
+                                    backgroundColor: colors.primary,
+                                    color: "white",
+                                    border: "none",
+                                }}
+                                title="Laad regels vanaf globale template"
+                            >
+                                <FaDownload
+                                    size={10}
+                                    style={{ marginRight: "4px" }}
+                                />
+                                Laden van Template
+                            </button>
+
+                            {/* Add Rule Button */}
+                            <button
+                                type="button"
+                                onClick={addRule}
+                                style={{
+                                    ...styles.primaryButton,
+                                    padding: "8px 12px",
+                                    fontSize: 12,
+                                    borderRadius: 6,
+                                }}
+                                onMouseOver={(e) =>
+                                    hover.primaryButton(e.target as HTMLElement)
+                                }
+                                onMouseOut={(e) =>
+                                    hover.resetPrimaryButton(
+                                        e.target as HTMLElement
+                                    )
+                                }
+                            >
+                                + Regel Toevoegen
+                            </button>
+                        </div>
                     </div>
 
                     {config.rules.length === 0 ? (
@@ -580,33 +1110,87 @@ function AutoApprovalTab({
                             te maken.
                         </div>
                     ) : (
-                        config.rules.map((rule: any, ruleIndex: number) => (
-                            <RuleEditor
-                                key={ruleIndex}
-                                rule={rule}
-                                ruleIndex={ruleIndex}
-                                availableFields={availableFields}
-                                onUpdate={(updatedRule) =>
-                                    updateRule(ruleIndex, updatedRule)
-                                }
-                                onDelete={() => deleteRule(ruleIndex)}
-                                onAddCondition={(fieldKey) =>
-                                    addCondition(ruleIndex, fieldKey)
-                                }
-                                onUpdateCondition={(fieldKey, conditionData) =>
-                                    updateCondition(
-                                        ruleIndex,
-                                        fieldKey,
-                                        conditionData
-                                    )
-                                }
-                                onRemoveCondition={(fieldKey) =>
-                                    removeCondition(ruleIndex, fieldKey)
-                                }
-                            />
-                        ))
+                        <div>
+                            {config.rules.map(
+                                (rule: any, ruleIndex: number) => (
+                                    <React.Fragment key={ruleIndex}>
+                                        <RuleEditor
+                                            rule={rule}
+                                            ruleIndex={ruleIndex}
+                                            availableFields={availableFields}
+                                            onUpdate={(updatedRule) =>
+                                                updateRule(ruleIndex, updatedRule)
+                                            }
+                                            onDelete={() => deleteRule(ruleIndex)}
+                                            onDuplicate={() =>
+                                                handleDuplicateRule(ruleIndex)
+                                            }
+                                            onAddCondition={(fieldKey) =>
+                                                addCondition(ruleIndex, fieldKey)
+                                            }
+                                            onUpdateCondition={(
+                                                fieldKey,
+                                                conditionData
+                                            ) =>
+                                                updateCondition(
+                                                    ruleIndex,
+                                                    fieldKey,
+                                                    conditionData
+                                                )
+                                            }
+                                            onRemoveCondition={(fieldKey) =>
+                                                removeCondition(ruleIndex, fieldKey)
+                                            }
+                                            onMoveUp={
+                                                ruleIndex > 0
+                                                    ? () =>
+                                                          reorderRules(
+                                                              ruleIndex,
+                                                              ruleIndex - 1
+                                                          )
+                                                    : undefined
+                                            }
+                                            onMoveDown={
+                                                ruleIndex < config.rules.length - 1
+                                                    ? () =>
+                                                          reorderRules(
+                                                              ruleIndex,
+                                                              ruleIndex + 1
+                                                          )
+                                                    : undefined
+                                            }
+                                        />
+                                    </React.Fragment>
+                                )
+                            )}
+                        </div>
                     )}
                 </div>
+            )}
+
+            {/* Global Rules Management Modals */}
+            {showGlobalRulesManager && (
+                <GlobalRulesManager
+                    userInfo={currentUser}
+                    onClose={() => setShowGlobalRulesManager(false)}
+                />
+            )}
+
+            {showSaveAsGlobal && (
+                <SaveAsGlobalTemplate
+                    userInfo={currentUser}
+                    currentRuleConfig={config}
+                    onClose={() => setShowSaveAsGlobal(false)}
+                    onSaved={handleSaveAsGlobal}
+                />
+            )}
+
+            {showLoadFromGlobal && (
+                <LoadFromGlobalTemplate
+                    userInfo={currentUser}
+                    onClose={() => setShowLoadFromGlobal(false)}
+                    onLoadTemplate={handleLoadFromGlobal}
+                />
             )}
         </div>
     )
@@ -618,15 +1202,22 @@ function RuleEditor({
     availableFields,
     onUpdate,
     onDelete,
+    onDuplicate,
     onAddCondition,
     onUpdateCondition,
     onRemoveCondition,
 }: {
     rule: any
     ruleIndex: number
-    availableFields: Array<{ key: string; label: string; type: string }>
+    availableFields: Array<{
+        key: string
+        label: string
+        type: string
+        options?: string[]
+    }>
     onUpdate: (rule: any) => void
     onDelete: () => void
+    onDuplicate: () => void
     onAddCondition: (fieldKey: string) => void
     onUpdateCondition: (fieldKey: string, conditionData: any) => void
     onRemoveCondition: (fieldKey: string) => void
@@ -639,10 +1230,10 @@ function RuleEditor({
         <div
             style={{
                 border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                padding: 16,
-                marginBottom: 16,
-                backgroundColor: "#fefefe",
+                borderRadius: "8px",
+                padding: "16px",
+                backgroundColor: "#ffffff",
+                marginBottom: "8px",
             }}
         >
             <div
@@ -692,6 +1283,25 @@ function RuleEditor({
                     </select>
                     <button
                         type="button"
+                        onClick={onDuplicate}
+                        style={{
+                            padding: "6px 8px",
+                            backgroundColor: colors.info,
+                            color: "white",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontSize: 11,
+                            fontFamily: FONT_STACK,
+                            marginRight: 8,
+                        }}
+                        title="Dupliceer deze regel"
+                    >
+                        <FaCopy size={10} style={{ marginRight: 4 }} />
+                        Dupliceren
+                    </button>
+                    <button
+                        type="button"
                         onClick={onDelete}
                         style={{
                             padding: "6px 8px",
@@ -711,7 +1321,7 @@ function RuleEditor({
 
             <div style={{ marginBottom: 12 }}>
                 <h5 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                    Conditions:
+                    Voorwaarden:
                 </h5>
                 {Object.keys(rule.conditions).length === 0 ? (
                     <div
@@ -724,7 +1334,7 @@ function RuleEditor({
                             fontSize: 12,
                         }}
                     >
-                        No conditions added. Add a condition below.
+                        Geen voorwaarden toegevoegd. Voeg een voorwaarde toe onder.
                     </div>
                 ) : (
                     Object.entries(rule.conditions).map(
@@ -774,13 +1384,35 @@ function RuleEditor({
             )}
 
             {/* Pricing Configuration Section */}
-            <div style={{ marginTop: 16, borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "#374151" }}>
+            <div
+                style={{
+                    marginTop: 16,
+                    borderTop: "1px solid #e5e7eb",
+                    paddingTop: 16,
+                }}
+            >
+                <h4
+                    style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        marginBottom: 12,
+                        color: "#374151",
+                    }}
+                >
                     Premie & Eigen Risico (Verplicht)
                 </h4>
-                <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <div style={{ flex: 1 }}>
-                        <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 4, color: "#6b7280" }}>
+                        <label
+                            style={{
+                                display: "block",
+                                fontSize: 12,
+                                fontWeight: 500,
+                                marginBottom: 4,
+                                color: "#6b7280",
+                                height: "16px", // Fixed height for label alignment
+                            }}
+                        >
                             Premie Promillage (‰)
                         </label>
                         <input
@@ -788,14 +1420,19 @@ function RuleEditor({
                             step="0.1"
                             min="0.1"
                             max="50"
-                            value={rule.pricing?.premium_promille || ''}
-                            onChange={(e) => onUpdate({ 
-                                ...rule, 
-                                pricing: { 
-                                    ...rule.pricing, 
-                                    premium_promille: parseFloat(e.target.value) || 0.1 
-                                } 
-                            })}
+                            value={rule.pricing?.premium_promille || ""}
+                            onChange={(e) => {
+                                const normalizedValue =
+                                    normalizePromillageValue(e.target.value)
+                                onUpdate({
+                                    ...rule,
+                                    pricing: {
+                                        ...rule.pricing,
+                                        premium_promille:
+                                            normalizedValue || 0.1,
+                                    },
+                                })
+                            }}
                             placeholder="5.0"
                             required
                             style={{
@@ -809,39 +1446,549 @@ function RuleEditor({
                         />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <label style={{ display: "block", fontSize: 12, fontWeight: 500, marginBottom: 4, color: "#6b7280" }}>
-                            Eigen Risico (€)
-                        </label>
-                        <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            max="10000"
-                            value={rule.pricing?.eigen_risico || ''}
-                            onChange={(e) => onUpdate({ 
-                                ...rule, 
-                                pricing: { 
-                                    ...rule.pricing, 
-                                    eigen_risico: parseFloat(e.target.value) || 0 
-                                } 
-                            })}
-                            placeholder="250"
-                            required
+                        <label
                             style={{
-                                width: "100%",
-                                padding: "6px 8px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 4,
+                                display: "block",
                                 fontSize: 12,
-                                fontFamily: FONT_STACK,
+                                fontWeight: 500,
+                                marginBottom: 4,
+                                color: "#6b7280",
+                                height: "16px", // Fixed height for label alignment
+                            }}
+                        >
+                            Eigen Risico Berekening
+                        </label>
+                        <EnhancedOwnRiskInput
+                            config={{
+                                method:
+                                    rule.pricing?.eigen_risico_method ||
+                                    "fixed",
+                                fixedAmount: rule.pricing?.eigen_risico || 0,
+                                percentage:
+                                    rule.pricing?.eigen_risico_percentage || 0,
+                            }}
+                            onChange={(config) =>
+                                onUpdate({
+                                    ...rule,
+                                    pricing: {
+                                        ...rule.pricing,
+                                        eigen_risico_method: config.method,
+                                        eigen_risico:
+                                            config.method === "fixed"
+                                                ? config.fixedAmount
+                                                : 0,
+                                        eigen_risico_percentage:
+                                            config.method === "percentage"
+                                                ? config.percentage
+                                                : 0,
+                                    },
+                                })
+                            }
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// DraggableRuleEditor wraps RuleEditor with drag-and-drop functionality
+function DraggableRuleEditor({
+    rule,
+    ruleIndex,
+    availableFields,
+    onUpdate,
+    onDelete,
+    onAddCondition,
+    onUpdateCondition,
+    onRemoveCondition,
+    onReorder,
+    totalRules,
+}: {
+    rule: any
+    ruleIndex: number
+    availableFields: Array<{
+        key: string
+        label: string
+        type: string
+        options?: string[]
+    }>
+    onUpdate: (rule: any) => void
+    onDelete: () => void
+    onAddCondition: (fieldKey: string) => void
+    onUpdateCondition: (fieldKey: string, conditionData: any) => void
+    onRemoveCondition: (fieldKey: string) => void
+    onReorder: (dragIndex: number, hoverIndex: number) => void
+    totalRules: number
+}) {
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
+
+    const handleDragStart = (e: React.DragEvent) => {
+        e.stopPropagation() // Prevent event bubbling
+        e.dataTransfer.setData("text/plain", ruleIndex.toString())
+        e.dataTransfer.effectAllowed = "move"
+        setIsDragging(true)
+    }
+
+    const handleDragEnd = () => {
+        setIsDragging(false)
+        setDragOverIndex(null)
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation() // Prevent event bubbling
+        e.dataTransfer.dropEffect = "move"
+
+        // Calculate drop position based on mouse position
+        const rect = e.currentTarget.getBoundingClientRect()
+        const y = e.clientY - rect.top
+        const height = rect.height
+        const isUpperHalf = y < height / 2
+
+        setDragOverIndex(isUpperHalf ? ruleIndex : ruleIndex + 1)
+    }
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        // Only clear if leaving the component entirely
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDragOverIndex(null)
+        }
+    }
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault()
+        e.stopPropagation() // Prevent event bubbling
+        const draggedIndex = parseInt(e.dataTransfer.getData("text/plain"))
+
+        if (draggedIndex !== ruleIndex) {
+            const dropIndex =
+                dragOverIndex !== null
+                    ? Math.min(dragOverIndex, totalRules)
+                    : ruleIndex
+
+            onReorder(
+                draggedIndex,
+                dropIndex > draggedIndex ? dropIndex - 1 : dropIndex
+            )
+        }
+
+        setDragOverIndex(null)
+    }
+
+    const canMoveUp = ruleIndex > 0
+    const canMoveDown = ruleIndex < totalRules - 1
+
+    const moveUp = (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        if (canMoveUp) {
+            onReorder(ruleIndex, ruleIndex - 1)
+        }
+    }
+
+    const moveDown = (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+        if (canMoveDown) {
+            onReorder(ruleIndex, ruleIndex + 1)
+        }
+    }
+
+    return (
+        <div
+            style={{
+                position: "relative",
+                opacity: isDragging ? 0.5 : 1,
+                transition: "opacity 0.2s ease",
+            }}
+        >
+            {/* Drop indicator */}
+            {dragOverIndex === ruleIndex && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: -2,
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        backgroundColor: colors.blue500,
+                        borderRadius: 2,
+                        zIndex: 10,
+                        boxShadow: "0 0 8px rgba(59, 130, 246, 0.5)",
+                    }}
+                />
+            )}
+
+            <div
+                draggable
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    border: "2px solid #d1d5db",
+                    borderRadius: 8,
+                    padding: 16,
+                    marginBottom: 24,
+                    backgroundColor: "#fefefe",
+                    cursor: "move",
+                    position: "relative",
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                }}
+            >
+                {/* Priority Badge & Drag Handle */}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: -8,
+                        left: 16,
+                        backgroundColor: colors.blue500,
+                        color: "white",
+                        padding: "4px 8px",
+                        borderRadius: 12,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                        zIndex: 5,
+                    }}
+                >
+                    <span>Prioriteit {rule.priority || ruleIndex + 1}</span>
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1,
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: 3,
+                                height: 1,
+                                backgroundColor: "rgba(255,255,255,0.7)",
+                            }}
+                        />
+                        <div
+                            style={{
+                                width: 3,
+                                height: 1,
+                                backgroundColor: "rgba(255,255,255,0.7)",
+                            }}
+                        />
+                        <div
+                            style={{
+                                width: 3,
+                                height: 1,
+                                backgroundColor: "rgba(255,255,255,0.7)",
                             }}
                         />
                     </div>
                 </div>
-                <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
-                    Deze prijzen worden automatisch toegepast op verzekeringsobjecten die voldoen aan deze regel.
-                </p>
+
+                {/* Move Buttons */}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 16,
+                        right: 16,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        zIndex: 5,
+                    }}
+                >
+                    <button
+                        onClick={(e) => moveUp(e)}
+                        disabled={!canMoveUp}
+                        style={{
+                            border: "none",
+                            background: canMoveUp
+                                ? colors.gray100
+                                : colors.gray50,
+                            padding: "4px 6px",
+                            borderRadius: 4,
+                            cursor: canMoveUp ? "pointer" : "not-allowed",
+                            color: canMoveUp ? colors.gray700 : colors.gray400,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            opacity: canMoveUp ? 1 : 0.5,
+                            transition: "all 0.2s ease",
+                        }}
+                        title="Naar boven"
+                    >
+                        ↑
+                    </button>
+                    <button
+                        onClick={(e) => moveDown(e)}
+                        disabled={!canMoveDown}
+                        style={{
+                            border: "none",
+                            background: canMoveDown
+                                ? colors.gray100
+                                : colors.gray50,
+                            padding: "4px 6px",
+                            borderRadius: 4,
+                            cursor: canMoveDown ? "pointer" : "not-allowed",
+                            color: canMoveDown
+                                ? colors.gray700
+                                : colors.gray400,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            opacity: canMoveDown ? 1 : 0.5,
+                            transition: "all 0.2s ease",
+                        }}
+                        title="Naar beneden"
+                    >
+                        ↓
+                    </button>
+                </div>
+
+                {/* Rule Editor Content */}
+                <div style={{ marginTop: 20 }}>
+                    <RuleEditor
+                        rule={rule}
+                        ruleIndex={ruleIndex}
+                        availableFields={availableFields}
+                        onUpdate={onUpdate}
+                        onDelete={onDelete}
+                        onAddCondition={onAddCondition}
+                        onUpdateCondition={onUpdateCondition}
+                        onRemoveCondition={onRemoveCondition}
+                    />
+                </div>
             </div>
+
+            {/* Drop indicator for after this rule */}
+            {dragOverIndex === ruleIndex + 1 && (
+                <div
+                    style={{
+                        position: "absolute",
+                        bottom: -2,
+                        left: 0,
+                        right: 0,
+                        height: 4,
+                        backgroundColor: colors.blue500,
+                        borderRadius: 2,
+                        zIndex: 10,
+                        boxShadow: "0 0 8px rgba(59, 130, 246, 0.5)",
+                    }}
+                />
+            )}
+        </div>
+    )
+}
+
+// BetweenInput component for range inputs (min/max)
+function BetweenInput({
+    fieldType,
+    range,
+    onChange,
+}: {
+    fieldType: string
+    range: { min: any; max: any }
+    onChange: (range: { min: any; max: any }) => void
+}) {
+    const handleMinChange = (value: string) => {
+        let processedValue = value
+        if (fieldType === "number" || fieldType === "currency") {
+            processedValue = value ? parseFloat(value) : null
+        }
+        onChange({ ...range, min: processedValue })
+    }
+
+    const handleMaxChange = (value: string) => {
+        let processedValue = value
+        if (fieldType === "number" || fieldType === "currency") {
+            processedValue = value ? parseFloat(value) : null
+        }
+        onChange({ ...range, max: processedValue })
+    }
+
+    const getInputType = () => {
+        switch (fieldType) {
+            case "number":
+            case "currency":
+                return "number"
+            case "date":
+                return "date"
+            default:
+                return "text"
+        }
+    }
+
+    const getPlaceholder = (type: "min" | "max") => {
+        switch (fieldType) {
+            case "number":
+            case "currency":
+                return type === "min" ? "Min waarde" : "Max waarde"
+            case "date":
+                return type === "min" ? "Van datum" : "Tot datum"
+            default:
+                return type === "min" ? "Min waarde" : "Max waarde"
+        }
+    }
+
+    const inputStyle = {
+        padding: "4px 6px",
+        border: "1px solid #d1d5db",
+        borderRadius: 3,
+        fontSize: 11,
+        minWidth: 80,
+        fontFamily: "Inter, sans-serif",
+    }
+
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+                type={getInputType()}
+                value={range.min || ""}
+                onChange={(e) => handleMinChange(e.target.value)}
+                placeholder={getPlaceholder("min")}
+                style={inputStyle}
+            />
+            <span style={{ fontSize: 11, color: "#6b7280" }}>tot</span>
+            <input
+                type={getInputType()}
+                value={range.max || ""}
+                onChange={(e) => handleMaxChange(e.target.value)}
+                placeholder={getPlaceholder("max")}
+                style={inputStyle}
+            />
+        </div>
+    )
+}
+
+// MultiValueInput component for dynamic list inputs (in/not_in operations)
+function MultiValueInput({
+    fieldType,
+    options,
+    values,
+    onChange,
+}: {
+    fieldType: string
+    options?: string[]
+    values: string[]
+    onChange: (values: string[]) => void
+}) {
+    const addValue = () => {
+        onChange([...values, ""])
+    }
+
+    const updateValue = (index: number, newValue: string) => {
+        const newValues = [...values]
+        newValues[index] = newValue
+        onChange(newValues)
+    }
+
+    const removeValue = (index: number) => {
+        onChange(values.filter((_, i) => i !== index))
+    }
+
+    const inputStyle = {
+        padding: "4px 6px",
+        border: "1px solid #d1d5db",
+        borderRadius: 3,
+        fontSize: 11,
+        minWidth: 120,
+        fontFamily: "Inter, sans-serif",
+    }
+
+    const removeButtonStyle = {
+        background: "#ef4444",
+        color: "white",
+        border: "none",
+        borderRadius: "50%",
+        width: 18,
+        height: 18,
+        fontSize: 11,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        marginLeft: 4,
+    }
+
+    return (
+        <div
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                minWidth: 200,
+            }}
+        >
+            {values.map((value, index) => (
+                <div
+                    key={index}
+                    style={{ display: "flex", alignItems: "center", gap: 4 }}
+                >
+                    {fieldType === "dropdown" && options?.length ? (
+                        <select
+                            value={value}
+                            onChange={(e) => updateValue(index, e.target.value)}
+                            style={inputStyle}
+                        >
+                            <option value="">Selecteer...</option>
+                            {options.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            type="text"
+                            value={value}
+                            onChange={(e) => updateValue(index, e.target.value)}
+                            placeholder={`Waarde ${index + 1}`}
+                            style={inputStyle}
+                        />
+                    )}
+                    <button
+                        onClick={() => removeValue(index)}
+                        style={removeButtonStyle}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "#dc2626"
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "#ef4444"
+                        }}
+                    >
+                        ×
+                    </button>
+                </div>
+            ))}
+            <button
+                onClick={addValue}
+                style={{
+                    padding: "4px 8px",
+                    border: "1px dashed #d1d5db",
+                    borderRadius: 3,
+                    backgroundColor: "transparent",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    color: "#6b7280",
+                }}
+                onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = "#f9fafb"
+                }}
+                onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent"
+                }}
+            >
+                + Voeg waarde toe
+            </button>
         </div>
     )
 }
@@ -854,62 +2001,128 @@ function ConditionEditor({
     onRemove,
 }: {
     fieldKey: string
-    field?: { key: string; label: string; type: string }
+    field?: { key: string; label: string; type: string; options?: string[] }
     condition: any
     onUpdate: (condition: any) => void
     onRemove: () => void
 }) {
-    const fieldType = field?.type || "string"
+    const fieldType = field?.type || "text"
     const operators =
-        OPERATORS[fieldType as keyof typeof OPERATORS] || OPERATORS.string
+        OPERATORS[fieldType as keyof typeof OPERATORS] || OPERATORS.text
 
+    // Handle single value changes (for eq, ne, lt, gt, etc.)
     const handleValueChange = (value: string) => {
-        if (fieldType === "numeric") {
-            onUpdate({ ...condition, value: parseFloat(value) || 0 })
-        } else {
-            onUpdate({ ...condition, value })
+        let processedValue = value
+        if (fieldType === "number" || fieldType === "currency") {
+            processedValue = value ? parseFloat(value) : 0
+        }
+        onUpdate({ ...condition, value: processedValue })
+    }
+
+    // Handle range changes (for between operator)
+    const handleRangeChange = (range: { min: any; max: any }) => {
+        onUpdate({ ...condition, range })
+    }
+
+    // Handle multiple values changes (for in, not_in operators)
+    const handleValuesChange = (values: string[]) => {
+        onUpdate({ ...condition, values })
+    }
+
+    // Determine which input component to show
+    const needsBetween = condition.operator === "between"
+    const needsMultiValues = ["in", "not_in"].includes(condition.operator)
+    const needsSingleValue = !needsBetween && !needsMultiValues
+
+    // Get input type for single value inputs
+    const getSingleInputType = () => {
+        switch (fieldType) {
+            case "number":
+            case "currency":
+                return "number"
+            case "date":
+                return "date"
+            default:
+                return "text"
         }
     }
 
-    const handleValuesChange = (values: string) => {
-        const valueArray = values
-            .split(",")
-            .map((v) => v.trim())
-            .filter((v) => v)
-        onUpdate({ ...condition, values: valueArray })
+    const getSingleInputPlaceholder = () => {
+        switch (fieldType) {
+            case "number":
+            case "currency":
+                return "Voer getal in"
+            case "date":
+                return "Selecteer datum"
+            case "dropdown":
+                return "Selecteer optie"
+            default:
+                return "Voer waarde in"
+        }
     }
 
-    const needsValues = ["between", "in", "not_in"].includes(condition.operator)
-    const needsSingleValue = !needsValues
+    // Initialize values if they don't exist
+    const ensureValues = () => {
+        if (
+            needsMultiValues &&
+            (!condition.values || condition.values.length === 0)
+        ) {
+            onUpdate({ ...condition, values: [""] })
+        }
+        if (needsBetween && !condition.range) {
+            onUpdate({ ...condition, range: { min: null, max: null } })
+        }
+    }
+
+    // Call ensureValues when operator changes to initialize data
+    React.useEffect(() => {
+        ensureValues()
+    }, [condition.operator])
 
     return (
         <div
             style={{
                 display: "flex",
                 gap: 8,
-                alignItems: "center",
-                padding: 8,
+                alignItems: "flex-start",
+                padding: 12,
                 border: "1px solid #e5e7eb",
-                borderRadius: 4,
-                marginBottom: 8,
+                borderRadius: 6,
+                marginBottom: 12,
                 fontSize: 12,
+                backgroundColor: "#fafafa",
             }}
         >
-            <span style={{ minWidth: 100, fontWeight: 500 }}>
-                {field?.label}:
-            </span>
+            {/* Field Label with Type Indicator */}
+            <div style={{ minWidth: 120, paddingTop: 4 }}>
+                <span style={{ fontWeight: 600, color: "#374151" }}>
+                    {field?.label}
+                </span>
+                <span
+                    style={{
+                        fontSize: 10,
+                        color: "#6b7280",
+                        marginLeft: 4,
+                        fontStyle: "italic",
+                    }}
+                >
+                    ({fieldType})
+                </span>
+            </div>
 
+            {/* Operator Selection */}
             <select
                 value={condition.operator}
                 onChange={(e) =>
                     onUpdate({ ...condition, operator: e.target.value })
                 }
                 style={{
-                    padding: "4px 6px",
+                    padding: "6px 8px",
                     border: "1px solid #d1d5db",
-                    borderRadius: 3,
+                    borderRadius: 4,
                     fontSize: 11,
-                    fontFamily: FONT_STACK,
+                    fontFamily: "Inter, sans-serif",
+                    backgroundColor: "white",
                 }}
             >
                 {operators.map((op) => (
@@ -919,62 +2132,216 @@ function ConditionEditor({
                 ))}
             </select>
 
-            {needsSingleValue && (
-                <input
-                    type={fieldType === "numeric" ? "number" : "text"}
-                    value={condition.value || ""}
-                    onChange={(e) => handleValueChange(e.target.value)}
-                    placeholder={
-                        fieldType === "numeric" ? "Enter number" : "Enter value"
-                    }
-                    style={{
-                        padding: "4px 6px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 3,
-                        fontSize: 11,
-                        minWidth: 120,
-                        fontFamily: FONT_STACK,
-                    }}
-                />
-            )}
+            {/* Input Components Based on Operator */}
+            <div style={{ flex: 1 }}>
+                {needsSingleValue && (
+                    <>
+                        {fieldType === "dropdown" && field?.options?.length ? (
+                            <select
+                                value={condition.value || ""}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
+                                style={{
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    minWidth: 140,
+                                    fontFamily: "Inter, sans-serif",
+                                    backgroundColor: "white",
+                                }}
+                            >
+                                <option value="">Selecteer...</option>
+                                {field.options.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type={getSingleInputType()}
+                                value={condition.value || ""}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
+                                placeholder={getSingleInputPlaceholder()}
+                                style={{
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 11,
+                                    minWidth: 140,
+                                    fontFamily: "Inter, sans-serif",
+                                }}
+                            />
+                        )}
+                    </>
+                )}
 
-            {needsValues && (
-                <input
-                    type="text"
-                    value={condition.values?.join(", ") || ""}
-                    onChange={(e) => handleValuesChange(e.target.value)}
-                    placeholder={
-                        condition.operator === "between"
-                            ? "min, max"
-                            : "value1, value2, value3..."
-                    }
-                    style={{
-                        padding: "4px 6px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 3,
-                        fontSize: 11,
-                        minWidth: 150,
-                        fontFamily: FONT_STACK,
-                    }}
-                />
-            )}
+                {needsBetween && (
+                    <BetweenInput
+                        fieldType={fieldType}
+                        range={condition.range || { min: null, max: null }}
+                        onChange={handleRangeChange}
+                    />
+                )}
 
+                {needsMultiValues && (
+                    <MultiValueInput
+                        fieldType={fieldType}
+                        options={field?.options}
+                        values={condition.values || [""]}
+                        onChange={handleValuesChange}
+                    />
+                )}
+            </div>
+
+            {/* Remove Button */}
             <button
                 type="button"
                 onClick={onRemove}
                 style={{
-                    padding: "2px 6px",
-                    backgroundColor: "#f87171",
+                    padding: "4px 8px",
+                    backgroundColor: "#ef4444",
                     color: "white",
                     border: "none",
-                    borderRadius: 3,
+                    borderRadius: 4,
                     cursor: "pointer",
                     fontSize: 10,
-                    fontFamily: FONT_STACK,
+                    fontFamily: "Inter, sans-serif",
+                    marginTop: 2,
+                }}
+                onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = "#dc2626"
+                }}
+                onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = "#ef4444"
                 }}
             >
-                ×
+                Verwijder
             </button>
+        </div>
+    )
+}
+
+// Enhanced Own Risk Input Component
+function EnhancedOwnRiskInput({
+    config,
+    onChange,
+}: {
+    config: OwnRiskConfig
+    onChange: (config: OwnRiskConfig) => void
+}) {
+    const handleMethodChange = (method: OwnRiskCalculationMethod) => {
+        onChange({
+            ...config,
+            method,
+            // Clear the other value when switching methods
+            fixedAmount:
+                method === "fixed" ? config.fixedAmount || 0 : undefined,
+            percentage:
+                method === "percentage" ? config.percentage || 0 : undefined,
+        })
+    }
+
+    const handleValueChange = (value: number) => {
+        if (config.method === "fixed") {
+            onChange({ ...config, fixedAmount: value })
+        } else {
+            onChange({ ...config, percentage: value })
+        }
+    }
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {/* Value Input */}
+            <div>
+                <input
+                    type="number"
+                    step={config.method === "percentage" ? "0.1" : "1"}
+                    min="0"
+                    max={config.method === "percentage" ? "100" : undefined}
+                    value={
+                        config.method === "fixed"
+                            ? config.fixedAmount || ""
+                            : config.percentage || ""
+                    }
+                    onChange={(e) =>
+                        handleValueChange(parseFloat(e.target.value) || 0)
+                    }
+                    placeholder={config.method === "fixed" ? "250" : "5.0"}
+                    style={{
+                        width: "100%",
+                        padding: "6px 8px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 4,
+                        fontSize: 12,
+                        fontFamily: FONT_STACK,
+                    }}
+                />
+                <span
+                    style={{
+                        fontSize: 10,
+                        color: "#9ca3af",
+                        marginTop: "2px",
+                        display: "block",
+                    }}
+                >
+                    {config.method === "fixed"
+                        ? "Euro (afgerond op €100)"
+                        : "Percentage (0-100%)"}
+                </span>
+            </div>
+
+            {/* Method Selection */}
+            <div style={{ display: "flex", gap: "16px" }}>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="ownRiskMethod"
+                        value="fixed"
+                        checked={config.method === "fixed"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as OwnRiskCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Vast bedrag
+                </label>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="ownRiskMethod"
+                        value="percentage"
+                        checked={config.method === "percentage"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as OwnRiskCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Percentage van bootwaarde
+                </label>
+            </div>
         </div>
     )
 }
@@ -1018,12 +2385,15 @@ function EditOrgForm({
     )
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
-    const [activeTab, setActiveTab] = useState<"basic" | "fields" | "approval">(
-        "basic"
-    )
+    const [activeTab, setActiveTab] = useState<
+        "basic" | "fields" | "approval" | "logo"
+    >("basic")
     const [autoApprovalConfig, setAutoApprovalConfig] = useState(
         org.auto_approval_config || { enabled: false, rules: [] }
     )
+
+    // Get current user info for role-based access control
+    const currentUser = getCurrentUserInfo()
 
     // Use dynamic schema for field configuration
     const { schema: dynamicSchema, loading: schemaLoading } = useDynamicSchema(
@@ -1059,24 +2429,43 @@ function EditOrgForm({
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
-        
-        // Validate that all enabled rules have required pricing
+
+        // Validate that all enabled rules have required pricing with enhanced validation
         if (autoApprovalConfig.enabled && autoApprovalConfig.rules.length > 0) {
-            const missingPricing = autoApprovalConfig.rules.filter((rule: any, index: number) => {
-                const pricing = rule.pricing
-                return !pricing || 
-                       typeof pricing.premium_promille !== 'number' || 
-                       typeof pricing.eigen_risico !== 'number' ||
-                       pricing.premium_promille <= 0 ||
-                       pricing.eigen_risico < 0
-            })
-            
+            const missingPricing = autoApprovalConfig.rules.filter(
+                (rule: any, index: number) => {
+                    const pricing = rule.pricing
+                    if (!pricing) {
+                        return true
+                    }
+
+                    // Enhanced promillage validation
+                    const promillageError = validatePromillage(
+                        pricing.premium_promille
+                    )
+                    if (promillageError !== null) {
+                        return true
+                    }
+
+                    // Enhanced own risk configuration validation (supports both fixed and percentage)
+                    const ownRiskConfig: OwnRiskConfig = {
+                        method: pricing.eigen_risico_method || "fixed",
+                        fixedAmount: pricing.eigen_risico || 0,
+                        percentage: pricing.eigen_risico_percentage || 0,
+                    }
+                    const ownRiskError = validateOwnRiskConfig(ownRiskConfig)
+                    return ownRiskError !== null
+                }
+            )
+
             if (missingPricing.length > 0) {
-                setError(`Alle regels moeten verplichte prijzen hebben. Controleer de regels: ${missingPricing.map((rule: any, index: number) => rule.name || `Regel ${index + 1}`).join(', ')}`)
+                setError(
+                    `Alle regels moeten verplichte prijzen hebben. Controleer de regels: ${missingPricing.map((rule: any, index: number) => rule.name || `Regel ${index + 1}`).join(", ")}`
+                )
                 return
             }
         }
-        
+
         try {
             // All fields are now configurable by admin - no forced requirements
             const updatedInsuredObjectFieldsConfig = {
@@ -1136,9 +2525,9 @@ function EditOrgForm({
                 padding: 32,
                 borderRadius: 12,
                 boxShadow: "0 25px 70px rgba(0,0,0,0.15)",
-                minWidth: 600,
-                maxWidth: "90vw",
-                maxHeight: "90vh",
+                minWidth: 700,
+                maxWidth: "95vw",
+                maxHeight: "95vh",
                 overflow: "auto",
             }}
         >
@@ -1205,6 +2594,22 @@ function EditOrgForm({
                     }}
                 >
                     Auto-Goedkeuring Instellingen
+                </button>
+                <button
+                    onClick={() => setActiveTab("logo")}
+                    style={{
+                        padding: "12px 20px",
+                        border: "none",
+                        background: "none",
+                        borderBottom:
+                            activeTab === "logo" ? "2px solid #3b82f6" : "none",
+                        color: activeTab === "logo" ? "#3b82f6" : "#6b7280",
+                        fontWeight: activeTab === "logo" ? 600 : 400,
+                        cursor: "pointer",
+                        fontFamily: FONT_STACK,
+                    }}
+                >
+                    Logo Beheer
                 </button>
             </div>
 
@@ -1458,7 +2863,6 @@ function EditOrgForm({
                                     }}
                                 />
                             </div>
-
                         </div>
                     </div>
                 )}
@@ -1678,6 +3082,23 @@ function EditOrgForm({
                         onChange={setAutoApprovalConfig}
                         org={org}
                     />
+                )}
+                {activeTab === "logo" && (
+                    <div style={{ padding: "20px 0" }}>
+                        <LogoManager
+                            organizationId={org.id}
+                            organizationName={org.name}
+                            userInfo={currentUser}
+                            onLogoUpdated={(logoData) => {
+                                // Optional: Handle logo update events
+                                console.log(
+                                    "Logo updated for organization:",
+                                    org.name,
+                                    logoData
+                                )
+                            }}
+                        />
+                    </div>
                 )}
 
                 {error && (
@@ -2132,8 +3553,8 @@ export function OrganizationPageOverride(): Override {
                                 }}
                                 onMouseOver={(e) => {
                                     e.target.style.backgroundColor = "#f8fafc"
-                                    e.target.style.borderColor = "#3b82f6"
-                                    e.target.style.color = "#3b82f6"
+                                    e.target.style.borderColor = colors.primary
+                                    e.target.style.color = colors.primary
                                     e.target.style.transform =
                                         "translateY(-1px)"
                                     e.target.style.boxShadow =
@@ -2982,4 +4403,654 @@ export function OrganizationPageOverride(): Override {
             </>
         ),
     }
+}
+
+// ——— Global Rules Integration Components ———
+
+// Save As Global Template Component
+interface SaveAsGlobalTemplateProps {
+    userInfo: any
+    currentRuleConfig: any
+    onClose: () => void
+    onSaved?: (template: GlobalRuleTemplate) => void
+}
+
+function SaveAsGlobalTemplate({
+    userInfo,
+    currentRuleConfig,
+    onClose,
+    onSaved,
+}: SaveAsGlobalTemplateProps) {
+    const [formData, setFormData] = useState({
+        name: "",
+        description: "",
+    })
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    // All users can save templates now
+
+    const handleSave = async () => {
+        if (!formData.name.trim()) {
+            setError("Template naam is verplicht")
+            return
+        }
+
+        if (
+            !currentRuleConfig ||
+            !currentRuleConfig.rules ||
+            currentRuleConfig.rules.length === 0
+        ) {
+            setError("Er zijn geen regels om op te slaan als template")
+            return
+        }
+
+        try {
+            setSaving(true)
+            setError(null)
+
+            const template = {
+                name: formData.name.trim(),
+                description: formData.description.trim() || undefined,
+                ruleConfig: currentRuleConfig,
+                createdBy: userInfo.sub,
+            }
+
+            const token = getIdToken()
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
+            if (token) headers.Authorization = `Bearer ${token}`
+
+            const response = await fetch(
+                `${API_BASE_URL}/neptunus/global-rule-templates`,
+                {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify(template),
+                    mode: "cors",
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to save template: ${response.statusText}`
+                )
+            }
+
+            const savedTemplate = await response.json()
+            onSaved?.(savedTemplate)
+            onClose()
+        } catch (err) {
+            setError(formatErrorMessage(err))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div style={styles.modalOverlay}>
+            <div
+                style={{
+                    ...styles.modal,
+                    maxWidth: "500px",
+                    padding: "24px",
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        marginBottom: "20px",
+                    }}
+                >
+                    <FaSave size={20} color={colors.primary} />
+                    <h3
+                        style={{
+                            margin: 0,
+                            fontSize: "18px",
+                            fontWeight: "600",
+                        }}
+                    >
+                        Opslaan als Globale Template
+                    </h3>
+                </div>
+
+                {/* Form */}
+                <div style={{ marginBottom: "20px" }}>
+                    <label
+                        style={{
+                            display: "block",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: colors.gray700,
+                        }}
+                    >
+                        Template Naam *
+                    </label>
+                    <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                name: e.target.value,
+                            }))
+                        }
+                        placeholder="Bijv. Standaard Boot Acceptatie Regels"
+                        style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: `1px solid ${colors.gray300}`,
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            marginBottom: "12px",
+                        }}
+                    />
+
+                    <label
+                        style={{
+                            display: "block",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            marginBottom: "6px",
+                            color: colors.gray700,
+                        }}
+                    >
+                        Beschrijving (optioneel)
+                    </label>
+                    <textarea
+                        value={formData.description}
+                        onChange={(e) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                description: e.target.value,
+                            }))
+                        }
+                        placeholder="Beschrijf wanneer deze template gebruikt moet worden..."
+                        rows={3}
+                        style={{
+                            width: "100%",
+                            padding: "10px",
+                            border: `1px solid ${colors.gray300}`,
+                            borderRadius: "6px",
+                            fontSize: "14px",
+                            resize: "vertical",
+                            marginBottom: "12px",
+                        }}
+                    />
+
+                </div>
+
+                {/* Info Box */}
+                <div
+                    style={{
+                        padding: "12px",
+                        backgroundColor: colors.infoBg,
+                        border: `1px solid ${colors.info}`,
+                        borderRadius: "6px",
+                        marginBottom: "20px",
+                        fontSize: "13px",
+                        color: colors.info,
+                    }}
+                >
+                    <strong>Opmerking:</strong> Deze template bevat{" "}
+                    {currentRuleConfig?.rules?.length || 0} acceptatie regels en
+                    kan door alle organisaties gebruikt worden.
+                </div>
+
+                {error && (
+                    <div
+                        style={{
+                            padding: "12px",
+                            backgroundColor: colors.errorBg,
+                            color: colors.error,
+                            borderRadius: "6px",
+                            marginBottom: "20px",
+                            fontSize: "14px",
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                {/* Actions */}
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "12px",
+                        justifyContent: "flex-end",
+                    }}
+                >
+                    <button
+                        onClick={onClose}
+                        disabled={saving}
+                        style={{
+                            ...styles.secondaryButton,
+                            padding: "10px 16px",
+                        }}
+                    >
+                        Annuleren
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving || !formData.name.trim()}
+                        style={{
+                            ...styles.primaryButton,
+                            padding: "10px 16px",
+                            backgroundColor: saving
+                                ? colors.gray400
+                                : colors.success,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                        }}
+                    >
+                        <FaSave size={12} />
+                        {saving ? "Opslaan..." : "Template Opslaan"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// Load From Global Template Component
+interface LoadFromGlobalTemplateProps {
+    userInfo: any
+    onClose: () => void
+    onLoadTemplate: (template: GlobalRuleTemplate) => void
+}
+
+function LoadFromGlobalTemplate({
+    userInfo,
+    onClose,
+    onLoadTemplate,
+}: LoadFromGlobalTemplateProps) {
+    const [templates, setTemplates] = useState<GlobalRuleTemplate[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [selectedTemplate, setSelectedTemplate] =
+        useState<GlobalRuleTemplate | null>(null)
+    const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
+
+    // Load templates on mount
+    React.useEffect(() => {
+        loadTemplates()
+    }, [])
+
+    const loadTemplates = async () => {
+        try {
+            setLoading(true)
+            const token = getIdToken()
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
+            if (token) headers.Authorization = `Bearer ${token}`
+
+            const response = await fetch(
+                `${API_BASE_URL}/neptunus/global-rule-templates?active=true`,
+                {
+                    method: "GET",
+                    headers,
+                    mode: "cors",
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to load templates: ${response.statusText}`
+                )
+            }
+
+            const data = await response.json()
+            setTemplates(data)
+        } catch (err) {
+            setError(formatErrorMessage(err))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleLoadTemplate = () => {
+        if (selectedTemplate) {
+            onLoadTemplate(selectedTemplate)
+            onClose()
+        }
+    }
+
+    const handleDeleteTemplate = async (templateId: string) => {
+        try {
+            const token = getIdToken()
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            }
+            if (token) headers.Authorization = `Bearer ${token}`
+
+            const response = await fetch(
+                `${API_BASE_URL}/neptunus/global-rule-templates/${templateId}`,
+                {
+                    method: "DELETE",
+                    headers,
+                    mode: "cors",
+                }
+            )
+
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to delete template: ${response.statusText}`
+                )
+            }
+
+            // Remove the deleted template from the local state
+            setTemplates(templates.filter(t => t.id !== templateId))
+
+            // Clear selection if the deleted template was selected
+            if (selectedTemplate?.id === templateId) {
+                setSelectedTemplate(null)
+            }
+
+            setDeletingTemplateId(null)
+        } catch (err) {
+            setError(formatErrorMessage(err))
+        }
+    }
+
+    return (
+        <div style={styles.modalOverlay}>
+            <div
+                style={{
+                    ...styles.modal,
+                    maxWidth: "700px",
+                    maxHeight: "80vh",
+                    padding: "24px",
+                    display: "flex",
+                    flexDirection: "column",
+                }}
+            >
+                {/* Header */}
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        marginBottom: "20px",
+                    }}
+                >
+                    <FaDownload size={20} color={colors.primary} />
+                    <h3
+                        style={{
+                            margin: 0,
+                            fontSize: "18px",
+                            fontWeight: "600",
+                        }}
+                    >
+                        Laden vanaf Globale Template
+                    </h3>
+                </div>
+
+                {error && (
+                    <div
+                        style={{
+                            padding: "12px",
+                            backgroundColor: colors.errorBg,
+                            color: colors.error,
+                            borderRadius: "6px",
+                            marginBottom: "20px",
+                            fontSize: "14px",
+                        }}
+                    >
+                        {error}
+                    </div>
+                )}
+
+                {/* Content */}
+                <div
+                    style={{ flex: 1, overflowY: "auto", marginBottom: "20px" }}
+                >
+                    {loading ? (
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "40px",
+                            }}
+                        >
+                            Laden...
+                        </div>
+                    ) : templates.length === 0 ? (
+                        <div
+                            style={{
+                                textAlign: "center",
+                                padding: "40px",
+                                color: colors.gray500,
+                            }}
+                        >
+                            <FaGlobe
+                                size={32}
+                                color={colors.gray300}
+                                style={{ marginBottom: "16px" }}
+                            />
+                            <h4>Geen Actieve Templates</h4>
+                            <p>
+                                Er zijn geen actieve globale templates
+                                beschikbaar.
+                            </p>
+                        </div>
+                    ) : (
+                        <div
+                            style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "12px",
+                            }}
+                        >
+                            {templates.map((template) => (
+                                <div
+                                    key={template.id}
+                                    onClick={() =>
+                                        setSelectedTemplate(template)
+                                    }
+                                    style={{
+                                        padding: "16px",
+                                        border: `2px solid ${selectedTemplate?.id === template.id ? colors.primary : colors.gray200}`,
+                                        borderRadius: "8px",
+                                        cursor: "pointer",
+                                        backgroundColor:
+                                            selectedTemplate?.id === template.id
+                                                ? colors.primaryBg
+                                                : colors.white,
+                                        transition: "all 0.2s ease",
+                                        position: "relative",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (
+                                            selectedTemplate?.id !== template.id
+                                        ) {
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.gray50
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        if (
+                                            selectedTemplate?.id !== template.id
+                                        ) {
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.white
+                                        }
+                                    }}
+                                >
+                                    {/* Delete button */}
+                                    <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (window.confirm(`Weet je zeker dat je de template "${template.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
+                                                    setDeletingTemplateId(template.id)
+                                                    handleDeleteTemplate(template.id)
+                                                }
+                                            }}
+                                            style={{
+                                                position: "absolute",
+                                                top: "8px",
+                                                right: "8px",
+                                                background: "none",
+                                                border: "none",
+                                                cursor: "pointer",
+                                                color: colors.error,
+                                                padding: "4px",
+                                                borderRadius: "4px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = colors.errorBg
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = "transparent"
+                                            }}
+                                            title="Template verwijderen"
+                                            disabled={deletingTemplateId === template.id}
+                                        >
+                                            <FaTimes
+                                                size={14}
+                                                style={{
+                                                    opacity: deletingTemplateId === template.id ? 0.5 : 1
+                                                }}
+                                            />
+                                        </button>
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "flex-start",
+                                            justifyContent: "space-between",
+                                            marginBottom: "8px",
+                                            paddingRight: "24px", // Make room for delete button
+                                        }}
+                                    >
+                                        <h4
+                                            style={{
+                                                margin: 0,
+                                                fontSize: "16px",
+                                                fontWeight: "600",
+                                                color:
+                                                    selectedTemplate?.id ===
+                                                    template.id
+                                                        ? colors.primary
+                                                        : colors.gray900,
+                                            }}
+                                        >
+                                            {template.name}
+                                        </h4>
+                                        {selectedTemplate?.id ===
+                                            template.id && (
+                                            <FaCheckCircle
+                                                size={16}
+                                                color={colors.primary}
+                                            />
+                                        )}
+                                    </div>
+
+                                    {template.description && (
+                                        <p
+                                            style={{
+                                                margin: "0 0 12px 0",
+                                                fontSize: "14px",
+                                                color: colors.gray600,
+                                                lineHeight: "1.4",
+                                            }}
+                                        >
+                                            {template.description}
+                                        </p>
+                                    )}
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: "16px",
+                                            fontSize: "12px",
+                                            color: colors.gray500,
+                                        }}
+                                    >
+                                        <span>
+                                            {template.ruleConfig.rules.length}{" "}
+                                            regels
+                                        </span>
+                                        <span>
+                                            {template.usageCount} x gebruikt
+                                        </span>
+                                        <span>
+                                            Aangemaakt:{" "}
+                                            {new Date(
+                                                template.createdAt
+                                            ).toLocaleDateString("nl-NL")}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Warning */}
+                {selectedTemplate && (
+                    <div
+                        style={{
+                            padding: "12px",
+                            backgroundColor: colors.warningBg,
+                            border: `1px solid ${colors.warning}`,
+                            borderRadius: "6px",
+                            marginBottom: "20px",
+                            fontSize: "13px",
+                            color: colors.warning,
+                        }}
+                    >
+                        <strong>Let op:</strong> Het laden van een template
+                        overschrijft alle huidige acceptatie regels.
+                    </div>
+                )}
+
+                {/* Actions */}
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "12px",
+                        justifyContent: "flex-end",
+                    }}
+                >
+                    <button
+                        onClick={onClose}
+                        style={{
+                            ...styles.secondaryButton,
+                            padding: "10px 16px",
+                        }}
+                    >
+                        Annuleren
+                    </button>
+                    <button
+                        onClick={handleLoadTemplate}
+                        disabled={!selectedTemplate}
+                        style={{
+                            ...styles.primaryButton,
+                            padding: "10px 16px",
+                            backgroundColor: !selectedTemplate
+                                ? colors.gray400
+                                : colors.primary,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                        }}
+                    >
+                        <FaDownload size={12} />
+                        Template Laden
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
 }

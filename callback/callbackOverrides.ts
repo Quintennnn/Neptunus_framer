@@ -2,7 +2,7 @@ import React, { useEffect } from "react"
 import { Override } from "framer"
 
 // Import utils to maintain consistency with existing code
-import { API_BASE_URL, API_PATHS } from "../utils"
+import { API_BASE_URL, API_PATHS, determineRedirectPath } from "../utils"
 
 // Helper function to decode JWT and extract sub (user ID) - same as login
 function decodeJWT(token: string): any {
@@ -91,10 +91,12 @@ export function callbackHandler(): Override {
                     }
                     
                     console.log('Session storage updated successfully');
-                    
-                    // Redirect to organizations (same as existing login flow)
-                    console.log('Redirecting to organizations...');
-                    window.location.href = "https://neptunus.framer.website/organizations";
+
+                    // Determine optimal redirect path based on user role and organization access
+                    console.log('Determining optimal redirect path...');
+                    const redirectPath = await determineRedirectPath();
+                    console.log(`Redirecting to: ${redirectPath}`);
+                    window.location.href = `https://neptunus.framer.website${redirectPath}`;
                     
                 } else {
                     // No code parameter found

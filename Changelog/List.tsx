@@ -123,7 +123,7 @@ function getInsuredObjectIconAndName(
         formattedChanges?.bootnummer
     ) {
         const boatNumber = formattedChanges.bootnummer || ""
-        const displayName = boatNumber ? `Boat: ${boatNumber}` : "Boat: Unknown"
+        const displayName = boatNumber ? `Boot: ${boatNumber}` : "Boot: Onbekend"
         return {
             icon: <FaShip style={{ color: colors.primary }} />,
             displayName,
@@ -141,7 +141,7 @@ function getInsuredObjectIconAndName(
 
     // Check for motor
     if (formattedChanges?.motorMerk || formattedChanges?.motorSerienummer) {
-        const motorNumber = formattedChanges.motorSerienummer || "Unknown"
+        const motorNumber = formattedChanges.motorSerienummer || "Onbekend"
         return {
             icon: <FaCogs style={{ color: colors.error }} />,
             displayName: `Motor: ${motorNumber}`,
@@ -154,17 +154,17 @@ function getInsuredObjectIconAndName(
         if (objectType.includes("boat") || objectType.includes("boot")) {
             return {
                 icon: <FaShip style={{ color: colors.primary }} />,
-                displayName: "Boat: Unknown",
+                displayName: "Boot: Onbekend",
             }
         } else if (objectType.includes("trailer")) {
             return {
                 icon: <FaTruck style={{ color: colors.warning }} />,
-                displayName: "Trailer: Unknown",
+                displayName: "Trailer: Onbekend",
             }
         } else if (objectType.includes("motor")) {
             return {
                 icon: <FaCogs style={{ color: colors.error }} />,
-                displayName: "Motor: Unknown",
+                displayName: "Motor: Onbekend",
             }
         }
     }
@@ -190,7 +190,7 @@ async function fetchEntityInfo(
 
     // First try to extract info from changes data (which is always available)
     const formattedChanges = formatDynamoDBValue(changes)
-    let displayName = "Unknown"
+    let displayName = "Onbekend"
     let organization = ""
     let icon: React.ReactNode = <FaClipboardList />
 
@@ -237,7 +237,7 @@ async function fetchEntityInfo(
 
     // If we got good info from changes, return it
     if (
-        displayName !== "Unknown" &&
+        displayName !== "Onbekend" &&
         displayName !== `${sourceTableTag} ${entityId.slice(-8)}`
     ) {
         return {

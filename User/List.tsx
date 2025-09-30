@@ -270,9 +270,9 @@ const buttonVariants = {
     } as React.CSSProperties,
     
     primary: {
-        backgroundColor: "#3b82f6",
+        backgroundColor: colors.primary,
         color: "#ffffff",
-        borderColor: "#3b82f6",
+        borderColor: colors.primary,
     } as React.CSSProperties,
     
     secondary: {
@@ -813,8 +813,8 @@ function EditUserForm({
                         }}
                         onMouseLeave={(e) => {
                             if (!organizationsError) {
-                                e.currentTarget.style.backgroundColor = "#3b82f6"
-                                e.currentTarget.style.borderColor = "#3b82f6"
+                                e.currentTarget.style.backgroundColor = colors.primary
+                                e.currentTarget.style.borderColor = colors.primary
                             }
                         }}
                     >
@@ -1042,8 +1042,8 @@ function CreateUserForm({
                         }}
                         onMouseLeave={(e) => {
                             if (!isSubmitting) {
-                                e.currentTarget.style.backgroundColor = "#3b82f6"
-                                e.currentTarget.style.borderColor = "#3b82f6"
+                                e.currentTarget.style.backgroundColor = colors.primary
+                                e.currentTarget.style.borderColor = colors.primary
                             }
                         }}
                     >
@@ -1095,8 +1095,8 @@ function ErrorNotification({
                         e.currentTarget.style.borderColor = "#2563eb"
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "#3b82f6"
-                        e.currentTarget.style.borderColor = "#3b82f6"
+                        e.currentTarget.style.backgroundColor = colors.primary
+                        e.currentTarget.style.borderColor = colors.primary
                     }}
                 >
                     OK
@@ -1668,9 +1668,9 @@ export function UserPageOverride(): Override {
                                         }}
                                         style={{
                                             padding: "16px 24px",
-                                            backgroundColor: isActive ? "#3b82f6" : "#ffffff",
-                                            color: isActive ? "white" : "#6b7280",
-                                            border: isActive ? "none" : "2px solid #e5e7eb",
+                                            backgroundColor: isActive ? colors.navigationActive : colors.navigationInactive,
+                                            color: isActive ? "white" : colors.gray500,
+                                            border: isActive ? "none" : `2px solid ${colors.navigationInactiveBorder}`,
                                             borderRadius: "12px",
                                             fontSize: "15px",
                                             fontWeight: "600",
@@ -1689,9 +1689,9 @@ export function UserPageOverride(): Override {
                                         onMouseOver={(e) => {
                                             if (!isActive) {
                                                 const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#f8fafc"
-                                                target.style.borderColor = "#3b82f6"
-                                                target.style.color = "#3b82f6"
+                                                target.style.backgroundColor = colors.navigationInactiveHover
+                                                target.style.borderColor = colors.navigationActive
+                                                target.style.color = colors.navigationActive
                                                 target.style.transform = "translateY(-1px)"
                                                 target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                             }
@@ -1699,9 +1699,9 @@ export function UserPageOverride(): Override {
                                         onMouseOut={(e) => {
                                             if (!isActive) {
                                                 const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#ffffff"
-                                                target.style.borderColor = "#e5e7eb"
-                                                target.style.color = "#6b7280"
+                                                target.style.backgroundColor = colors.navigationInactive
+                                                target.style.borderColor = colors.navigationInactiveBorder
+                                                target.style.color = colors.gray500
                                                 target.style.transform = "none"
                                                 target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                             }
@@ -1762,7 +1762,7 @@ export function UserPageOverride(): Override {
                                         <FaUsers
                                             size={24}
                                             style={{
-                                                color: "#3b82f6",
+                                                color: colors.primary,
                                             }}
                                         />
                                         <h1

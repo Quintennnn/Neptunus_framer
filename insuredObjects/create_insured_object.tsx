@@ -2,20 +2,22 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
 import { FaPlus, FaTimes, FaShip, FaTruck, FaCog, FaArrowLeft, FaUser } from "react-icons/fa"
-import { colors, styles, hover, animations, FONT_STACK } from "../Theme"
-import { 
-    API_BASE_URL, 
-    API_PATHS, 
-    getIdToken, 
+import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
+import {
+    API_BASE_URL,
+    API_PATHS,
+    getIdToken,
     getUserId,
-    formatErrorMessage, 
+    formatErrorMessage,
     formatSuccessMessage,
     validateRequired,
     validateYear,
     validateNumberRange,
-    formatLabel
-} from "../Utils"
-import { useDynamicSchema, useCompleteSchema, getUserInputFieldsForObjectType, type FieldSchema } from "../hooks/UseDynamicSchema"
+    formatLabel,
+    formatObjectSummary,
+    formatCurrency
+} from "../Utils.tsx"
+import { useDynamicSchema, useCompleteSchema, getUserInputFieldsForObjectType, type FieldSchema } from "../hooks/UseDynamicSchema.tsx"
 
 
 // Object type definitions
@@ -39,7 +41,7 @@ type InsuredObjectFormState = Record<string, any> & {
 // Object type configurations
 export const OBJECT_TYPE_CONFIG = {
     boat: {
-        label: "Boat",
+        label: "Boot",
         icon: FaShip,
         description: "Zeilboten, motorboten, jachten en andere watervoertuigen",
         color: colors.blue || "#3b82f6",
@@ -214,13 +216,15 @@ function getFieldsFromSchemaForCreateForm(schema: FieldSchema[] | null, objectTy
     console.log("🎯 Fields for type:", fieldsForType.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
     
     // Show ALL user input fields regardless of visible setting (for create forms only)
+    // Exclude 'edit_only' fields from create forms
     const finalFields = fieldsForType.filter(field => {
-        const isUserField = field.inputType === 'user'
+        const isUserField = field.inputType === 'user'  // Only 'user' fields, not 'edit_only'
         const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
         
         console.log(`🔎 Field ${field.key}: isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}`)
         
         // IMPORTANT: Do NOT check field.visible here - create forms show all user input fields
+        // IMPORTANT: Exclude 'edit_only' fields from create forms
         return isUserField && isNotOrganizationField
     })
     
@@ -272,7 +276,7 @@ export function ObjectTypeSelector({
                         </button>
                     )}
                     <div style={styles.title}>
-                        Choose Object Type
+                        Kies Object Type
                     </div>
                 </div>
                 <button
@@ -393,7 +397,7 @@ export function OrganizationSelector({
                         <FaArrowLeft size={16} />
                     </button>
                     <div style={styles.title}>
-                        Choose Organization
+                        Kies Organisatie
                     </div>
                 </div>
                 <button
@@ -504,6 +508,8 @@ function InsuredObjectForm({
     const [error, setError] = React.useState<string | null>(null)
     const [success, setSuccess] = React.useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [showConfirmDialog, setShowConfirmDialog] = React.useState(false)
+    const [pendingSubmitData, setPendingSubmitData] = React.useState<any>(null)
     const [isLoadingConfig, setIsLoadingConfig] = React.useState(config.useOrgConfig)
     // Legacy state removed - now using useDynamicSchema hook
     
@@ -566,30 +572,41 @@ function InsuredObjectForm({
         })
     }
 
+    // Function to show confirmation dialog
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
 
-
         setError(null)
         setSuccess(null)
+
+        // Prepare form data for confirmation dialog
+        let formData: any
+        if (payloadFormat === 'simple') {
+            formData = { ...form }
+        } else {
+            formData = { ...form }
+            Object.keys(formData).forEach(key => {
+                if (formData[key] === "" || formData[key] === null || formData[key] === undefined) {
+                    delete formData[key]
+                }
+            })
+        }
+
+        // Store data and show confirmation dialog
+        setPendingSubmitData(formData)
+        setShowConfirmDialog(true)
+    }
+
+    // Function to perform actual submission after confirmation
+    async function performSubmit() {
+        if (!pendingSubmitData) return
+
         setIsSubmitting(true)
+        setShowConfirmDialog(false)
 
         try {
-            // Prepare API payload based on compatibility mode
-            let apiPayload: any
-            
-            if (payloadFormat === 'simple') {
-                // Simple payload (list file behavior) - send form data directly
-                apiPayload = { ...form }
-            } else {
-                // Advanced payload (create file behavior) - clean up empty values
-                apiPayload = { ...form }
-                Object.keys(apiPayload).forEach(key => {
-                    if (apiPayload[key] === "" || apiPayload[key] === null || apiPayload[key] === undefined) {
-                        delete apiPayload[key]
-                    }
-                })
-            }
+            // Use the pending submit data (already prepared in handleSubmit)
+            const apiPayload = pendingSubmitData
 
             // Debug logging - now fully dynamic
             const fieldsToRenderForDebug = getFieldsFromSchemaForCreateForm(orgSchema, objectType)
@@ -727,6 +744,163 @@ function InsuredObjectForm({
                     />
                 )}
             </div>
+        )
+    }
+
+    // Confirmation Dialog Component
+    function ConfirmationDialog({ isOpen, onConfirm, onCancel, objectData, schema }: {
+        isOpen: boolean
+        onConfirm: () => void
+        onCancel: () => void
+        objectData: any
+        schema?: FieldSchema[]
+    }) {
+        if (!isOpen) return null
+
+        const summary = formatObjectSummary(objectData, schema)
+        const summaryEntries = Object.entries(summary)
+
+        return ReactDOM.createPortal(
+            <>
+                {/* Background overlay */}
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0, 0, 0, 0.5)",
+                        zIndex: 1000,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "20px",
+                    }}
+                    onClick={onCancel}
+                >
+                    {/* Modal content */}
+                    <div
+                        style={{
+                            backgroundColor: colors.white,
+                            borderRadius: "12px",
+                            padding: "24px",
+                            maxWidth: "600px",
+                            width: "100%",
+                            maxHeight: "80vh",
+                            overflowY: "auto",
+                            boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)",
+                            fontFamily: FONT_STACK,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 style={{
+                            margin: "0 0 16px 0",
+                            fontSize: "20px",
+                            fontWeight: "600",
+                            color: colors.gray900,
+                        }}>
+                            Overzicht voor opslaan
+                        </h2>
+
+                        <p style={{
+                            margin: "0 0 24px 0",
+                            fontSize: "14px",
+                            color: colors.gray600,
+                        }}>
+                            Controleer de gegevens voordat u het verzekerd object opslaat:
+                        </p>
+
+                        {/* Object summary */}
+                        <div style={{
+                            border: `1px solid ${colors.gray200}`,
+                            borderRadius: "8px",
+                            padding: "16px",
+                            marginBottom: "24px",
+                            backgroundColor: colors.gray50,
+                        }}>
+                            {summaryEntries.length > 0 ? (
+                                <div style={{ display: "grid", gap: "12px" }}>
+                                    {summaryEntries.map(([label, value], index) => (
+                                        <div key={index} style={{
+                                            display: "grid",
+                                            gridTemplateColumns: "140px 1fr",
+                                            gap: "12px",
+                                            alignItems: "start",
+                                        }}>
+                                            <span style={{
+                                                fontSize: "13px",
+                                                fontWeight: "500",
+                                                color: colors.gray700,
+                                            }}>
+                                                {label}:
+                                            </span>
+                                            <span style={{
+                                                fontSize: "13px",
+                                                color: colors.gray900,
+                                            }}>
+                                                {value}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p style={{
+                                    margin: 0,
+                                    fontSize: "13px",
+                                    color: colors.gray500,
+                                    fontStyle: "italic",
+                                }}>
+                                    Geen gegevens om weer te geven
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div style={{
+                            display: "flex",
+                            gap: "12px",
+                            justifyContent: "flex-end",
+                        }}>
+                            <button
+                                onClick={onCancel}
+                                type="button"
+                                style={{
+                                    padding: "10px 20px",
+                                    border: `1px solid ${colors.gray300}`,
+                                    backgroundColor: colors.white,
+                                    color: colors.gray700,
+                                    borderRadius: "6px",
+                                    fontSize: "14px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                }}
+                            >
+                                Annuleren
+                            </button>
+                            <button
+                                onClick={onConfirm}
+                                type="button"
+                                style={{
+                                    padding: "10px 20px",
+                                    border: "none",
+                                    backgroundColor: colors.primary,
+                                    color: colors.white,
+                                    borderRadius: "6px",
+                                    fontSize: "14px",
+                                    fontWeight: "500",
+                                    cursor: "pointer",
+                                    fontFamily: FONT_STACK,
+                                }}
+                            >
+                                Opslaan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </>,
+            document.body
         )
     }
 
@@ -899,6 +1073,18 @@ function InsuredObjectForm({
                 </div>
             </form>
 
+            {/* Confirmation Dialog */}
+            <ConfirmationDialog
+                isOpen={showConfirmDialog}
+                onConfirm={performSubmit}
+                onCancel={() => {
+                    setShowConfirmDialog(false)
+                    setPendingSubmitData(null)
+                }}
+                objectData={pendingSubmitData}
+                schema={fieldsToRender}
+            />
+
             <style>{animations}</style>
         </div>
     )
@@ -1052,7 +1238,7 @@ function InsuredObjectFormManager() {
                 }}
             >
                 <FaPlus size={14} />
-                Add Insured Object
+                Verzekerd Object Toevoegen
             </button>
             {overlay}
         </Frame>

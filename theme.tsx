@@ -22,6 +22,21 @@ export type ColorScheme = {
   warningBg: string
   warningBorder: string
   
+  // Navigation colors
+  navigationActive: string
+  navigationActiveHover: string
+  navigationInactive: string
+  navigationInactiveHover: string
+  navigationInactiveBorder: string
+  
+  // Action button colors
+  actionCreate: string
+  actionCreateHover: string
+  actionEdit: string
+  actionEditHover: string
+  actionDelete: string
+  actionDeleteHover: string
+  
   // Gray scale
   white: string
   gray50: string
@@ -59,6 +74,21 @@ const greenScheme: ColorScheme = {
   warningBg: "#fefce8",
   warningBorder: "#fde68a",
   
+  // Navigation colors - blue theme for consistency
+  navigationActive: "#3b82f6",
+  navigationActiveHover: "#2563eb",
+  navigationInactive: "#ffffff",
+  navigationInactiveHover: "#f8fafc",
+  navigationInactiveBorder: "#e5e7eb",
+  
+  // Action button colors
+  actionCreate: "#10b981",  // Green theme
+  actionCreateHover: "#059669",
+  actionEdit: "#3b82f6",    // Blue for edit
+  actionEditHover: "#2563eb",
+  actionDelete: "#dc2626",  // Red for delete
+  actionDeleteHover: "#b91c1c",
+  
   white: "#ffffff",
   gray50: "#f9fafb",
   gray100: "#f3f4f6",
@@ -93,6 +123,21 @@ const blueScheme: ColorScheme = {
   warningBg: "#fefce8",
   warningBorder: "#fde68a",
   
+  // Navigation colors - blue theme
+  navigationActive: "#3b82f6",
+  navigationActiveHover: "#2563eb",
+  navigationInactive: "#ffffff",
+  navigationInactiveHover: "#f8fafc",
+  navigationInactiveBorder: "#e5e7eb",
+  
+  // Action button colors
+  actionCreate: "#10b981",  // Green for create
+  actionCreateHover: "#059669",
+  actionEdit: "#3b82f6",    // Blue for edit
+  actionEditHover: "#2563eb",
+  actionDelete: "#dc2626",  // Red for delete
+  actionDeleteHover: "#b91c1c",
+  
   white: "#ffffff",
   gray50: "#f9fafb",
   gray100: "#f3f4f6",
@@ -126,6 +171,21 @@ const purpleScheme: ColorScheme = {
   warning: "#ca8a04",
   warningBg: "#fefce8",
   warningBorder: "#fde68a",
+  
+  // Navigation colors - blue theme for consistency
+  navigationActive: "#3b82f6",
+  navigationActiveHover: "#2563eb",
+  navigationInactive: "#ffffff",
+  navigationInactiveHover: "#f8fafc",
+  navigationInactiveBorder: "#e5e7eb",
+  
+  // Action button colors
+  actionCreate: "#10b981",  // Green for create
+  actionCreateHover: "#059669",
+  actionEdit: "#3b82f6",    // Blue for edit
+  actionEditHover: "#2563eb",
+  actionDelete: "#dc2626",  // Red for delete
+  actionDeleteHover: "#b91c1c",
   
   white: "#ffffff",
   gray50: "#f9fafb",
@@ -187,6 +247,56 @@ export const styles = {
   primaryButton: {
     padding: "12px 24px",
     backgroundColor: colors.primary,
+    color: colors.white,
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "500",
+    cursor: "pointer",
+    fontFamily: FONT_STACK,
+    transition: "all 0.2s",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+
+  // Navigation tab styles
+  navigationTabActive: {
+    padding: "16px 24px",
+    backgroundColor: colors.navigationActive,
+    color: colors.white,
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    fontFamily: FONT_STACK,
+    transition: "all 0.2s",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+
+  navigationTabInactive: {
+    padding: "16px 24px",
+    backgroundColor: colors.navigationInactive,
+    color: colors.gray500,
+    border: `2px solid ${colors.navigationInactiveBorder}`,
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    fontFamily: FONT_STACK,
+    transition: "all 0.2s",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+
+  // Action button styles
+  createButton: {
+    padding: "12px 24px",
+    backgroundColor: colors.actionCreate,
     color: colors.white,
     border: "none",
     borderRadius: "8px",
@@ -359,6 +469,30 @@ export const hover = {
   dangerButton: (element: HTMLElement) => {
     element.style.backgroundColor = "#b91c1c"
   },
+
+  // Navigation tab hover effects
+  navigationTabActive: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.navigationActiveHover
+  },
+
+  navigationTabInactive: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.navigationInactiveHover
+    element.style.borderColor = colors.navigationActive
+    element.style.color = colors.navigationActive
+  },
+
+  // Action button hover effects  
+  createButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionCreateHover
+  },
+
+  editButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionEditHover
+  },
+
+  deleteButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionDeleteHover
+  },
   
   input: (element: HTMLElement) => {
     element.style.borderColor = colors.primary
@@ -379,6 +513,30 @@ export const hover = {
   
   resetDangerButton: (element: HTMLElement) => {
     element.style.backgroundColor = colors.error
+  },
+
+  // Reset navigation tab functions
+  resetNavigationTabActive: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.navigationActive
+  },
+
+  resetNavigationTabInactive: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.navigationInactive
+    element.style.borderColor = colors.navigationInactiveBorder
+    element.style.color = colors.gray500
+  },
+
+  // Reset action button functions
+  resetCreateButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionCreate
+  },
+
+  resetEditButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionEdit
+  },
+
+  resetDeleteButton: (element: HTMLElement) => {
+    element.style.backgroundColor = colors.actionDelete
   },
   
   resetInput: (element: HTMLElement) => {

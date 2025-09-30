@@ -12,7 +12,8 @@
       "WebSearch",
       "Read(C:\\Users\\Quinten\\Desktop\\development_local\\**)",
       "Write(C:\\Users\\Quinten\\Desktop\\development_local\\**)",
-      "Edit(C:\\Users\\Quinten\\Desktop\\development_local\\**)"
+      "Edit(C:\\Users\\Quinten\\Desktop\\development_local\\**)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "additionalDirectories": [

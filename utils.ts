@@ -53,7 +53,7 @@ export function clearAuthTokens(): void {
 export function getUserInfoFromToken(): any | null {
   const token = getIdToken()
   if (!token) return null
-  
+
   try {
     const payload = JSON.parse(atob(token.split('.')[1]))
     return {
@@ -61,12 +61,49 @@ export function getUserInfoFromToken(): any | null {
       email: payload.email,
       name: payload.name || payload.given_name || payload.email,
       groups: payload['cognito:groups'] || [],
+      role: payload['custom:role'] || 'user', // Extract role from token
+      organization: payload['custom:organization'], // Single org for users
+      organizations: payload['custom:organizations'] ? payload['custom:organizations'].split(',') : [], // Multiple orgs for editors
       // Add other claims as needed
     }
   } catch (error) {
     console.error('Error parsing user info from token:', error)
     return null
   }
+}
+
+// Determine optimal redirect path based on user role and organization access
+export async function determineRedirectPath(): Promise<string> {
+  const userInfo = getUserInfoFromToken()
+  if (!userInfo) {
+    return "/organizations" // Default fallback
+  }
+
+  const role = userInfo.role || 'user'
+
+  // Admin: Always go to organizations page to choose their workflow
+  if (role === 'admin') {
+    return "/organizations"
+  }
+
+  // Editor: Always go to organizations page to choose which org to work with
+  if (role === 'editor') {
+    return "/organizations"
+  }
+
+  // User: Check if they have only one organization
+  if (role === 'user') {
+    // If user has a single organization, redirect directly to insured objects
+    if (userInfo.organization) {
+      return "/insuredobjects"
+    }
+
+    // Fallback: if organization info is unclear, go to organizations page
+    return "/organizations"
+  }
+
+  // Default fallback
+  return "/organizations"
 }
 
 // ——— Error & Success Message Formatting ———
@@ -183,6 +220,175 @@ export function validateNumberRange(
   return null
 }
 
+// Enhanced validation for high-value currency fields (boat values, own risk, etc.)
+export function validateCurrencyValue(value: string | number, fieldName: string = "Waarde"): string | null {
+  let numValue: number
+
+  if (typeof value === "string") {
+    // Remove any currency symbols and format characters
+    const cleanValue = value.replace(/[€$,\s]/g, '').replace(',', '.')
+    numValue = parseFloat(cleanValue)
+  } else {
+    numValue = value
+  }
+
+  if (isNaN(numValue)) {
+    return `${fieldName} moet een geldig bedrag zijn`
+  }
+
+  if (numValue < 0) {
+    return `${fieldName} kan niet negatief zijn`
+  }
+
+  // Reasonable upper limit check for very high values (10 million euros)
+  if (numValue > 10000000) {
+    return `${fieldName} lijkt ongewoon hoog (€${numValue.toLocaleString('nl-NL')}). Controleer of dit correct is.`
+  }
+
+  return null
+}
+
+// Enhanced promillage validation with automatic decimal handling
+export function validatePromillage(value: string | number, fieldName: string = "Premiepromillage"): string | null {
+  // Convert string to number and handle automatic decimal conversion
+  let numValue: number
+
+  if (typeof value === "string") {
+    // Remove any non-numeric characters except decimal point
+    const cleanValue = value.replace(/[^0-9.,]/g, '').replace(',', '.')
+    numValue = parseFloat(cleanValue)
+  } else {
+    numValue = value
+  }
+
+  if (isNaN(numValue)) {
+    return `${fieldName} moet een geldig nummer zijn`
+  }
+
+  // Automatically handle decimal values (e.g., 5 becomes 5.0, 50 becomes 5.0 if >10)
+  if (numValue > 100) {
+    return `${fieldName} lijkt te hoog (${numValue}). Controleer of dit een promillage waarde is (bijvoorbeeld: 5.0 voor 5‰)`
+  }
+
+  if (numValue <= 0) {
+    return `${fieldName} moet groter dan 0 zijn`
+  }
+
+  // Reasonable range check for promillage values
+  if (numValue > 50) {
+    return `${fieldName} lijkt ongewoon hoog (${numValue}‰). Typische waarden liggen tussen 1-20‰`
+  }
+
+  return null
+}
+
+// Convert promillage input to standardized format
+export function normalizePromillageValue(value: string | number): number {
+  let numValue: number
+
+  if (typeof value === "string") {
+    const cleanValue = value.replace(/[^0-9.,]/g, '').replace(',', '.')
+    numValue = parseFloat(cleanValue)
+  } else {
+    numValue = value
+  }
+
+  if (isNaN(numValue)) return 0
+
+  // Round to 1 decimal place for promillage precision
+  return Math.round(numValue * 10) / 10
+}
+
+// Own Risk Calculation Types and Functions
+export type OwnRiskCalculationMethod = "fixed" | "percentage"
+
+export interface OwnRiskConfig {
+  method: OwnRiskCalculationMethod
+  fixedAmount?: number
+  percentage?: number
+}
+
+// Calculate own risk based on method and boat value
+export function calculateOwnRisk(config: OwnRiskConfig, boatValue: number): number {
+  if (config.method === "percentage" && config.percentage) {
+    const calculatedAmount = (boatValue * config.percentage) / 100
+    // Round to nearest 100 euros as per business requirement
+    return Math.round(calculatedAmount / 100) * 100
+  } else if (config.method === "fixed" && config.fixedAmount) {
+    return config.fixedAmount
+  }
+  return 0
+}
+
+// Validate own risk configuration
+export function validateOwnRiskConfig(config: OwnRiskConfig): string | null {
+  if (!config.method) {
+    return "Selecteer een berekeningswijze voor eigen risico"
+  }
+
+  if (config.method === "fixed") {
+    if (!config.fixedAmount || config.fixedAmount <= 0) {
+      return "Voer een geldig vast bedrag in voor eigen risico"
+    }
+    const currencyError = validateCurrencyValue(config.fixedAmount, "Vast bedrag eigen risico")
+    if (currencyError) return currencyError
+  } else if (config.method === "percentage") {
+    if (!config.percentage || config.percentage <= 0 || config.percentage > 100) {
+      return "Voer een geldig percentage in (0-100%) voor eigen risico"
+    }
+  }
+
+  return null
+}
+
+// Format own risk display text
+export function formatOwnRiskDisplay(config: OwnRiskConfig, boatValue?: number): string {
+  if (config.method === "fixed" && config.fixedAmount) {
+    return formatCurrency(config.fixedAmount)
+  } else if (config.method === "percentage" && config.percentage) {
+    const baseText = `${config.percentage}% van bootwaarde`
+    if (boatValue) {
+      const calculatedAmount = calculateOwnRisk(config, boatValue)
+      return `${baseText} (${formatCurrency(calculatedAmount)})`
+    }
+    return baseText
+  }
+  return "Niet geconfigureerd"
+}
+
+// Confirmation Dialog Utilities
+export function formatObjectSummary(objectData: any, schema?: any[]): Record<string, string> {
+  const summary: Record<string, string> = {}
+
+  if (!objectData) return summary
+
+  // Format each field with proper labels and values
+  Object.keys(objectData).forEach(key => {
+    const value = objectData[key]
+    if (value === null || value === undefined || value === '') return
+
+    // Find field schema for proper label
+    const fieldSchema = schema?.find(field => field.key === key)
+    const label = fieldSchema?.label || formatLabel(key)
+
+    // Format value based on field type
+    let formattedValue = value
+    if (fieldSchema?.type === 'currency' && typeof value === 'number') {
+      formattedValue = formatCurrency(value)
+    } else if (fieldSchema?.type === 'date' && value) {
+      formattedValue = formatDate(value)
+    } else if (typeof value === 'boolean') {
+      formattedValue = value ? 'Ja' : 'Nee'
+    } else if (Array.isArray(value)) {
+      formattedValue = value.join(', ')
+    }
+
+    summary[label] = String(formattedValue)
+  })
+
+  return summary
+}
+
 export function validateYear(year: number, fieldName: string = "Year"): string | null {
   const currentYear = new Date().getFullYear()
   if (year <= 1900 || year > currentYear) {
@@ -204,10 +410,14 @@ export function getCurrentYear(): number {
 }
 
 export function formatCurrency(amount: number, currency: string = "EUR"): string {
-  return new Intl.NumberFormat("en-US", {
+  // Round to whole euros as per business requirement
+  const roundedAmount = Math.round(amount)
+  return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: currency,
-  }).format(amount)
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(roundedAmount)
 }
 
 export function formatDate(dateString: string): string {

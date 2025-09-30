@@ -8,10 +8,13 @@ export interface FieldSchema {
     group: "basic" | "metadata"
     required: boolean
     visible: boolean
+    filterable: boolean
+    editable: boolean
+    printable: boolean
     sortable: boolean
     width: string
     objectTypes?: string[]
-    inputType?: "user" | "system" | "auto"  // From field registry to determine form visibility
+    inputType?: "user" | "system" | "auto" | "edit_only"  // From field registry to determine form visibility
     options?: string[]  // Dropdown options for dropdown type
 }
 
@@ -118,6 +121,7 @@ export function getUserInputFieldsForObjectType(schema: FieldSchema[] | null, ob
     return fieldsForType.filter(field => {
         // Only show fields that require user input (from field registry input_type)
         // Only accept fields explicitly marked as 'user' input type
+        // Exclude 'edit_only' fields from create forms
         const isUserField = field.inputType === 'user'
         
         // Also filter out organization-specific fields from insured object forms
@@ -127,6 +131,64 @@ export function getUserInputFieldsForObjectType(schema: FieldSchema[] | null, ob
         // Create forms should show ALL user input fields regardless of organization visible setting
         
         return isUserField && isNotOrganizationField
+    })
+}
+
+// Helper function to get editable fields for edit forms
+export function getEditableFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
+    const fieldsForType = getFieldsForObjectType(schema, objectType)
+    return fieldsForType.filter(field => {
+        // Show fields that can be edited (from field registry)
+        // Include both 'user' fields and 'edit_only' fields for edit forms
+        const isEditableField = field.editable && (field.inputType === 'user' || field.inputType === 'edit_only')
+        
+        // Filter out organization-specific fields from insured object forms
+        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+        
+        return isEditableField && isNotOrganizationField
+    })
+}
+
+// Helper function to get filterable fields for column filters
+export function getFilterableFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
+    const fieldsForType = getFieldsForObjectType(schema, objectType)
+    return fieldsForType.filter(field => {
+        // Only show fields that can be filtered (from field registry)
+        return field.filterable
+    })
+}
+
+// Helper function to get ALL filterable fields for insured objects (excludes organization-specific fields)
+// Use this for column filters where you want to show all possible filterable fields for insured objects
+export function getAllFilterableFields(schema: FieldSchema[] | null): FieldSchema[] {
+    if (!schema) {
+        return []
+    }
+    return schema.filter(field => {
+        // Only show filterable fields
+        if (!field.filterable) return false
+        
+        // Exclude organization-specific fields from insured object column filters
+        if (field.objectTypes && field.objectTypes.includes('organization')) {
+            return false
+        }
+        
+        // Include universal fields (no object type restrictions) and insured object fields
+        return true
+    })
+}
+
+// Helper function to get printable fields for print/export
+export function getPrintableFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
+    const fieldsForType = getFieldsForObjectType(schema, objectType)
+    return fieldsForType.filter(field => {
+        // Only show fields that can be printed (from field registry)
+        const isPrintable = field.printable
+        
+        // Filter out organization-specific fields from insured object prints (they're handled separately)
+        const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
+        
+        return isPrintable && isNotOrganizationField
     })
 }
 

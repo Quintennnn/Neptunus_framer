@@ -7,11 +7,12 @@ import {
     getActionText, 
     getTooltipText 
 } from "../rbac"
+import { colors } from "../theme"
 
 // Enhanced font stack
 const FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif"
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "success" | "blue"
+export type ButtonVariant = "primary" | "secondary" | "danger" | "success" | "blue" | "create" | "edit" | "delete"
 export type ButtonSize = "small" | "medium" | "large"
 export type ButtonBehavior = "hide" | "disable" | "request"
 
@@ -192,6 +193,21 @@ export function RoleBasedButton({
                 backgroundColor: isDisabled ? "#9ca3af" : "#3b82f6",
                 color: "#ffffff",
                 boxShadow: isDisabled ? "none" : "0 2px 4px rgba(59, 130, 246, 0.2)"
+            },
+            create: {
+                backgroundColor: isDisabled ? "#9ca3af" : colors.actionCreate,
+                color: "#ffffff",
+                boxShadow: isDisabled ? "none" : `0 2px 4px ${colors.actionCreate}40`
+            },
+            edit: {
+                backgroundColor: isDisabled ? "#9ca3af" : colors.actionEdit,
+                color: "#ffffff",
+                boxShadow: isDisabled ? "none" : `0 2px 4px ${colors.actionEdit}40`
+            },
+            delete: {
+                backgroundColor: isDisabled ? "#9ca3af" : colors.actionDelete,
+                color: "#ffffff",
+                boxShadow: isDisabled ? "none" : `0 2px 4px ${colors.actionDelete}40`
             }
         }
         
@@ -225,6 +241,18 @@ export function RoleBasedButton({
             button.style.backgroundColor = "#2563eb"
             button.style.transform = "translateY(-1px)"
             button.style.boxShadow = "0 4px 8px rgba(59, 130, 246, 0.3)"
+        } else if (variant === "create") {
+            button.style.backgroundColor = colors.actionCreateHover
+            button.style.transform = "translateY(-1px)"
+            button.style.boxShadow = `0 4px 8px ${colors.actionCreate}60`
+        } else if (variant === "edit") {
+            button.style.backgroundColor = colors.actionEditHover
+            button.style.transform = "translateY(-1px)"
+            button.style.boxShadow = `0 4px 8px ${colors.actionEdit}60`
+        } else if (variant === "delete") {
+            button.style.backgroundColor = colors.actionDeleteHover
+            button.style.transform = "translateY(-1px)"
+            button.style.boxShadow = `0 4px 8px ${colors.actionDelete}60`
         }
     }
     
@@ -249,6 +277,18 @@ export function RoleBasedButton({
             button.style.backgroundColor = "#3b82f6"
             button.style.transform = "translateY(0)"
             button.style.boxShadow = "0 2px 4px rgba(59, 130, 246, 0.2)"
+        } else if (variant === "create") {
+            button.style.backgroundColor = colors.actionCreate
+            button.style.transform = "translateY(0)"
+            button.style.boxShadow = `0 2px 4px ${colors.actionCreate}40`
+        } else if (variant === "edit") {
+            button.style.backgroundColor = colors.actionEdit
+            button.style.transform = "translateY(0)"
+            button.style.boxShadow = `0 2px 4px ${colors.actionEdit}40`
+        } else if (variant === "delete") {
+            button.style.backgroundColor = colors.actionDelete
+            button.style.transform = "translateY(0)"
+            button.style.boxShadow = `0 2px 4px ${colors.actionDelete}40`
         }
     }
     

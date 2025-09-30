@@ -193,7 +193,7 @@ function PolicyForm({
         },
         inventaristype: {
             type: "select",
-            options: ["Boat", "Car", "Property", "Equipment", "Other"],
+            options: ["Boot", "Auto", "Onroerend goed", "Uitrusting", "Overig"],
             placeholder: "Selecteer inventaristype",
         },
         makelaarsnaam: { type: "text", placeholder: "Voer makelaarsnaam in" },

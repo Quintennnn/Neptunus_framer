@@ -3,7 +3,7 @@
 
 export type Role = "admin" | "editor" | "user"
 
-export type Permission = 
+export type Permission =
     // Insured Object permissions (boats/assets)
     | "INSURED_OBJECT_CREATE"
     | "INSURED_OBJECT_READ"
@@ -11,7 +11,7 @@ export type Permission =
     | "INSURED_OBJECT_DELETE"
     // Policy permissions
     | "POLICY_CREATE"
-    | "POLICY_EDIT" 
+    | "POLICY_EDIT"
     | "POLICY_DELETE"
     | "POLICY_VIEW"
     | "POLICY_APPROVE"
@@ -21,7 +21,11 @@ export type Permission =
     | "ORG_DELETE"
     | "ORG_VIEW"
     | "ORG_MANAGE_USERS"
-    // User permissions  
+    // Organization detailed permissions (granular)
+    | "ORG_EDIT_ADDRESS"        // Edit address data only
+    | "ORG_EDIT_FIELD_CONFIG"   // Edit field configurations
+    | "ORG_EDIT_ACCEPTANCE_RULES" // Edit acceptance rules
+    // User permissions
     | "USER_CREATE"
     | "USER_EDIT"
     | "USER_DELETE"
@@ -37,11 +41,12 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
         // Full access to everything - matches backend 'admin' role
         // insured_object: ['create', 'read', 'update', 'delete']
         "INSURED_OBJECT_CREATE", "INSURED_OBJECT_READ", "INSURED_OBJECT_UPDATE", "INSURED_OBJECT_DELETE",
-        // user: ['create', 'read', 'update', 'delete'] 
+        // user: ['create', 'read', 'update', 'delete']
         "USER_CREATE", "USER_EDIT", "USER_DELETE", "USER_VIEW", "USER_ASSIGN_ROLES",
-        // organization: ['create', 'read', 'update', 'delete']
+        // organization: ['create', 'read', 'update', 'delete'] + granular permissions
         "ORG_CREATE", "ORG_EDIT", "ORG_DELETE", "ORG_VIEW", "ORG_MANAGE_USERS",
-        // policy: ['create', 'read', 'update', 'delete'] 
+        "ORG_EDIT_ADDRESS", "ORG_EDIT_FIELD_CONFIG", "ORG_EDIT_ACCEPTANCE_RULES",
+        // policy: ['create', 'read', 'update', 'delete']
         "POLICY_CREATE", "POLICY_EDIT", "POLICY_DELETE", "POLICY_VIEW", "POLICY_APPROVE",
         "CHANGELOG_VIEW", "SYSTEM_CONFIG"
     ],
@@ -52,20 +57,20 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
         // user: ['read'] - can only READ users
         "USER_VIEW",
         // organization: ['read'] - can only READ organizations  
-        "ORG_VIEW",
+        "ORG_VIEW", "ORG_EDIT_ADDRESS",
         // policy: ['read', 'create'] - can READ and CREATE policies, no update/delete
-        "POLICY_CREATE", "POLICY_VIEW",
+        "POLICY_CREATE", "POLICY_VIEW", "POLICY_EDIT",
         "CHANGELOG_VIEW"
     ],
     user: [
         // Regular user permissions - matches backend 'user' role exactly
         // insured_object: ['read', 'create', 'update'] - no delete
-        "INSURED_OBJECT_CREATE", "INSURED_OBJECT_READ", "INSURED_OBJECT_UPDATE",
+        "INSURED_OBJECT_READ", 
         // policy: ['read'] - can only READ policies
         "POLICY_VIEW",
         // organization: ['read'] - can only READ organizations
         "ORG_VIEW",
-        "CHANGELOG_VIEW"
+       
     ]
 }
 
@@ -162,4 +167,30 @@ export function canCreatePolicy(userInfo: UserInfo | null, orgId?: string): bool
 
 export function canDeletePolicy(userInfo: UserInfo | null, orgId?: string): boolean {
     return canPerformAction(userInfo, "POLICY_DELETE", orgId)
+}
+
+// Action button group visibility helpers
+export function canManageUsers(userInfo: UserInfo | null): boolean {
+    return hasPermission(userInfo, "USER_EDIT") || hasPermission(userInfo, "USER_DELETE")
+}
+
+export function canManagePolicies(userInfo: UserInfo | null, orgId?: string): boolean {
+    return canPerformAction(userInfo, "POLICY_EDIT", orgId) || canPerformAction(userInfo, "POLICY_DELETE", orgId)
+}
+
+export function canManageOrganizations(userInfo: UserInfo | null, orgId?: string): boolean {
+    return canPerformAction(userInfo, "ORG_EDIT", orgId) || canPerformAction(userInfo, "ORG_DELETE", orgId)
+}
+
+// Enhanced organization permission helpers for granular access
+export function canEditOrganizationAddress(userInfo: UserInfo | null, orgId?: string): boolean {
+    return canPerformAction(userInfo, "ORG_EDIT_ADDRESS", orgId) || canPerformAction(userInfo, "ORG_EDIT", orgId)
+}
+
+export function canEditOrganizationFieldConfig(userInfo: UserInfo | null, orgId?: string): boolean {
+    return canPerformAction(userInfo, "ORG_EDIT_FIELD_CONFIG", orgId) || canPerformAction(userInfo, "ORG_EDIT", orgId)
+}
+
+export function canEditOrganizationAcceptanceRules(userInfo: UserInfo | null, orgId?: string): boolean {
+    return canPerformAction(userInfo, "ORG_EDIT_ACCEPTANCE_RULES", orgId) || canPerformAction(userInfo, "ORG_EDIT", orgId)
 }

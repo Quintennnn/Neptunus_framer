@@ -2,7 +2,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { FaPlus, FaEdit, FaTrashAlt, FaUsers, FaBuilding, FaFileContract, FaCheck, FaEye, FaEllipsisV } from "react-icons/fa"
 import { RoleBasedButton, RoleBasedButtonProps } from "./RoleBasedButton"
-import { UserInfo } from "../rbac"
+import { UserInfo, canManageOrganizations, canManageUsers, canManagePolicies, canPerformAction } from "../rbac"
 import { colors, styles, hover, FONT_STACK } from "../theme"
 
 // Insurance-specific button components with pre-configured permissions and styling
@@ -21,7 +21,7 @@ export function NewPolicyButton({ userInfo, onClick, children, ...props }: Insur
             userInfo={userInfo}
             permission="POLICY_CREATE"
             onClick={onClick}
-            variant="success"
+            variant="create"
             actionName="Polis Aanmaken"
             icon={<FaPlus size={14} />}
             behavior="hide"
@@ -45,15 +45,11 @@ export function EditPolicyButton({ userInfo, onClick, resourceOrganization, chil
             permission="POLICY_EDIT"
             onClick={onClick}
             resourceOrganization={resourceOrganization}
-            variant="blue"
+            variant="edit"
             size="small"
             actionName="Polis Bewerken"
             icon={<FaEdit size={12} />}
-            behavior="request"
-            fallbackAction={() => {
-                // Since editors can only create policies (not edit), and users can only read them
-                alert("Om wijzigingen aan deze polis aan te vragen, neem contact op met je beheerder.")
-            }}
+            behavior="hide"
         >
             {children || "Bewerken"}
         </RoleBasedButton>
@@ -68,7 +64,7 @@ export function DeletePolicyButton({ userInfo, onClick, resourceOrganization, ch
             permission="POLICY_DELETE"
             onClick={onClick}
             resourceOrganization={resourceOrganization}
-            variant="danger"
+            variant="delete"
             size="small"
             actionName="Polis Verwijderen"
             icon={<FaTrashAlt size={12} />}
@@ -105,7 +101,7 @@ export function NewOrganizationButton({ userInfo, onClick, children, ...props }:
             userInfo={userInfo}
             permission="ORG_CREATE"
             onClick={onClick}
-            variant="success"
+            variant="create"
             actionName="Organisatie Aanmaken"
             icon={<FaBuilding size={14} />}
             behavior="hide"
@@ -123,11 +119,11 @@ export function EditOrganizationButton({ userInfo, onClick, resourceOrganization
             permission="ORG_EDIT"
             onClick={onClick}
             resourceOrganization={resourceOrganization}
-            variant="secondary"
+            variant="edit"
             size="small"
             actionName="Organisatie Bewerken"
             icon={<FaEdit size={12} />}
-            behavior="disable"
+            behavior="hide"
         >
             Bewerken
         </RoleBasedButton>
@@ -142,7 +138,7 @@ export function DeleteOrganizationButton({ userInfo, onClick, resourceOrganizati
             permission="ORG_DELETE"
             onClick={onClick}
             resourceOrganization={resourceOrganization}
-            variant="danger"
+            variant="delete"
             size="small"
             actionName="Organisatie Verwijderen"
             icon={<FaTrashAlt size={12} />}
@@ -161,14 +157,10 @@ export function NewUserButton({ userInfo, onClick, children, ...props }: Insuran
             userInfo={userInfo}
             permission="USER_CREATE"
             onClick={onClick}
-            variant="success"
+            variant="create"
             actionName="Gebruiker Aanmaken"
             icon={<FaPlus size={14} />}
-            behavior="request"
-            fallbackAction={() => {
-                // Now that editors can only READ users, they need admin help too
-                alert("Om nieuwe gebruikers toe te voegen, neem contact op met je beheerder.")
-            }}
+            behavior="hide"
         >
             {children || "Nieuwe Gebruiker"}
         </RoleBasedButton>
@@ -182,11 +174,11 @@ export function EditUserButton({ userInfo, onClick, children, ...props }: Insura
             userInfo={userInfo}
             permission="USER_EDIT"
             onClick={onClick}
-            variant="secondary"
+            variant="edit"
             size="small"
             actionName="Gebruiker Bewerken"
             icon={<FaEdit size={12} />}
-            behavior="disable"
+            behavior="hide"
         >
             Bewerken
         </RoleBasedButton>
@@ -200,7 +192,7 @@ export function DeleteUserButton({ userInfo, onClick, children, ...props }: Insu
             userInfo={userInfo}
             permission="USER_DELETE"
             onClick={onClick}
-            variant="danger"
+            variant="delete"
             size="small"
             actionName="Gebruiker Verwijderen"
             icon={<FaTrashAlt size={12} />}
@@ -222,7 +214,7 @@ export function ViewChangelogButton({ userInfo, onClick, children, ...props }: I
             variant="secondary"
             actionName="Wijzigingslogboek Bekijken"
             icon={<FaEye size={14} />}
-            behavior="disable"
+            behavior="hide"
         >
             {children || "Wijzigingslogboek Bekijken"}
         </RoleBasedButton>
@@ -247,6 +239,11 @@ export function PolicyActionButtons({
     resourceOrganization,
     policyStatus = "active"
 }: PolicyActionButtonsProps) {
+    // Hide entire action buttons group if user has no policy management permissions
+    if (!canManagePolicies(userInfo, resourceOrganization)) {
+        return null
+    }
+
     return (
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <PolicyDropdownMenu
@@ -376,89 +373,95 @@ function PolicyDropdownMenu({
                         }}
                     >
                         <div>
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onEdit()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#3b82f6",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#2563eb"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#3b82f6"
-                                }}
-                            >
-                                <FaEdit size={14} />
-                                Bewerken
-                            </div>
+                            {/* Edit option - only show if user has POLICY_EDIT permission */}
+                            {canPerformAction(userInfo, "POLICY_EDIT", resourceOrganization) && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onEdit()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionEdit,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f3f4f6"
+                                        e.target.style.color = "#2563eb"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionEdit
+                                    }}
+                                >
+                                    <FaEdit size={14} />
+                                    Bewerken
+                                </div>
+                            )}
                             
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onDelete()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#dc2626",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#fef2f2"
-                                    e.target.style.color = "#b91c1c"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#dc2626"
-                                }}
-                            >
-                                <FaTrashAlt size={14} />
-                                Verwijderen
-                            </div>
+                            {/* Delete option - only show if user has POLICY_DELETE permission */}
+                            {canPerformAction(userInfo, "POLICY_DELETE", resourceOrganization) && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onDelete()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionDelete,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#fef2f2"
+                                        e.target.style.color = "#b91c1c"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionDelete
+                                    }}
+                                >
+                                    <FaTrashAlt size={14} />
+                                    Verwijderen
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>,
@@ -609,7 +612,7 @@ function ActionDropdownMenu({
                                     display: "flex",
                                     alignItems: "center",
                                     gap: "8px",
-                                    color: "#3b82f6",
+                                    color: colors.actionEdit,
                                     textAlign: "left",
                                     transition: "all 0.2s ease",
                                     fontFamily: FONT_STACK,
@@ -649,7 +652,7 @@ function ActionDropdownMenu({
                                     display: "flex",
                                     alignItems: "center",
                                     gap: "8px",
-                                    color: "#dc2626",
+                                    color: colors.actionDelete,
                                     textAlign: "left",
                                     transition: "all 0.2s ease",
                                     fontFamily: FONT_STACK,
@@ -696,6 +699,11 @@ export function OrganizationActionButtons({
     onDelete,
     resourceOrganization 
 }: OrganizationActionButtonsProps) {
+    // Hide entire action buttons group if user has no management permissions
+    if (!canManageOrganizations(userInfo, resourceOrganization)) {
+        return null
+    }
+
     return (
         <OrganizationDropdownMenu
             userInfo={userInfo}
@@ -816,89 +824,95 @@ function OrganizationDropdownMenu({
                         }}
                     >
                         <div>
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onEdit()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#3b82f6",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#2563eb"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#3b82f6"
-                                }}
-                            >
-                                <FaEdit size={14} />
-                                Bewerken
-                            </div>
+                            {/* Edit option - only show if user has ORG_EDIT permission */}
+                            {canPerformAction(userInfo, "ORG_EDIT", resourceOrganization) && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onEdit()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionEdit,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f3f4f6"
+                                        e.target.style.color = "#2563eb"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionEdit
+                                    }}
+                                >
+                                    <FaEdit size={14} />
+                                    Bewerken
+                                </div>
+                            )}
                             
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onDelete()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#dc2626",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#fef2f2"
-                                    e.target.style.color = "#b91c1c"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#dc2626"
-                                }}
-                            >
-                                <FaTrashAlt size={14} />
-                                Verwijderen
-                            </div>
+                            {/* Delete option - only show if user has ORG_DELETE permission */}
+                            {canPerformAction(userInfo, "ORG_DELETE", resourceOrganization) && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onDelete()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionDelete,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#fef2f2"
+                                        e.target.style.color = "#b91c1c"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionDelete
+                                    }}
+                                >
+                                    <FaTrashAlt size={14} />
+                                    Verwijderen
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>,
@@ -919,6 +933,11 @@ export function UserActionButtons({
     onEdit, 
     onDelete 
 }: UserActionButtonsProps) {
+    // Hide entire action buttons group if user has no user management permissions
+    if (!canManageUsers(userInfo)) {
+        return null
+    }
+
     return (
         <UserDropdownMenu
             userInfo={userInfo}
@@ -1036,89 +1055,95 @@ function UserDropdownMenu({
                         }}
                     >
                         <div>
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onEdit()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#3b82f6",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f3f4f6"
-                                    e.target.style.color = "#2563eb"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#3b82f6"
-                                }}
-                            >
-                                <FaEdit size={14} />
-                                Bewerken
-                            </div>
+                            {/* Edit option - only show if user has USER_EDIT permission */}
+                            {canPerformAction(userInfo, "USER_EDIT") && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onEdit()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionEdit,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#f3f4f6"
+                                        e.target.style.color = "#2563eb"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionEdit
+                                    }}
+                                >
+                                    <FaEdit size={14} />
+                                    Bewerken
+                                </div>
+                            )}
                             
-                            <div 
-                                onMouseDown={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onMouseUp={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                }}
-                                onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    onDelete()
-                                    setIsOpen(false)
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "12px 16px", 
-                                    cursor: "pointer",
-                                    backgroundColor: "transparent",
-                                    color: "#dc2626",
-                                    fontSize: "14px",
-                                    fontWeight: "600",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    borderRadius: "6px",
-                                    transition: "all 0.2s ease"
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#fef2f2"
-                                    e.target.style.color = "#b91c1c"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "transparent"
-                                    e.target.style.color = "#dc2626"
-                                }}
-                            >
-                                <FaTrashAlt size={14} />
-                                Verwijderen
-                            </div>
+                            {/* Delete option - only show if user has USER_DELETE permission */}
+                            {canPerformAction(userInfo, "USER_DELETE") && (
+                                <div 
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onMouseUp={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onDelete()
+                                        setIsOpen(false)
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 16px", 
+                                        cursor: "pointer",
+                                        backgroundColor: "transparent",
+                                        color: colors.actionDelete,
+                                        fontSize: "14px",
+                                        fontWeight: "600",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        borderRadius: "6px",
+                                        transition: "all 0.2s ease"
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.target.style.backgroundColor = "#fef2f2"
+                                        e.target.style.color = "#b91c1c"
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.target.style.backgroundColor = "transparent"
+                                        e.target.style.color = colors.actionDelete
+                                    }}
+                                >
+                                    <FaTrashAlt size={14} />
+                                    Verwijderen
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>,

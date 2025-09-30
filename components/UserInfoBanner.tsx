@@ -269,7 +269,7 @@ export function UserInfoBanner({ currentOrganization, showCurrentOrg = false, br
         )
     }
 
-    const roleConfig = ROLE_CONFIG[userInfo.role]
+    const roleConfig = ROLE_CONFIG[userInfo.role] || ROLE_CONFIG.user
     const RoleIcon = roleConfig.icon
 
     return (
@@ -344,7 +344,7 @@ export function UserInfoBanner({ currentOrganization, showCurrentOrg = false, br
                             color: colors.gray900,
                             marginBottom: "2px",
                         }}>
-                            {userInfo.email || "Unknown User"}
+                            {userInfo.email || "Onbekende Gebruiker"}
                         </div>
                         <div style={{
                             fontSize: "12px",

@@ -14,14 +14,14 @@ This is a Framer-based frontend for an insurance company's boat management syste
 
 ### **Users/Organization Owners**
 - **Login Flow**: Login → Immediate redirect to `/insuredobjects` (their fleet)
-- **Primary Function**: Add and manage their insured objects (boats, motors, trailers)
-- **Workflow**: Create → Submit for review → Wait for approval
+- **Primary Function**: Only view their insured objects (boats, motors, trailers)
+- **Workflow**: Only view and possibly print their overview
 - **Access**: Limited to their own organization's objects
 
 ### **Editors/Brokers** 
-- **Login Flow**: Login → Organizations page → Navigate to pending items
-- **Primary Function**: Help users with policies and applications, review pending items
-- **Workflow**: Review pending items → Approve/Edit → Assist users
+- **Login Flow**: Login → Organizations page 
+- **Primary Function**: Add manage and edit insured objects
+- **Workflow**: 
 - **Access**: Can work across assigned organizations
 
 ### **Admins**
@@ -54,7 +54,7 @@ This is a Framer-based frontend for an insurance company's boat management syste
 
 ### **Core Components Structure**
 **IMPORTANT** 
-What happens in my actual front-end is that I use all the list components as an override. The create modules are purely there to be imported by the list and their functionaility therefore can be out of date. List files contain create buttons.
+What happens in my actual front-end is that I use all the list components as an override. The create modules are purely there to be imported by the list and their functionaility therefore can be out of date. List files contain the UI create buttons.
 ```
 Changelog/
   └── List.tsx                    # Changelog page component

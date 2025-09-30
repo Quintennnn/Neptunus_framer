@@ -32,9 +32,9 @@ import {
     FaExclamationTriangle,
     FaCheckCircle
 } from "react-icons/fa"
-import { UserInfoBanner } from "../components/UserInfoBanner"
-import { colors, styles, hover, FONT_STACK } from "../theme"
-import { API_BASE_URL, API_PATHS, getIdToken } from "../utils"
+import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
+import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
+import { API_BASE_URL, API_PATHS, getIdToken, formatCurrency, formatErrorMessage, formatSuccessMessage, formatDate, validatePromillage, normalizePromillageValue } from "../Utils.tsx"
 
 // ——— Enhanced font stack for better typography ———
 const ENHANCED_FONT_STACK =
@@ -60,6 +60,7 @@ interface PendingInsuredObject {
     uitgangsdatum?: string // insuranceEndDate
     premiepromillage: number // premiumPerMille
     eigenRisico: number // deductible
+    naam?: string // name/title
     notitie?: string // notes
     createdAt: string
     updatedAt: string
@@ -375,6 +376,11 @@ function getObjectTypeName(objectType: ObjectType): string {
 }
 
 function getObjectDisplayName(object: PendingInsuredObject): string {
+    // If the object has a custom name, use that first
+    if (object.naam) {
+        return object.naam
+    }
+    
     switch (object.objectType) {
         case "boat":
             const boatName = object.merkBoot || object.typeBoot || ""
@@ -430,22 +436,49 @@ function CalculatedFieldEditor({
     const [isSaving, setIsSaving] = React.useState(false)
 
     const handleSave = async () => {
-        const numValue = parseFloat(editValue)
-        if (isNaN(numValue) || numValue < 0) {
-            setEditValue(value.toString()) // Reset to original value
-            setIsEditing(false)
-            return
-        }
+        // Enhanced validation for promillage with automatic decimal handling
+        if (type === "promillage") {
+            const validationError = validatePromillage(editValue)
+            if (validationError) {
+                console.warn("Promillage validation error:", validationError)
+                setEditValue(value.toString()) // Reset to original value
+                setIsEditing(false)
+                return
+            }
 
-        setIsSaving(true)
-        try {
-            onUpdate(numValue)
-            setIsEditing(false)
-        } catch (error) {
-            console.error("Failed to update calculated field:", error)
-            setEditValue(value.toString()) // Reset on error
-        } finally {
-            setIsSaving(false)
+            // Normalize the promillage value
+            const normalizedValue = normalizePromillageValue(editValue)
+            setEditValue(normalizedValue.toString())
+
+            setIsSaving(true)
+            try {
+                onUpdate(normalizedValue)
+                setIsEditing(false)
+            } catch (error) {
+                console.error("Failed to update promillage field:", error)
+                setEditValue(value.toString()) // Reset on error
+            } finally {
+                setIsSaving(false)
+            }
+        } else {
+            // Currency validation (existing logic)
+            const numValue = parseFloat(editValue)
+            if (isNaN(numValue) || numValue < 0) {
+                setEditValue(value.toString()) // Reset to original value
+                setIsEditing(false)
+                return
+            }
+
+            setIsSaving(true)
+            try {
+                onUpdate(numValue)
+                setIsEditing(false)
+            } catch (error) {
+                console.error("Failed to update currency field:", error)
+                setEditValue(value.toString()) // Reset on error
+            } finally {
+                setIsSaving(false)
+            }
         }
     }
 
@@ -921,8 +954,8 @@ function PendingObjectRow({
     // Add error handling for utility function calls
     let daysAgo = 0
     let isUrgent = false
-    let displayName = "Unknown Object"
-    let objectTypeName = "Unknown"
+    let displayName = "Onbekend Object"
+    let objectTypeName = "Onbekend"
     let objectTypeIcon = <FaBox style={{ color: "#6b7280" }} />
     
     try {
@@ -940,7 +973,7 @@ function PendingObjectRow({
         console.log("Display name calculation successful:", displayName)
     } catch (error) {
         console.error("Error calculating display name for object:", object, error)
-        displayName = `Object ${object.id?.slice(-8) || 'Unknown'}`
+        displayName = `Object ${object.id?.slice(-8) || 'Onbekend'}`
     }
 
     try {
@@ -948,7 +981,7 @@ function PendingObjectRow({
         console.log("Object type name calculation successful:", objectTypeName)
     } catch (error) {
         console.error("Error calculating object type name for object:", object, error)
-        objectTypeName = "Unknown"
+        objectTypeName = "Onbekend"
     }
 
     try {
@@ -2135,9 +2168,9 @@ export const PendingBoatsOverview: Override = () => {
                                         }}
                                         style={{
                                             padding: "16px 24px",
-                                            backgroundColor: isActive ? "#3b82f6" : "#ffffff",
-                                            color: isActive ? "white" : "#6b7280",
-                                            border: isActive ? "none" : "2px solid #e5e7eb",
+                                            backgroundColor: isActive ? colors.navigationActive : colors.navigationInactive,
+                                            color: isActive ? "white" : colors.gray500,
+                                            border: isActive ? "none" : `2px solid ${colors.navigationInactiveBorder}`,
                                             borderRadius: "12px",
                                             fontSize: "15px",
                                             fontWeight: "600",
@@ -2157,9 +2190,9 @@ export const PendingBoatsOverview: Override = () => {
                                         onMouseOver={(e) => {
                                             if (!isActive) {
                                                 const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#f8fafc"
-                                                target.style.borderColor = "#3b82f6"
-                                                target.style.color = "#3b82f6"
+                                                target.style.backgroundColor = colors.navigationInactiveHover
+                                                target.style.borderColor = colors.navigationActive
+                                                target.style.color = colors.navigationActive
                                                 target.style.transform = "translateY(-1px)"
                                                 target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
                                             }
@@ -2167,9 +2200,9 @@ export const PendingBoatsOverview: Override = () => {
                                         onMouseOut={(e) => {
                                             if (!isActive) {
                                                 const target = e.target as HTMLElement
-                                                target.style.backgroundColor = "#ffffff"
-                                                target.style.borderColor = "#e5e7eb"
-                                                target.style.color = "#6b7280"
+                                                target.style.backgroundColor = colors.navigationInactive
+                                                target.style.borderColor = colors.navigationInactiveBorder
+                                                target.style.color = colors.gray500
                                                 target.style.transform = "none"
                                                 target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
                                             }

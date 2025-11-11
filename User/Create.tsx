@@ -49,7 +49,9 @@ function UserForm({
         const { name, value } = e.target
         setError(null)
         setSuccess(null)
-        setForm((prev) => ({ ...prev, [name]: value }))
+        // Always convert email to lowercase to avoid case-sensitive issues with Cognito
+        const processedValue = name === 'email' ? value.toLowerCase() : value
+        setForm((prev) => ({ ...prev, [name]: processedValue }))
     }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -76,14 +78,19 @@ function UserForm({
         setIsSubmitting(true)
 
         try {
-            console.log("Creating user with payload:", form)
+            // Ensure email is lowercase before sending to API
+            const payload = {
+                ...form,
+                email: form.email.toLowerCase()
+            }
+            console.log("Creating user with payload:", payload)
             const res = await fetch(API_BASE_URL + API_PATHS.SIGNUP, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify(form),
+                body: JSON.stringify(payload),
             })
             const data = await res.json()
 

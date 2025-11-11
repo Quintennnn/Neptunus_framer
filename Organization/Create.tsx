@@ -18,11 +18,14 @@ import {
 type OrganizationFormState = {
     name: string
     type_organisatie: string
+    polisnummer?: string
     street?: string
+    huisnummer?: string
     city?: string
     state?: string
     postal_code?: string
     country?: string
+    extra_info?: string
 }
 
 // Validation helper
@@ -51,11 +54,14 @@ function OrganizationForm({
     const [form, setForm] = React.useState<OrganizationFormState>({
         name: "",
         type_organisatie: "",
+        polisnummer: "",
         street: "",
+        huisnummer: "",
         city: "",
         state: "",
         postal_code: "",
         country: "",
+        extra_info: "",
     })
     const [error, setError] = React.useState<string | null>(null)
     const [success, setSuccess] = React.useState<string | null>(null)
@@ -88,11 +94,14 @@ function OrganizationForm({
             const payload = {
                 name: form.name,
                 type_organisatie: form.type_organisatie,
+                polisnummer: form.polisnummer || undefined,
                 street: form.street || undefined,
+                huisnummer: form.huisnummer || undefined,
                 city: form.city || undefined,
                 state: form.state || undefined,
                 postal_code: form.postal_code || undefined,
                 country: form.country || undefined,
+                extra_info: form.extra_info || undefined,
             }
             
             const res = await fetch(API_BASE_URL + API_PATHS.ORGANIZATION, {
@@ -308,6 +317,48 @@ function OrganizationForm({
                     </select>
                 </div>
 
+                {/* Polisnummer Field */}
+                <div style={{ marginBottom: "24px" }}>
+                    <label
+                        htmlFor="polisnummer"
+                        style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151",
+                        }}
+                    >
+                        Polisnummer
+                    </label>
+                    <input
+                        id="polisnummer"
+                        name="polisnummer"
+                        type="text"
+                        value={form.polisnummer || ""}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        placeholder="Voer polisnummer in"
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontFamily: FONT_STACK,
+                            transition: "border-color 0.2s",
+                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                            boxSizing: "border-box",
+                        }}
+                        onFocus={(e) =>
+                            !isSubmitting &&
+                            (e.target.style.borderColor = "#10b981")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                    />
+                </div>
+
                 {/* Address Fields */}
                 <div style={{ marginBottom: "24px" }}>
                     <h3 style={{
@@ -321,39 +372,75 @@ function OrganizationForm({
                         Adresgegevens (Optioneel)
                     </h3>
                     
-                    <div style={{ marginBottom: "16px" }}>
-                        <label htmlFor="street" style={{
-                            display: "block",
-                            marginBottom: "8px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            color: "#374151"
-                        }}>
-                            Straat
-                        </label>
-                        <input
-                            id="street"
-                            name="street"
-                            type="text"
-                            value={form.street || ""}
-                            onChange={handleChange}
-                            disabled={isSubmitting}
-                            placeholder="Voer straatnaam en huisnummer in"
-                            style={{
-                                width: "100%",
-                                padding: "12px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "8px",
+                    <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+                        <div style={{ flex: "3" }}>
+                            <label htmlFor="street" style={{
+                                display: "block",
+                                marginBottom: "8px",
                                 fontSize: "14px",
-                                fontFamily: FONT_STACK,
-                                transition: "border-color 0.2s",
-                                backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
-                                cursor: isSubmitting ? "not-allowed" : "text",
-                                boxSizing: "border-box",
-                            }}
-                            onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
-                            onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                        />
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Straat
+                            </label>
+                            <input
+                                id="street"
+                                name="street"
+                                type="text"
+                                value={form.street || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="Voer straatnaam in"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
+                        <div style={{ flex: "1" }}>
+                            <label htmlFor="huisnummer" style={{
+                                display: "block",
+                                marginBottom: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                color: "#374151"
+                            }}>
+                                Huisnummer
+                            </label>
+                            <input
+                                id="huisnummer"
+                                name="huisnummer"
+                                type="text"
+                                value={form.huisnummer || ""}
+                                onChange={handleChange}
+                                disabled={isSubmitting}
+                                placeholder="123"
+                                style={{
+                                    width: "100%",
+                                    padding: "12px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "8px",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    transition: "border-color 0.2s",
+                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                    boxSizing: "border-box",
+                                }}
+                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                            />
+                        </div>
                     </div>
 
                     <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
@@ -497,6 +584,49 @@ function OrganizationForm({
                             />
                         </div>
                     </div>
+                </div>
+
+                {/* Extra Info Field */}
+                <div style={{ marginBottom: "24px" }}>
+                    <label
+                        htmlFor="extra_info"
+                        style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151",
+                        }}
+                    >
+                        Extra Info
+                    </label>
+                    <textarea
+                        id="extra_info"
+                        name="extra_info"
+                        value={form.extra_info || ""}
+                        onChange={(e) => handleChange(e as any)}
+                        disabled={isSubmitting}
+                        placeholder="Voer extra informatie in"
+                        rows={4}
+                        style={{
+                            width: "100%",
+                            padding: "12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontFamily: FONT_STACK,
+                            transition: "border-color 0.2s",
+                            backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                            boxSizing: "border-box",
+                            resize: "vertical",
+                        }}
+                        onFocus={(e) =>
+                            !isSubmitting &&
+                            (e.target.style.borderColor = "#10b981")
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                    />
                 </div>
 
                 {/* Submit Buttons */}

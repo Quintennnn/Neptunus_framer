@@ -56,7 +56,16 @@ import {
     calculateOwnRisk,
     validateOwnRiskConfig,
     formatOwnRiskDisplay,
+    PremiumCalculationMethod,
+    PremiumConfig,
+    calculatePremium,
+    validatePremiumConfig,
+    formatPremiumDisplay,
 } from "../Utils.tsx"
+import {
+    hasPermission,
+    isAdmin,
+} from "../Rbac.tsx"
 import {
     canEditOrganizationAddress,
     canEditOrganizationFieldConfig,
@@ -162,11 +171,13 @@ function ColumnFilterDropdown({
     visibleColumns,
     onToggleColumn,
     onClose,
+    onResetColumnOrder,
 }: {
     columns: typeof ORG_COLUMNS
     visibleColumns: Set<string>
     onToggleColumn: (key: string) => void
     onClose: () => void
+    onResetColumnOrder: () => void
 }) {
     return (
         <div
@@ -247,68 +258,35 @@ function ColumnFilterDropdown({
                     </label>
                 ))}
             </div>
-        </div>
-    )
-}
-
-function ConfirmDeleteDialog({
-    onConfirm,
-    onCancel,
-}: {
-    onConfirm: () => void
-    onCancel: () => void
-}) {
-    return (
-        <div
-            style={{
-                ...styles.modal,
-                padding: "24px",
-                borderRadius: "12px",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-            }}
-        >
+            {/* Reset Column Order Button */}
             <div
-                style={{ ...styles.title, fontSize: "18px", marginBottom: 12 }}
-            >
-                Verwijder Organisatie
-            </div>
-            <p
                 style={{
-                    fontSize: 14,
-                    marginBottom: 20,
-                    color: colors.gray500,
+                    padding: "12px 16px",
+                    borderTop: "1px solid #e5e7eb",
                 }}
             >
-                Weet je zeker dat je deze organisatie wilt verwijderen?
-            </p>
-            <div style={styles.buttonGroup}>
                 <button
-                    onClick={onCancel}
+                    onClick={onResetColumnOrder}
                     style={{
-                        ...styles.secondaryButton,
-                        padding: "10px 16px",
-                        backgroundColor: colors.gray200,
+                        width: "100%",
+                        padding: "8px 12px",
+                        backgroundColor: "#6b7280",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "13px",
+                        fontWeight: "500",
+                        fontFamily: FONT_STACK,
                     }}
-                    onMouseOver={(e) => hover.secondaryButton(e.target)}
-                    onMouseOut={(e) => hover.resetSecondaryButton(e.target)}
-                >
-                    Annuleren
-                </button>
-                <button
-                    onClick={onConfirm}
-                    style={{
-                        ...styles.primaryButton,
-                        padding: "10px 16px",
-                        backgroundColor: colors.error,
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#4b5563"
                     }}
-                    onMouseOver={(e) =>
-                        (e.target.style.backgroundColor = "#dc2626")
-                    }
-                    onMouseOut={(e) =>
-                        (e.target.style.backgroundColor = colors.error)
-                    }
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#6b7280"
+                    }}
                 >
-                    Verwijderen
+                    Reset Volgorde
                 </button>
             </div>
         </div>
@@ -721,42 +699,51 @@ function AutoApprovalTab({
         })
     }
 
-    // Extract required fields from organization configuration using dynamic schema
-    useEffect(() => {
+    // Get available fields for a specific object type
+    const getFieldsForObjectType = (objectType: string) => {
         if (!org || schemaLoading || !dynamicSchema) {
-            return
+            return []
         }
 
         try {
             // Get all user input fields from the dynamic schema
             const userInputFields = getUserInputFieldsForObjectType(
                 dynamicSchema,
-                "boat"
+                objectType
             )
+
+            // Get config for this object type
+            const objectConfig =
+                org.insured_object_fields_config?.[objectType] || {}
 
             // Map fields and only include required ones based on org config
             const requiredFields = userInputFields
                 .filter((field) => {
-                    // Check if field is required in the organization config
-                    const boatConfig =
-                        org.insured_object_fields_config?.boat || {}
-                    return boatConfig[field.key]?.required || false
+                    return objectConfig[field.key]?.required || false
                 })
                 .map((field) => ({
                     key: field.key,
                     label: field.label,
-                    type: field.type, // Preserve original type: dropdown, date, currency, number, text
-                    options: field.options || [], // Add dropdown options from schema
+                    type: field.type,
+                    options: field.options || [],
                 }))
 
-            setAvailableFields(requiredFields)
+            // objectType is already selected at the rule level, no need to include as condition field
+            return requiredFields
         } catch (error) {
             console.error(
                 "Error extracting required fields from dynamic schema:",
                 error
             )
-            setAvailableFields([])
+            return []
         }
+    }
+
+    // Update available fields when org or schema changes
+    // Default to boat fields for backward compatibility
+    useEffect(() => {
+        const fields = getFieldsForObjectType("boot")
+        setAvailableFields(fields)
     }, [org, dynamicSchema, schemaLoading])
 
     // Ensure rules have priority field (backward compatibility)
@@ -783,10 +770,11 @@ function AutoApprovalTab({
         const newRule = {
             name: `Rule ${config.rules.length + 1}`,
             priority: config.rules.length + 1, // Add explicit priority
+            objectType: "boot", // Default to boot for backward compatibility
             conditions: {},
             logic: "AND",
             pricing: {
-                premium_promille: 5.0,
+                premium_percentage: 5.0,
                 eigen_risico_method: "fixed",
                 eigen_risico: 250,
                 eigen_risico_percentage: 0,
@@ -843,7 +831,10 @@ function AutoApprovalTab({
 
     const addCondition = (ruleIndex: number, fieldKey: string) => {
         const rule = config.rules[ruleIndex]
-        const field = availableFields.find((f) => f.key === fieldKey)
+        // Get fields for this rule's object type
+        const ruleObjectType = rule.objectType || "boot"
+        const fieldsForType = getFieldsForObjectType(ruleObjectType)
+        const field = fieldsForType.find((f) => f.key === fieldKey)
         const fieldType = field?.type || "text"
 
         // Get default operator based on field type
@@ -1141,6 +1132,7 @@ function AutoApprovalTab({
                                             onRemoveCondition={(fieldKey) =>
                                                 removeCondition(ruleIndex, fieldKey)
                                             }
+                                            getFieldsForType={getFieldsForObjectType}
                                             onMoveUp={
                                                 ruleIndex > 0
                                                     ? () =>
@@ -1206,6 +1198,7 @@ function RuleEditor({
     onAddCondition,
     onUpdateCondition,
     onRemoveCondition,
+    getFieldsForType,
 }: {
     rule: any
     ruleIndex: number
@@ -1221,8 +1214,18 @@ function RuleEditor({
     onAddCondition: (fieldKey: string) => void
     onUpdateCondition: (fieldKey: string, conditionData: any) => void
     onRemoveCondition: (fieldKey: string) => void
+    getFieldsForType: (objectType: string) => Array<{
+        key: string
+        label: string
+        type: string
+        options?: string[]
+    }>
 }) {
-    const unusedFields = availableFields.filter(
+    // Get fields specific to this rule's object type
+    const ruleObjectType = rule.objectType || "boot"
+    const fieldsForRuleType = getFieldsForType(ruleObjectType)
+
+    const unusedFields = fieldsForRuleType.filter(
         (field) => !rule.conditions.hasOwnProperty(field.key)
     )
 
@@ -1240,26 +1243,63 @@ function RuleEditor({
                 style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     marginBottom: 12,
+                    gap: "12px",
                 }}
             >
-                <input
-                    type="text"
-                    value={rule.name}
-                    onChange={(e) =>
-                        onUpdate({ ...rule, name: e.target.value })
-                    }
-                    style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        border: "1px solid #d1d5db",
-                        borderRadius: 4,
-                        padding: "6px 8px",
-                        fontFamily: FONT_STACK,
-                    }}
-                    placeholder="Rule name"
-                />
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+                    <input
+                        type="text"
+                        value={rule.name}
+                        onChange={(e) =>
+                            onUpdate({ ...rule, name: e.target.value })
+                        }
+                        style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            border: "1px solid #d1d5db",
+                            borderRadius: 4,
+                            padding: "6px 8px",
+                            fontFamily: FONT_STACK,
+                        }}
+                        placeholder="Rule name"
+                    />
+
+                    {/* Object Type Selector */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: 12, color: colors.gray600, fontWeight: 500 }}>
+                            Type object:
+                        </span>
+                        <select
+                            value={ruleObjectType}
+                            onChange={(e) => {
+                                // Clear conditions when changing object type
+                                onUpdate({
+                                    ...rule,
+                                    objectType: e.target.value,
+                                    conditions: {} // Reset conditions since fields may be different
+                                })
+                            }}
+                            style={{
+                                padding: "4px 8px",
+                                border: `2px solid ${colors.primary}`,
+                                borderRadius: 4,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                fontFamily: FONT_STACK,
+                                backgroundColor: colors.white,
+                                color: colors.primary,
+                                cursor: "pointer",
+                            }}
+                        >
+                            <option value="boot">Boot</option>
+                            <option value="trailer">Trailer</option>
+                            <option value="motor">Motor</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <select
                         value={rule.logic}
@@ -1413,36 +1453,35 @@ function RuleEditor({
                                 height: "16px", // Fixed height for label alignment
                             }}
                         >
-                            Premie Promillage (‰)
+                            Premie Berekening
                         </label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            min="0.1"
-                            max="50"
-                            value={rule.pricing?.premium_promille || ""}
-                            onChange={(e) => {
-                                const normalizedValue =
-                                    normalizePromillageValue(e.target.value)
+                        <EnhancedPremiumInput
+                            config={{
+                                method:
+                                    rule.pricing?.premium_method ||
+                                    "percentage",
+                                fixedAmount: rule.pricing?.premium_fixed_amount || 0,
+                                percentage:
+                                    rule.pricing?.premium_percentage || 0,
+                            }}
+                            onChange={(config) =>
                                 onUpdate({
                                     ...rule,
                                     pricing: {
                                         ...rule.pricing,
-                                        premium_promille:
-                                            normalizedValue || 0.1,
+                                        premium_method: config.method,
+                                        premium_fixed_amount:
+                                            config.method === "fixed"
+                                                ? config.fixedAmount
+                                                : 0,
+                                        premium_percentage:
+                                            config.method === "percentage"
+                                                ? config.percentage
+                                                : 0,
                                     },
                                 })
-                            }}
-                            placeholder="5.0"
-                            required
-                            style={{
-                                width: "100%",
-                                padding: "6px 8px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: 4,
-                                fontSize: 12,
-                                fontFamily: FONT_STACK,
-                            }}
+                            }
+                            ruleIndex={ruleIndex}
                         />
                     </div>
                     <div style={{ flex: 1 }}>
@@ -1484,6 +1523,7 @@ function RuleEditor({
                                     },
                                 })
                             }
+                            ruleIndex={ruleIndex}
                         />
                     </div>
                 </div>
@@ -1504,6 +1544,7 @@ function DraggableRuleEditor({
     onRemoveCondition,
     onReorder,
     totalRules,
+    getFieldsForType,
 }: {
     rule: any
     ruleIndex: number
@@ -1520,6 +1561,12 @@ function DraggableRuleEditor({
     onRemoveCondition: (fieldKey: string) => void
     onReorder: (dragIndex: number, hoverIndex: number) => void
     totalRules: number
+    getFieldsForType: (objectType: string) => Array<{
+        key: string
+        label: string
+        type: string
+        options?: string[]
+    }>
 }) {
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -1762,9 +1809,11 @@ function DraggableRuleEditor({
                         availableFields={availableFields}
                         onUpdate={onUpdate}
                         onDelete={onDelete}
+                        onDuplicate={() => {}} // Placeholder for DraggableRuleEditor context
                         onAddCondition={onAddCondition}
                         onUpdateCondition={onUpdateCondition}
                         onRemoveCondition={onRemoveCondition}
+                        getFieldsForType={getFieldsForType}
                     />
                 </div>
             </div>
@@ -2227,26 +2276,28 @@ function ConditionEditor({
 }
 
 // Enhanced Own Risk Input Component
-function EnhancedOwnRiskInput({
+function EnhancedPremiumInput({
     config,
     onChange,
+    ruleIndex,
 }: {
-    config: OwnRiskConfig
-    onChange: (config: OwnRiskConfig) => void
+    config: PremiumConfig
+    onChange: (config: PremiumConfig) => void
+    ruleIndex?: number
 }) {
-    const handleMethodChange = (method: OwnRiskCalculationMethod) => {
-        onChange({
+    const handleMethodChange = (method: PremiumCalculationMethod) => {
+        // Preserve existing values when switching methods
+        const newConfig: PremiumConfig = {
             ...config,
             method,
-            // Clear the other value when switching methods
-            fixedAmount:
-                method === "fixed" ? config.fixedAmount || 0 : undefined,
-            percentage:
-                method === "percentage" ? config.percentage || 0 : undefined,
-        })
+            fixedAmount: config.fixedAmount || 0,
+            percentage: config.percentage || 0,
+        }
+        onChange(newConfig)
     }
 
-    const handleValueChange = (value: number) => {
+    const handleValueChange = (value: string | number) => {
+        // Store raw value to allow partial decimals
         if (config.method === "fixed") {
             onChange({ ...config, fixedAmount: value })
         } else {
@@ -2254,45 +2305,167 @@ function EnhancedOwnRiskInput({
         }
     }
 
+    const handleBlur = (value: string) => {
+        if (value === "" || value === ".") {
+            // Reset to 0 if empty or just a dot
+            if (config.method === "fixed") {
+                onChange({ ...config, fixedAmount: 0 })
+            } else {
+                onChange({ ...config, percentage: 0 })
+            }
+            return
+        }
+
+        const numValue = parseFloat(value)
+        if (!isNaN(numValue)) {
+            if (config.method === "fixed") {
+                // Round to 2 decimals for fixed amount on blur
+                const roundedValue = Math.round(numValue * 100) / 100
+                onChange({ ...config, fixedAmount: roundedValue })
+            } else {
+                // Round to 2 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 100) / 100
+                onChange({ ...config, percentage: roundedValue })
+            }
+        }
+    }
+
+    // Split value into integer and decimal parts
+    const getCurrentValue = () => {
+        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        if (value === "" || value == null) return { integer: "", decimal: "" }
+        const numValue = typeof value === "string" ? parseFloat(value) : value
+        if (isNaN(numValue)) return { integer: "", decimal: "" }
+        const [intPart, decPart] = numValue.toString().split(".")
+        return { integer: intPart || "", decimal: decPart || "" }
+    }
+
+    const currentValue = getCurrentValue()
+
+    const handleIntegerChange = (newInteger: string) => {
+        // Only allow digits
+        if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        handleValueChange(combinedValue)
+    }
+
+    const handleDecimalChange = (newDecimal: string) => {
+        // Only allow digits, max 3 digits
+        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        const integer = currentValue.integer || "0"
+        const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
+        handleValueChange(combinedValue)
+    }
+
+    const handleIntegerBlur = () => {
+        // Ensure at least "0" if empty
+        if (!currentValue.integer) {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `0.${decimal}` : "0"
+            handleBlur(combinedValue)
+        } else {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            handleBlur(combinedValue)
+        }
+    }
+
+    const handleDecimalBlur = () => {
+        const integer = currentValue.integer || "0"
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${integer}.${decimal}` : integer
+        handleBlur(combinedValue)
+    }
+
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {/* Value Input */}
+            {/* Value Input - Conditional based on method */}
             <div>
-                <input
-                    type="number"
-                    step={config.method === "percentage" ? "0.1" : "1"}
-                    min="0"
-                    max={config.method === "percentage" ? "100" : undefined}
-                    value={
-                        config.method === "fixed"
-                            ? config.fixedAmount || ""
-                            : config.percentage || ""
-                    }
-                    onChange={(e) =>
-                        handleValueChange(parseFloat(e.target.value) || 0)
-                    }
-                    placeholder={config.method === "fixed" ? "250" : "5.0"}
-                    style={{
-                        width: "100%",
-                        padding: "6px 8px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 4,
-                        fontSize: 12,
-                        fontFamily: FONT_STACK,
-                    }}
-                />
-                <span
-                    style={{
-                        fontSize: 10,
-                        color: "#9ca3af",
-                        marginTop: "2px",
-                        display: "block",
-                    }}
-                >
-                    {config.method === "fixed"
-                        ? "Euro (afgerond op €100)"
-                        : "Percentage (0-100%)"}
-                </span>
+                {config.method === "percentage" ? (
+                    // Split Integer and Decimal for percentage
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="text"
+                                value={currentValue.integer}
+                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onBlur={handleIntegerBlur}
+                                placeholder="0"
+                                style={{
+                                    width: "60px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                    textAlign: "right",
+                                }}
+                            />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <input
+                                type="text"
+                                value={currentValue.decimal}
+                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onBlur={handleDecimalBlur}
+                                placeholder="000"
+                                maxLength={3}
+                                style={{
+                                    width: "50px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Percentage (max 3 decimalen)
+                        </span>
+                    </>
+                ) : (
+                    // Regular input for fixed amount
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={config.fixedAmount || ""}
+                                onChange={(e) => handleValueChange(e.target.value)}
+                                onBlur={(e) => handleBlur(e.target.value)}
+                                placeholder="0.00"
+                                style={{
+                                    width: "120px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Euro (max 2 decimalen)
+                        </span>
+                    </>
+                )}
             </div>
 
             {/* Method Selection */}
@@ -2307,7 +2480,250 @@ function EnhancedOwnRiskInput({
                 >
                     <input
                         type="radio"
-                        name="ownRiskMethod"
+                        name={`premiumMethod_${ruleIndex ?? "default"}`}
+                        value="fixed"
+                        checked={config.method === "fixed"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as PremiumCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Vast bedrag
+                </label>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name={`premiumMethod_${ruleIndex ?? "default"}`}
+                        value="percentage"
+                        checked={config.method === "percentage"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as PremiumCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Percentage van bootwaarde
+                </label>
+            </div>
+        </div>
+    )
+}
+
+function EnhancedOwnRiskInput({
+    config,
+    onChange,
+    ruleIndex,
+}: {
+    config: OwnRiskConfig
+    onChange: (config: OwnRiskConfig) => void
+    ruleIndex?: number
+}) {
+    const handleMethodChange = (method: OwnRiskCalculationMethod) => {
+        // Preserve existing values when switching methods
+        const newConfig: OwnRiskConfig = {
+            ...config,
+            method,
+            fixedAmount: config.fixedAmount || 0,
+            percentage: config.percentage || 0,
+        }
+        onChange(newConfig)
+    }
+
+    const handleValueChange = (value: string | number) => {
+        // Store raw value to allow partial decimals
+        if (config.method === "fixed") {
+            onChange({ ...config, fixedAmount: value })
+        } else {
+            onChange({ ...config, percentage: value })
+        }
+    }
+
+    const handleBlur = (value: string) => {
+        if (value === "" || value === ".") {
+            // Reset to 0 if empty or just a dot
+            if (config.method === "fixed") {
+                onChange({ ...config, fixedAmount: 0 })
+            } else {
+                onChange({ ...config, percentage: 0 })
+            }
+            return
+        }
+
+        const numValue = parseFloat(value)
+        if (!isNaN(numValue)) {
+            if (config.method === "fixed") {
+                // Round to nearest 50 for fixed amount on blur
+                const roundedValue = Math.round(numValue / 50) * 50
+                onChange({ ...config, fixedAmount: roundedValue })
+            } else {
+                // Round to 3 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 1000) / 1000
+                onChange({ ...config, percentage: roundedValue })
+            }
+        }
+    }
+
+    // Split value into integer and decimal parts
+    const getCurrentValue = () => {
+        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        if (value === "" || value == null) return { integer: "", decimal: "" }
+        const numValue = typeof value === "string" ? parseFloat(value) : value
+        if (isNaN(numValue)) return { integer: "", decimal: "" }
+        const [intPart, decPart] = numValue.toString().split(".")
+        return { integer: intPart || "", decimal: decPart || "" }
+    }
+
+    const currentValue = getCurrentValue()
+
+    const handleIntegerChange = (newInteger: string) => {
+        // Only allow digits
+        if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        handleValueChange(combinedValue)
+    }
+
+    const handleDecimalChange = (newDecimal: string) => {
+        // Only allow digits, max 3 digits
+        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        const integer = currentValue.integer || "0"
+        const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
+        handleValueChange(combinedValue)
+    }
+
+    const handleIntegerBlur = () => {
+        // Ensure at least "0" if empty
+        if (!currentValue.integer) {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `0.${decimal}` : "0"
+            handleBlur(combinedValue)
+        } else {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            handleBlur(combinedValue)
+        }
+    }
+
+    const handleDecimalBlur = () => {
+        const integer = currentValue.integer || "0"
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${integer}.${decimal}` : integer
+        handleBlur(combinedValue)
+    }
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {/* Value Input - Conditional based on method */}
+            <div>
+                {config.method === "percentage" ? (
+                    // Split Integer and Decimal for percentage
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="text"
+                                value={currentValue.integer}
+                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onBlur={handleIntegerBlur}
+                                placeholder="0"
+                                style={{
+                                    width: "60px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                    textAlign: "right",
+                                }}
+                            />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <input
+                                type="text"
+                                value={currentValue.decimal}
+                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onBlur={handleDecimalBlur}
+                                placeholder="000"
+                                maxLength={3}
+                                style={{
+                                    width: "50px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Percentage (max 3 decimalen)
+                        </span>
+                    </>
+                ) : (
+                    // Regular input for fixed amount
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="number"
+                                step="50"
+                                value={config.fixedAmount || ""}
+                                onChange={(e) => handleValueChange(e.target.value)}
+                                onBlur={(e) => handleBlur(e.target.value)}
+                                placeholder="0"
+                                style={{
+                                    width: "120px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Euro (afgerond op €50)
+                        </span>
+                    </>
+                )}
+            </div>
+
+            {/* Method Selection */}
+            <div style={{ display: "flex", gap: "16px" }}>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name={`ownRiskMethod_${ruleIndex ?? "default"}`}
                         value="fixed"
                         checked={config.method === "fixed"}
                         onChange={(e) =>
@@ -2329,7 +2745,7 @@ function EnhancedOwnRiskInput({
                 >
                     <input
                         type="radio"
-                        name="ownRiskMethod"
+                        name={`ownRiskMethod_${ruleIndex ?? "default"}`}
                         value="percentage"
                         checked={config.method === "percentage"}
                         onChange={(e) =>
@@ -2359,24 +2775,24 @@ function EditOrgForm({
     const [typeOrganisatie, setTypeOrganisatie] = useState(
         org.type_organisatie || ""
     )
+    const [polisnummer, setPolisnummer] = useState(org.polisnummer || "")
     const [street, setStreet] = useState(org.street || "")
+    const [huisnummer, setHuisnummer] = useState(org.huisnummer || "")
     const [city, setCity] = useState(org.city || "")
     const [state, setState] = useState(org.state || "")
     const [postalCode, setPostalCode] = useState(org.postal_code || "")
     const [country, setCountry] = useState(org.country || "")
-    const [linkedPolicyId, setLinkedPolicyId] = useState(
-        org.linked_policy_id || ""
-    )
+    const [extraInfo, setExtraInfo] = useState(org.extra_info || "")
     const [insuredObjectFieldsConfig, setInsuredObjectFieldsConfig] = useState(
         () => {
             // Use the new insured_object_fields_config structure
             const newConfig = org.insured_object_fields_config || {}
 
             // All fields are now configurable by admin - no forced required fields
-            const enhancedBoatConfig = { ...newConfig.boat }
+            const enhancedBoatConfig = { ...newConfig.boot }
 
             return {
-                boat: enhancedBoatConfig,
+                boot: enhancedBoatConfig,
                 motor: newConfig.motor || {},
                 trailer: newConfig.trailer || {},
                 other: newConfig.other || {},
@@ -2391,6 +2807,16 @@ function EditOrgForm({
     const [autoApprovalConfig, setAutoApprovalConfig] = useState(
         org.auto_approval_config || { enabled: false, rules: [] }
     )
+
+    // Auto-clear success message after 2 seconds
+    useEffect(() => {
+        if (success) {
+            const timer = setTimeout(() => {
+                setSuccess(null)
+            }, 2000)
+            return () => clearTimeout(timer)
+        }
+    }, [success])
 
     // Get current user info for role-based access control
     const currentUser = getCurrentUserInfo()
@@ -2439,19 +2865,43 @@ function EditOrgForm({
                         return true
                     }
 
-                    // Enhanced promillage validation
-                    const promillageError = validatePromillage(
-                        pricing.premium_promille
-                    )
-                    if (promillageError !== null) {
+                    // Convert string values to numbers for validation
+                    const premiumFixedAmount =
+                        typeof pricing.premium_fixed_amount === "string"
+                            ? parseFloat(pricing.premium_fixed_amount)
+                            : pricing.premium_fixed_amount
+
+                    const premiumPercentage =
+                        typeof pricing.premium_percentage === "string"
+                            ? parseFloat(pricing.premium_percentage)
+                            : pricing.premium_percentage
+
+                    const eigenRisico =
+                        typeof pricing.eigen_risico === "string"
+                            ? parseFloat(pricing.eigen_risico)
+                            : pricing.eigen_risico
+
+                    const eigenRisicoPercentage =
+                        typeof pricing.eigen_risico_percentage === "string"
+                            ? parseFloat(pricing.eigen_risico_percentage)
+                            : pricing.eigen_risico_percentage
+
+                    // Enhanced premium configuration validation (supports both fixed and percentage)
+                    const premiumConfig: PremiumConfig = {
+                        method: pricing.premium_method || "percentage",
+                        fixedAmount: premiumFixedAmount || 0,
+                        percentage: premiumPercentage || 0,
+                    }
+                    const premiumError = validatePremiumConfig(premiumConfig)
+                    if (premiumError !== null) {
                         return true
                     }
 
                     // Enhanced own risk configuration validation (supports both fixed and percentage)
                     const ownRiskConfig: OwnRiskConfig = {
                         method: pricing.eigen_risico_method || "fixed",
-                        fixedAmount: pricing.eigen_risico || 0,
-                        percentage: pricing.eigen_risico_percentage || 0,
+                        fixedAmount: eigenRisico || 0,
+                        percentage: eigenRisicoPercentage || 0,
                     }
                     const ownRiskError = validateOwnRiskConfig(ownRiskConfig)
                     return ownRiskError !== null
@@ -2470,23 +2920,63 @@ function EditOrgForm({
             // All fields are now configurable by admin - no forced requirements
             const updatedInsuredObjectFieldsConfig = {
                 ...insuredObjectFieldsConfig,
-                boat: {
-                    ...insuredObjectFieldsConfig.boat,
+                boot: {
+                    ...insuredObjectFieldsConfig.boot,
                 },
+            }
+
+            // Sanitize auto approval config to ensure numeric fields are numbers, not strings
+            const sanitizedAutoApprovalConfig = {
+                ...autoApprovalConfig,
+                rules: autoApprovalConfig.rules.map((rule: any) => ({
+                    ...rule,
+                    pricing: rule.pricing
+                        ? {
+                              ...rule.pricing,
+                              premium_percentage:
+                                  typeof rule.pricing.premium_percentage ===
+                                  "string"
+                                      ? parseFloat(
+                                            rule.pricing.premium_percentage
+                                        ) || 0.1
+                                      : rule.pricing.premium_percentage,
+                              eigen_risico:
+                                  typeof rule.pricing.eigen_risico === "string"
+                                      ? parseFloat(rule.pricing.eigen_risico) ||
+                                        0
+                                      : rule.pricing.eigen_risico,
+                              eigen_risico_method:
+                                  rule.pricing.eigen_risico_method || "fixed", // Ensure method is always present
+                              eigen_risico_percentage:
+                                  typeof rule.pricing.eigen_risico_percentage ===
+                                  "string"
+                                      ? parseFloat(
+                                            rule.pricing.eigen_risico_percentage
+                                        ) || 0
+                                      : rule.pricing.eigen_risico_percentage,
+                          }
+                        : rule.pricing,
+                })),
             }
 
             const payload = {
                 name,
                 type_organisatie: typeOrganisatie,
+                polisnummer: polisnummer || undefined,
                 street: street || undefined,
+                huisnummer: huisnummer || undefined,
                 city: city || undefined,
                 state: state || undefined,
                 postal_code: postalCode || undefined,
                 country: country || undefined,
-                linked_policy_id: linkedPolicyId || undefined,
+                extra_info: extraInfo || undefined,
                 insured_object_fields_config: updatedInsuredObjectFieldsConfig,
-                auto_approval_config: autoApprovalConfig,
+                auto_approval_config: sanitizedAutoApprovalConfig,
             }
+
+            // Debug logging for auto approval config
+            console.log("=== AUTO APPROVAL CONFIG BEING SENT ===")
+            console.log(JSON.stringify(sanitizedAutoApprovalConfig, null, 2))
 
             // Update the organization (all configuration goes to organization, not policy)
             const res = await fetch(
@@ -2505,10 +2995,7 @@ function EditOrgForm({
                 throw new Error(data.message || "Failed to update")
             }
             setSuccess("Organization updated successfully.")
-            setTimeout(() => {
-                refresh()
-                onClose()
-            }, 1000)
+            refresh()
         } catch (err: any) {
             setError(err.message)
         }
@@ -2675,6 +3162,30 @@ function EditOrgForm({
                             </option>
                         </select>
 
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: 8,
+                                fontWeight: 500,
+                            }}
+                        >
+                            Polisnummer
+                        </label>
+                        <input
+                            value={polisnummer}
+                            onChange={(e) => setPolisnummer(e.target.value)}
+                            placeholder="Voer polisnummer in"
+                            style={{
+                                width: "100%",
+                                padding: 12,
+                                fontSize: 14,
+                                border: "1px solid #d1d5db",
+                                borderRadius: 8,
+                                marginBottom: 16,
+                                fontFamily: FONT_STACK,
+                            }}
+                        />
+
                         {/* Address Section */}
                         <div style={{ marginTop: 24 }}>
                             <h3
@@ -2689,30 +3200,65 @@ function EditOrgForm({
                                 Adresgegevens (Optioneel)
                             </h3>
 
-                            <div style={{ marginBottom: 16 }}>
-                                <label
-                                    style={{
-                                        display: "block",
-                                        marginBottom: 8,
-                                        fontWeight: 500,
-                                    }}
-                                >
-                                    Straat
-                                </label>
-                                <input
-                                    value={street}
-                                    onChange={(e) => setStreet(e.target.value)}
-                                    placeholder="Voer straatnaam en huisnummer in"
-                                    style={{
-                                        width: "100%",
-                                        padding: 12,
-                                        fontSize: 14,
-                                        border: "1px solid #d1d5db",
-                                        borderRadius: 8,
-                                        marginBottom: 16,
-                                        fontFamily: FONT_STACK,
-                                    }}
-                                />
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: 12,
+                                    marginBottom: 16,
+                                }}
+                            >
+                                <div style={{ flex: 3 }}>
+                                    <label
+                                        style={{
+                                            display: "block",
+                                            marginBottom: 8,
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        Straat
+                                    </label>
+                                    <input
+                                        value={street}
+                                        onChange={(e) =>
+                                            setStreet(e.target.value)
+                                        }
+                                        placeholder="Voer straatnaam in"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label
+                                        style={{
+                                            display: "block",
+                                            marginBottom: 8,
+                                            fontWeight: 500,
+                                        }}
+                                    >
+                                        Huisnummer
+                                    </label>
+                                    <input
+                                        value={huisnummer}
+                                        onChange={(e) =>
+                                            setHuisnummer(e.target.value)
+                                        }
+                                        placeholder="123"
+                                        style={{
+                                            width: "100%",
+                                            padding: 12,
+                                            fontSize: 14,
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: 8,
+                                            fontFamily: FONT_STACK,
+                                        }}
+                                    />
+                                </div>
                             </div>
 
                             <div
@@ -2845,14 +3391,15 @@ function EditOrgForm({
                                         fontWeight: 500,
                                     }}
                                 >
-                                    Gekoppelde Polis ID (Optioneel)
+                                    Extra Info
                                 </label>
-                                <input
-                                    value={linkedPolicyId}
+                                <textarea
+                                    value={extraInfo}
                                     onChange={(e) =>
-                                        setLinkedPolicyId(e.target.value)
+                                        setExtraInfo(e.target.value)
                                     }
-                                    placeholder="Voer polis ID in"
+                                    placeholder="Voer extra informatie in"
+                                    rows={4}
                                     style={{
                                         width: "100%",
                                         padding: 12,
@@ -2860,6 +3407,7 @@ function EditOrgForm({
                                         border: "1px solid #d1d5db",
                                         borderRadius: 8,
                                         fontFamily: FONT_STACK,
+                                        resize: "vertical",
                                     }}
                                 />
                             </div>
@@ -2959,11 +3507,11 @@ function EditOrgForm({
                                         <tbody>
                                             {getUserInputFieldsForObjectType(
                                                 dynamicSchema,
-                                                "boat"
+                                                "boot"
                                             ).map((field) => {
                                                 const config =
                                                     insuredObjectFieldsConfig
-                                                        .boat[field.key] || {
+                                                        .boot[field.key] || {
                                                         visible: false,
                                                         required: false,
                                                     }
@@ -3122,6 +3670,7 @@ function EditOrgForm({
                             padding: 0,
                             border: "none",
                             backgroundColor: "transparent",
+                            animation: "fadeOut 2s ease-in-out",
                         }}
                     >
                         {success}
@@ -3168,9 +3717,6 @@ export function OrganizationPageOverride(): Override {
     const [showEditForm, setShowEditForm] = useState(false)
     const [editingOrgId, setEditingOrgId] = useState<string | null>(null)
     const [editingOrgName, setEditingOrgName] = useState<string | null>(null)
-    const [deletingOrgId, setDeletingOrgId] = useState<string | number | null>(
-        null
-    )
     const [searchTerm, setSearchTerm] = useState("")
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
@@ -3179,7 +3725,6 @@ export function OrganizationPageOverride(): Override {
     const [sortField, setSortField] = useState<string | null>(null)
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
     const [showCreateModal, setShowCreateModal] = useState(false)
-    const [policies, setPolicies] = useState<any[]>([])
 
     // Use dynamic schema for organization columns
     const {
@@ -3188,6 +3733,14 @@ export function OrganizationPageOverride(): Override {
         error: schemaError,
     } = useOrganizationSchema()
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set())
+
+    // Column order state management with localStorage persistence
+    const [columnOrder, setColumnOrder] = useState<string[]>([])
+    const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+    const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+
+    // Default column order (can be customized based on most common view)
+    const defaultColumnOrder = ["name", "address", "created"]
 
     async function fetchPendingCount(): Promise<number> {
         try {
@@ -3326,6 +3879,46 @@ export function OrganizationPageOverride(): Override {
         }
     }, [organizationColumns])
 
+    // Load column order from localStorage or use default
+    useEffect(() => {
+        const savedOrder = localStorage.getItem('organizations_columnOrder')
+        if (savedOrder) {
+            try {
+                const parsedOrder = JSON.parse(savedOrder)
+                if (Array.isArray(parsedOrder)) {
+                    setColumnOrder(parsedOrder)
+                } else {
+                    setColumnOrder(defaultColumnOrder)
+                }
+            } catch (error) {
+                console.warn('Failed to parse saved column order, using default:', error)
+                setColumnOrder(defaultColumnOrder)
+            }
+        } else {
+            setColumnOrder(defaultColumnOrder)
+        }
+    }, [])
+
+    // Save column order to localStorage whenever it changes
+    useEffect(() => {
+        if (columnOrder.length > 0) {
+            localStorage.setItem('organizations_columnOrder', JSON.stringify(columnOrder))
+        }
+    }, [columnOrder])
+
+    // Update column order when new columns are available (but preserve user customizations)
+    useEffect(() => {
+        if (organizationColumns.length > 0 && columnOrder.length > 0) {
+            const availableColumnKeys = organizationColumns.map(col => col.key)
+            const newColumns = availableColumnKeys.filter(key => !columnOrder.includes(key))
+
+            if (newColumns.length > 0) {
+                // Add new columns at the end of the user's custom order
+                setColumnOrder(prev => [...prev, ...newColumns])
+            }
+        }
+    }, [organizationColumns, columnOrder.length])
+
     // Filter and sort organizations
     const filteredAndSortedOrgs = React.useMemo(() => {
         let filtered =
@@ -3383,36 +3976,75 @@ export function OrganizationPageOverride(): Override {
         })
     }
 
-    async function handleDelete() {
-        if (deletingOrgId == null) return
-        try {
-            // Find the organization in our current list to get its details
-            const orgToDelete = orgs?.find((org) => org.id === deletingOrgId)
-            const linkedPolicyId = orgToDelete?.linked_policy_id
+    // Column reordering functions
+    const moveColumn = (dragIndex: number, hoverIndex: number) => {
+        const newOrder = [...columnOrder]
+        const draggedColumn = newOrder[dragIndex]
 
-            // Delete the organization
-            await fetch(
-                `${API_BASE_URL}${API_PATHS.ORGANIZATION}/${deletingOrgId}`,
-                {
-                    method: "DELETE",
-                    headers: {
-                        Authorization: `Bearer ${getIdToken()}`,
-                    },
-                }
-            )
+        // Remove the dragged column from its current position
+        newOrder.splice(dragIndex, 1)
+        // Insert it at the new position
+        newOrder.splice(hoverIndex, 0, draggedColumn)
 
-            // No longer deleting linked policies - keep it simple, organization-only
+        setColumnOrder(newOrder)
+    }
 
-            refresh()
-        } catch (err) {
-            alert("Delete failed: " + (err as Error).message)
-        } finally {
-            setDeletingOrgId(null)
+    const resetColumnOrder = () => {
+        setColumnOrder([...defaultColumnOrder])
+        localStorage.removeItem('organizations_columnOrder')
+    }
+
+    // Drag and drop event handlers
+    const handleDragStart = (e: React.DragEvent, columnKey: string) => {
+        setDraggedColumn(columnKey)
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', columnKey)
+
+        // Add some visual feedback
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '0.5'
         }
     }
 
+    const handleDragEnd = (e: React.DragEvent) => {
+        setDraggedColumn(null)
+        setDragOverColumn(null)
+
+        // Reset visual feedback
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '1'
+        }
+    }
+
+    const handleDragOver = (e: React.DragEvent, columnKey: string) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDragOverColumn(columnKey)
+    }
+
+    const handleDragLeave = () => {
+        setDragOverColumn(null)
+    }
+
+    const handleDrop = (e: React.DragEvent, targetColumnKey: string) => {
+        e.preventDefault()
+
+        const draggedColumnKey = e.dataTransfer.getData('text/plain')
+        if (draggedColumnKey && draggedColumnKey !== targetColumnKey) {
+            const dragIndex = columnOrder.indexOf(draggedColumnKey)
+            const hoverIndex = columnOrder.indexOf(targetColumnKey)
+
+            if (dragIndex !== -1 && hoverIndex !== -1) {
+                moveColumn(dragIndex, hoverIndex)
+            }
+        }
+
+        setDraggedColumn(null)
+        setDragOverColumn(null)
+    }
+
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString()
+        return new Date(dateString).toLocaleDateString("nl-NL")
     }
 
     // Close column filter when clicking outside
@@ -3467,13 +4099,27 @@ export function OrganizationPageOverride(): Override {
             ),
         }
 
-    const visible = organizationColumns.filter((col) =>
-        visibleColumns.has(col.key)
-    )
+    // Filter and sort columns based on columnOrder
+    const visible = organizationColumns
+        .filter((col) => visibleColumns.has(col.key))
+        .sort((a, b) => {
+            const aIndex = columnOrder.indexOf(a.key)
+            const bIndex = columnOrder.indexOf(b.key)
+            // If both columns are in the order, sort by their position
+            if (aIndex !== -1 && bIndex !== -1) {
+                return aIndex - bIndex
+            }
+            // If only one is in the order, put it first
+            if (aIndex !== -1) return -1
+            if (bIndex !== -1) return 1
+            // If neither is in the order, maintain original order
+            return 0
+        })
 
     return {
         children: (
             <>
+                <style dangerouslySetInnerHTML={{ __html: animations }} />
                 <div
                     style={{
                         padding: 24,
@@ -3530,50 +4176,8 @@ export function OrganizationPageOverride(): Override {
                                 <FaBuilding size={14} />
                                 Organisaties
                             </button>
-                            <button
-                                onClick={() => {
-                                    window.location.href = "/policies"
-                                }}
-                                style={{
-                                    padding: "16px 24px",
-                                    backgroundColor: "#ffffff",
-                                    color: "#6b7280",
-                                    border: "2px solid #e5e7eb",
-                                    borderRadius: "12px",
-                                    fontSize: "15px",
-                                    fontWeight: "600",
-                                    cursor: "pointer",
-                                    fontFamily: FONT_STACK,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
-                                    transition: "all 0.2s",
-                                    minHeight: "48px",
-                                    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                                }}
-                                onMouseOver={(e) => {
-                                    e.target.style.backgroundColor = "#f8fafc"
-                                    e.target.style.borderColor = colors.primary
-                                    e.target.style.color = colors.primary
-                                    e.target.style.transform =
-                                        "translateY(-1px)"
-                                    e.target.style.boxShadow =
-                                        "0 4px 12px rgba(59, 130, 246, 0.15)"
-                                }}
-                                onMouseOut={(e) => {
-                                    e.target.style.backgroundColor = "#ffffff"
-                                    e.target.style.borderColor = "#e5e7eb"
-                                    e.target.style.color = "#6b7280"
-                                    e.target.style.transform = "none"
-                                    e.target.style.boxShadow =
-                                        "0 2px 4px rgba(0,0,0,0.05)"
-                                }}
-                            >
-                                <FaFileContract size={14} />
-                                Polissen
-                            </button>
-                            {/* Only show Pending tab for admin and editor roles */}
-                            {userInfo?.role !== "user" && (
+                            {/* Only show Pending tab for admin role */}
+                            {isAdmin(userInfo) && (
                                 <button
                                     onClick={() => {
                                         window.location.href =
@@ -3639,8 +4243,8 @@ export function OrganizationPageOverride(): Override {
                                     )}
                                 </button>
                             )}
-                            {/* Only show Users tab for admin and editor roles */}
-                            {userInfo?.role !== "user" && (
+                            {/* Only show Users tab for admin role */}
+                            {isAdmin(userInfo) && (
                                 <button
                                     onClick={() => {
                                         window.location.href = "/users"
@@ -3686,8 +4290,8 @@ export function OrganizationPageOverride(): Override {
                                     Gebruikers
                                 </button>
                             )}
-                            {/* Only show Changelog tab for admin and editor roles */}
-                            {userInfo?.role !== "user" && (
+                            {/* Only show Changelog tab for admin role */}
+                            {isAdmin(userInfo) && (
                                 <button
                                     onClick={() => {
                                         window.location.href = "/changelog"
@@ -3877,6 +4481,7 @@ export function OrganizationPageOverride(): Override {
                                                 onClose={() =>
                                                     setShowColumnFilter(false)
                                                 }
+                                                onResetColumnOrder={resetColumnOrder}
                                             />
                                         )}
                                 </div>
@@ -3926,26 +4531,45 @@ export function OrganizationPageOverride(): Override {
                                             {visible.map((col) => (
                                                 <th
                                                     key={col.key}
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, col.key)}
+                                                    onDragEnd={handleDragEnd}
+                                                    onDragOver={(e) => handleDragOver(e, col.key)}
+                                                    onDragLeave={handleDragLeave}
+                                                    onDrop={(e) => handleDrop(e, col.key)}
                                                     style={{
                                                         textAlign: "left",
                                                         padding: 12,
                                                         fontWeight: 600,
                                                         color: colors.gray700,
                                                         width: col.width,
-                                                        cursor: "pointer",
+                                                        cursor: "move",
                                                         userSelect: "none",
                                                         position: "relative",
+                                                        backgroundColor:
+                                                            dragOverColumn === col.key
+                                                                ? "#e2e8f0"
+                                                                : draggedColumn === col.key
+                                                                ? "#f1f5f9"
+                                                                : "transparent",
+                                                        transition: "background-color 0.2s ease",
                                                     }}
                                                     onClick={() =>
                                                         handleSort(col.key)
                                                     }
                                                     onMouseOver={(e) => {
-                                                        e.target.style.backgroundColor =
-                                                            "#f3f4f6"
+                                                        if (draggedColumn !== col.key) {
+                                                            e.currentTarget.style.backgroundColor =
+                                                                dragOverColumn === col.key
+                                                                    ? "#e2e8f0"
+                                                                    : "#f3f4f6"
+                                                        }
                                                     }}
                                                     onMouseOut={(e) => {
-                                                        e.target.style.backgroundColor =
-                                                            "transparent"
+                                                        if (draggedColumn !== col.key && dragOverColumn !== col.key) {
+                                                            e.currentTarget.style.backgroundColor =
+                                                                "transparent"
+                                                        }
                                                     }}
                                                 >
                                                     <div
@@ -4002,6 +4626,17 @@ export function OrganizationPageOverride(): Override {
                                                             )}
                                                         </div>
                                                     </div>
+                                                    {dragOverColumn === col.key && (
+                                                        <div style={{
+                                                            position: "absolute",
+                                                            left: "0",
+                                                            top: "0",
+                                                            bottom: "0",
+                                                            width: "3px",
+                                                            backgroundColor: "#3b82f6",
+                                                            borderRadius: "1px"
+                                                        }} />
+                                                    )}
                                                 </th>
                                             ))}
                                         </tr>
@@ -4104,14 +4739,37 @@ export function OrganizationPageOverride(): Override {
                                                 (org, i) => (
                                                     <tr
                                                         key={org.id}
+                                                        onClick={() => {
+                                                            const orgParam =
+                                                                encodeURIComponent(
+                                                                    org.name
+                                                                )
+                                                            window.location.href = `/insuredobjects?org=${orgParam}`
+                                                        }}
                                                         style={{
                                                             backgroundColor:
                                                                 i % 2 === 0
                                                                     ? colors.white
                                                                     : colors.gray50,
+                                                            cursor: "pointer",
+                                                            transition:
+                                                                "background-color 0.15s ease",
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.backgroundColor =
+                                                                "#f0fdf4"
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.backgroundColor =
+                                                                i % 2 === 0
+                                                                    ? colors.white
+                                                                    : colors.gray50
                                                         }}
                                                     >
                                                         <td
+                                                            onClick={(e) =>
+                                                                e.stopPropagation()
+                                                            }
                                                             style={{
                                                                 padding: 12,
                                                             }}
@@ -4176,11 +4834,6 @@ export function OrganizationPageOverride(): Override {
                                                                             true
                                                                         )
                                                                     }}
-                                                                    onDelete={() =>
-                                                                        setDeletingOrgId(
-                                                                            org.id
-                                                                        )
-                                                                    }
                                                                     resourceOrganization={
                                                                         org.name
                                                                     }
@@ -4195,55 +4848,26 @@ export function OrganizationPageOverride(): Override {
                                                                     color: colors.gray700,
                                                                 }}
                                                             >
-                                                                {/* Make organization name clickable */}
+                                                                {/* Organization name - highlighted to show clickable row */}
                                                                 {col.key ===
                                                                 "name" ? (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const orgParam =
-                                                                                encodeURIComponent(
-                                                                                    org.name
-                                                                                )
-                                                                            window.location.href = `/insuredobjects?org=${orgParam}`
-                                                                        }}
+                                                                    <span
                                                                         style={{
-                                                                            background:
-                                                                                "none",
-                                                                            border: "none",
                                                                             color: "#3b82f6",
                                                                             fontSize:
                                                                                 "14px",
                                                                             fontWeight:
                                                                                 "500",
-                                                                            cursor: "pointer",
-                                                                            textDecoration:
-                                                                                "underline",
                                                                             fontFamily:
                                                                                 FONT_STACK,
-                                                                            padding: 0,
-                                                                            textAlign:
-                                                                                "left",
                                                                         }}
-                                                                        onMouseOver={(
-                                                                            e
-                                                                        ) => {
-                                                                            e.target.style.color =
-                                                                                "#1d4ed8"
-                                                                        }}
-                                                                        onMouseOut={(
-                                                                            e
-                                                                        ) => {
-                                                                            e.target.style.color =
-                                                                                "#3b82f6"
-                                                                        }}
-                                                                        title={`Ga naar vloot van ${org.name}`}
                                                                     >
                                                                         {org[
                                                                             col
                                                                                 .key
                                                                         ] ??
                                                                             "-"}
-                                                                    </button>
+                                                                    </span>
                                                                 ) : col.key ===
                                                                   "type_organisatie" ? (
                                                                     <span
@@ -4291,38 +4915,18 @@ export function OrganizationPageOverride(): Override {
                                                                         ]
                                                                     )
                                                                 ) : col.key ===
-                                                                  "linked_policy_id" ? (
-                                                                    <span
+                                                                  "extra_info" ? (
+                                                                    <div
                                                                         style={{
-                                                                            padding:
-                                                                                "4px 8px",
-                                                                            borderRadius:
-                                                                                "12px",
-                                                                            fontSize:
-                                                                                "12px",
-                                                                            fontWeight:
-                                                                                "500",
-                                                                            backgroundColor:
-                                                                                org[
-                                                                                    col
-                                                                                        .key
-                                                                                ]
-                                                                                    ? "#dbeafe"
-                                                                                    : "#f3f4f6",
-                                                                            color: org[
-                                                                                col
-                                                                                    .key
-                                                                            ]
-                                                                                ? "#1e40af"
-                                                                                : "#6b7280",
+                                                                            maxWidth: "200px",
+                                                                            overflow: "hidden",
+                                                                            textOverflow: "ellipsis",
+                                                                            whiteSpace: "nowrap",
                                                                         }}
+                                                                        title={org[col.key] || "-"}
                                                                     >
-                                                                        {org[
-                                                                            col
-                                                                                .key
-                                                                        ] ||
-                                                                            "Geen polis"}
-                                                                    </span>
+                                                                        {org[col.key] || "-"}
+                                                                    </div>
                                                                 ) : (
                                                                     (org[
                                                                         col.key
@@ -4340,18 +4944,6 @@ export function OrganizationPageOverride(): Override {
                         </div>
                     </div>
                 </div>
-
-                {/* Delete Modal */}
-                {deletingOrgId &&
-                    ReactDOM.createPortal(
-                        <div style={styles.modalOverlay}>
-                            <ConfirmDeleteDialog
-                                onConfirm={handleDelete}
-                                onCancel={() => setDeletingOrgId(null)}
-                            />
-                        </div>,
-                        document.body
-                    )}
 
                 {/* Edit Modal */}
                 {showEditForm &&

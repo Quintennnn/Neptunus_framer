@@ -304,18 +304,35 @@ export type OwnRiskCalculationMethod = "fixed" | "percentage"
 
 export interface OwnRiskConfig {
   method: OwnRiskCalculationMethod
-  fixedAmount?: number
-  percentage?: number
+  fixedAmount?: number | string  // Allow string for partial input like "0." or "2."
+  percentage?: number | string    // Allow string for partial input like "0." or "5."
+}
+
+// Premium Calculation Types and Functions
+export type PremiumCalculationMethod = "fixed" | "percentage"
+
+export interface PremiumConfig {
+  method: PremiumCalculationMethod
+  fixedAmount?: number | string  // Allow string for partial input like "0." or "2."
+  percentage?: number | string    // Allow string for partial input like "0." or "5."
 }
 
 // Calculate own risk based on method and boat value
 export function calculateOwnRisk(config: OwnRiskConfig, boatValue: number): number {
   if (config.method === "percentage" && config.percentage) {
-    const calculatedAmount = (boatValue * config.percentage) / 100
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+    const calculatedAmount = (boatValue * percentage) / 100
     // Round to nearest 100 euros as per business requirement
     return Math.round(calculatedAmount / 100) * 100
   } else if (config.method === "fixed" && config.fixedAmount) {
-    return config.fixedAmount
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+    return fixedAmount
   }
   return 0
 }
@@ -327,13 +344,23 @@ export function validateOwnRiskConfig(config: OwnRiskConfig): string | null {
   }
 
   if (config.method === "fixed") {
-    if (!config.fixedAmount || config.fixedAmount <= 0) {
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+
+    if (!fixedAmount || isNaN(fixedAmount) || fixedAmount <= 0) {
       return "Voer een geldig vast bedrag in voor eigen risico"
     }
-    const currencyError = validateCurrencyValue(config.fixedAmount, "Vast bedrag eigen risico")
+    const currencyError = validateCurrencyValue(fixedAmount, "Vast bedrag eigen risico")
     if (currencyError) return currencyError
   } else if (config.method === "percentage") {
-    if (!config.percentage || config.percentage <= 0 || config.percentage > 100) {
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+
+    if (!percentage || isNaN(percentage) || percentage <= 0 || percentage > 100) {
       return "Voer een geldig percentage in (0-100%) voor eigen risico"
     }
   }
@@ -344,11 +371,93 @@ export function validateOwnRiskConfig(config: OwnRiskConfig): string | null {
 // Format own risk display text
 export function formatOwnRiskDisplay(config: OwnRiskConfig, boatValue?: number): string {
   if (config.method === "fixed" && config.fixedAmount) {
-    return formatCurrency(config.fixedAmount)
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+    return formatCurrency(fixedAmount)
   } else if (config.method === "percentage" && config.percentage) {
-    const baseText = `${config.percentage}% van bootwaarde`
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+    const baseText = `${percentage}% van bootwaarde`
     if (boatValue) {
       const calculatedAmount = calculateOwnRisk(config, boatValue)
+      return `${baseText} (${formatCurrency(calculatedAmount)})`
+    }
+    return baseText
+  }
+  return "Niet geconfigureerd"
+}
+
+// Calculate premium based on method and boat value
+export function calculatePremium(config: PremiumConfig, boatValue: number): number {
+  if (config.method === "percentage" && config.percentage) {
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+    const calculatedAmount = (boatValue * percentage) / 100
+    // Round to 3 decimal places for premium precision
+    return Math.round(calculatedAmount * 1000) / 1000
+  } else if (config.method === "fixed" && config.fixedAmount) {
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+    return fixedAmount
+  }
+  return 0
+}
+
+// Validate premium configuration
+export function validatePremiumConfig(config: PremiumConfig): string | null {
+  if (!config.method) {
+    return "Selecteer een berekeningswijze voor premie"
+  }
+
+  if (config.method === "fixed") {
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+
+    if (!fixedAmount || isNaN(fixedAmount) || fixedAmount <= 0) {
+      return "Voer een geldig vast bedrag in voor premie"
+    }
+    const currencyError = validateCurrencyValue(fixedAmount, "Vast bedrag premie")
+    if (currencyError) return currencyError
+  } else if (config.method === "percentage") {
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+
+    if (!percentage || isNaN(percentage) || percentage <= 0 || percentage > 100) {
+      return "Voer een geldig percentage in (0-100%) voor premie"
+    }
+  }
+
+  return null
+}
+
+// Format premium display text
+export function formatPremiumDisplay(config: PremiumConfig, boatValue?: number): string {
+  if (config.method === "fixed" && config.fixedAmount) {
+    // Convert string to number if needed
+    const fixedAmount = typeof config.fixedAmount === "string"
+      ? parseFloat(config.fixedAmount)
+      : config.fixedAmount
+    return formatCurrency(fixedAmount)
+  } else if (config.method === "percentage" && config.percentage) {
+    // Convert string to number if needed
+    const percentage = typeof config.percentage === "string"
+      ? parseFloat(config.percentage)
+      : config.percentage
+    const baseText = `${percentage}% van bootwaarde`
+    if (boatValue) {
+      const calculatedAmount = calculatePremium(config, boatValue)
       return `${baseText} (${formatCurrency(calculatedAmount)})`
     }
     return baseText
@@ -409,24 +518,24 @@ export function getCurrentYear(): number {
   return new Date().getFullYear()
 }
 
-export function formatCurrency(amount: number, currency: string = "EUR"): string {
-  // Round to whole euros as per business requirement
-  const roundedAmount = Math.round(amount)
+export function formatCurrency(amount: number, currency: string = "EUR", decimals: number = 0): string {
+  // Round to specified decimals (default: whole euros for values, 2 decimals for premiums)
+  const roundedAmount = decimals > 0 ? amount : Math.round(amount)
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(roundedAmount)
 }
 
 export function formatDate(dateString: string): string {
   if (!dateString) return ""
   const date = new Date(dateString)
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("nl-NL", {
     year: "numeric",
-    month: "long", 
-    day: "numeric"
+    month: "2-digit",
+    day: "2-digit"
   })
 }
 

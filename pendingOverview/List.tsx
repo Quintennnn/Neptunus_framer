@@ -34,7 +34,25 @@ import {
 } from "react-icons/fa"
 import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
 import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
-import { API_BASE_URL, API_PATHS, getIdToken, formatCurrency, formatErrorMessage, formatSuccessMessage, formatDate, validatePromillage, normalizePromillageValue } from "../Utils.tsx"
+import { 
+    API_BASE_URL, 
+    API_PATHS, 
+    getIdToken, 
+    formatErrorMessage, 
+    formatSuccessMessage, 
+    validatePromillage, 
+    normalizePromillageValue,
+    PremiumCalculationMethod,
+    PremiumConfig,
+    calculatePremium,
+    validatePremiumConfig,
+    formatPremiumDisplay,
+    OwnRiskCalculationMethod,
+    OwnRiskConfig,
+    calculateOwnRisk,
+    validateOwnRiskConfig,
+    formatOwnRiskDisplay
+} from "../utils.tsx"
 
 // ——— Enhanced font stack for better typography ———
 const ENHANCED_FONT_STACK =
@@ -48,24 +66,48 @@ interface UserInfo {
     organizations?: string[]
 }
 
-type ObjectType = "boat" | "trailer" | "motor"
+type ObjectType = "boot" | "trailer" | "motor"
 
 interface PendingInsuredObject {
     id: string
     objectType: ObjectType
-    status: "Pending"
+    status: "Pending" | "Rejected"  // Include rejected items for admin review/reconsideration
     waarde: number // value
     organization: string
     ingangsdatum: string // insuranceStartDate
     uitgangsdatum?: string // insuranceEndDate
-    premiepromillage: number // premiumPerMille
-    eigenRisico: number // deductible
+    premiepercentage: number // premiumPerMille (for percentage method: stores the %, for fixed: not used)
+    eigenRisico: number // deductible (calculated amount)
+
+    // Premium fields (match auto-approver behavior)
+    premiumMethod?: "percentage" | "fixed" // Premium calculation method
+    premiumPercentage?: number // Premium percentage value (when method is percentage)
+    premiumFixedAmount?: number // Premium fixed amount (when method is fixed)
+
     naam?: string // name/title
     notitie?: string // notes
     createdAt: string
     updatedAt: string
     lastUpdatedBy?: string
-    
+    rejectionReasons?: {
+        reason: string
+        timestamp: string
+        ingangsdatum_override?: boolean
+        rules_evaluated?: Array<{
+            rule_name: string
+            logic: string
+            failed_conditions: Array<{
+                field: string
+                reason: string
+                expected: any
+                actual: any
+                operator: string
+            }>
+            passed_conditions: number
+            total_conditions: number
+        }>
+    }
+
     // Dynamic fields based on object type
     [key: string]: any
 }
@@ -158,18 +200,20 @@ async function fetchAllPendingObjects(): Promise<PendingInsuredObject[]> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending`, {
+        // Fetch both Pending and Rejected items for review
+        // Rejected items are kept visible as rejection history for potential reconsideration
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending,Rejected`, {
             method: "GET",
             headers,
             mode: "cors",
         })
 
         if (!res.ok) {
-            throw new Error(`Failed to fetch pending objects: ${res.status} ${res.statusText}`)
+            throw new Error(`Failed to fetch pending/rejected objects: ${res.status} ${res.statusText}`)
         }
 
         const data = await res.json()
-        console.log("Fetched pending objects:", data)
+        console.log("Fetched pending and rejected objects:", data)
         
         // Check for different possible response structures
         const result = data.items || data.objects || data.insuredObjects || data || []
@@ -210,12 +254,30 @@ async function approveObject(objectId: string): Promise<void> {
 
 async function approveObjectWithCustomValues(
     objectId: string, 
-    premiepromillage: number, 
-    eigenRisico: number
+    premiumConfig: PremiumConfig,
+    ownRiskConfig: OwnRiskConfig
 ): Promise<void> {
     try {
         const token = getIdTokenFromStorage()
         if (!token) throw new Error("No authentication token")
+
+        // Prepare the payload with method and value for both premium and eigenRisico
+        const payload: any = {
+            premium: {
+                method: premiumConfig.method,
+                value: premiumConfig.method === "fixed" 
+                    ? parseFloat(String(premiumConfig.fixedAmount || 0))
+                    : parseFloat(String(premiumConfig.percentage || 0))
+            },
+            eigenRisico: {
+                method: ownRiskConfig.method,
+                value: ownRiskConfig.method === "fixed"
+                    ? parseFloat(String(ownRiskConfig.fixedAmount || 0))
+                    : parseFloat(String(ownRiskConfig.percentage || 0))
+            }
+        }
+
+        console.log("Sending approval with custom values:", payload)
 
         const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`, {
             method: "PUT",
@@ -223,10 +285,7 @@ async function approveObjectWithCustomValues(
                 Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                premiepromillage,
-                eigenRisico,
-            }),
+            body: JSON.stringify(payload),
         })
 
         if (!res.ok) {
@@ -273,13 +332,25 @@ async function bulkApproveObjects(objectIds: string[]): Promise<void> {
 }
 
 // ——— Utility Functions ———
+
+// Rounding helper functions
+function roundPremieToZero(value: number): number {
+    // Round premie to 2 decimal places (e.g., 1.25, 2.50)
+    return Math.round(value * 100) / 100
+}
+
+function roundBootWaardeToNearest50(value: number): number {
+    // Round boot value to nearest 50
+    return Math.round(value / 50) * 50
+}
+
 function calculatePendingStats(objects: PendingInsuredObject[]): PendingStats {
     // Safety check to ensure objects is an array
     const safeObjects = Array.isArray(objects) ? objects : []
     
     const stats = {
         total: safeObjects.length,
-        boats: safeObjects.filter(obj => obj.objectType === "boat").length,
+        boats: safeObjects.filter(obj => obj.objectType === "boot").length,
         trailers: safeObjects.filter(obj => obj.objectType === "trailer").length,
         motors: safeObjects.filter(obj => obj.objectType === "motor").length,
         organizationCount: new Set(safeObjects.map(obj => obj.organization)).size,
@@ -351,7 +422,7 @@ function getDaysAgo(dateString: string): number {
 
 function getObjectTypeIcon(objectType: ObjectType) {
     switch (objectType) {
-        case "boat":
+        case "boot":
             return <FaShip style={{ color: "#3b82f6" }} />
         case "trailer":
             return <FaTruck style={{ color: "#10b981" }} />
@@ -364,7 +435,7 @@ function getObjectTypeIcon(objectType: ObjectType) {
 
 function getObjectTypeName(objectType: ObjectType): string {
     switch (objectType) {
-        case "boat":
+        case "boot":
             return "Boot"
         case "trailer":
             return "Trailer"
@@ -382,9 +453,9 @@ function getObjectDisplayName(object: PendingInsuredObject): string {
     }
     
     switch (object.objectType) {
-        case "boat":
+        case "boot":
             const boatName = object.merkBoot || object.typeBoot || ""
-            const boatNumber = object.bootnummer || ""
+            const boatNumber = object.rompnummer || ""
             if (boatName && boatNumber) {
                 return `${boatName} (${boatNumber})`
             } else if (boatName) {
@@ -415,6 +486,8 @@ function getObjectDisplayName(object: PendingInsuredObject): string {
 
 // ——— Component Definitions ———
 
+// DEPRECATED: CalculatedFieldEditor - replaced by EnhancedPremiumInput and EnhancedOwnRiskInput
+// This component is kept for backward compatibility but should not be used in new code
 // Calculated Field Editor Component - allows admins to edit calculated values inline
 function CalculatedFieldEditor({
     label,
@@ -423,6 +496,7 @@ function CalculatedFieldEditor({
     type,
     objectId,
     onUpdate,
+    boatValue,
 }: {
     label: string
     value: number
@@ -430,52 +504,92 @@ function CalculatedFieldEditor({
     type: "promillage" | "currency"
     objectId: string
     onUpdate: (newValue: number) => void
+    boatValue?: number // Optional boat value for percentage calculations
 }) {
     const [isEditing, setIsEditing] = React.useState(false)
     const [editValue, setEditValue] = React.useState(value.toString())
     const [isSaving, setIsSaving] = React.useState(false)
 
+    // Split value into integer and decimal parts for percentage inputs
+    const getCurrentValue = () => {
+        if (value === null || value === undefined) return { integer: "", decimal: "" }
+        const numValue = typeof value === "string" ? parseFloat(value) : value
+        if (isNaN(numValue)) return { integer: "", decimal: "" }
+        const [intPart, decPart] = numValue.toString().split(".")
+        return { integer: intPart || "", decimal: decPart || "" }
+    }
+
+    const [integerValue, setIntegerValue] = React.useState(() => getCurrentValue().integer)
+    const [decimalValue, setDecimalValue] = React.useState(() => getCurrentValue().decimal)
+
+    const handleIntegerChange = (newInteger: string) => {
+        // Only allow digits
+        if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
+        setIntegerValue(newInteger)
+    }
+
+    const handleDecimalChange = (newDecimal: string) => {
+        // Only allow digits, max 3 digits
+        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        setDecimalValue(newDecimal)
+    }
+
     const handleSave = async () => {
-        // Enhanced validation for promillage with automatic decimal handling
         if (type === "promillage") {
-            const validationError = validatePromillage(editValue)
-            if (validationError) {
-                console.warn("Promillage validation error:", validationError)
-                setEditValue(value.toString()) // Reset to original value
+            if (!boatValue) {
+                console.warn("Cannot calculate promillage without boat value")
                 setIsEditing(false)
                 return
             }
 
-            // Normalize the promillage value
-            const normalizedValue = normalizePromillageValue(editValue)
-            setEditValue(normalizedValue.toString())
+            const integer = integerValue || "0"
+            const decimal = decimalValue
+            const combinedValue = decimal ? `${integer}.${decimal}` : integer
+            const promillage = parseFloat(combinedValue)
+            
+            if (isNaN(promillage) || promillage < 0) {
+                console.warn("Invalid promillage value:", combinedValue)
+                const current = getCurrentValue()
+                setIntegerValue(current.integer)
+                setDecimalValue(current.decimal)
+                setIsEditing(false)
+                return
+            }
+
+            // Round the promillage value to 3 decimals
+            const finalValue = Math.round(promillage * 1000) / 1000
 
             setIsSaving(true)
             try {
-                onUpdate(normalizedValue)
+                onUpdate(finalValue)
                 setIsEditing(false)
             } catch (error) {
                 console.error("Failed to update promillage field:", error)
-                setEditValue(value.toString()) // Reset on error
+                const current = getCurrentValue()
+                setIntegerValue(current.integer)
+                setDecimalValue(current.decimal)
             } finally {
                 setIsSaving(false)
             }
         } else {
-            // Currency validation (existing logic)
+            // Currency validation with rounding to nearest 50
             const numValue = parseFloat(editValue)
             if (isNaN(numValue) || numValue < 0) {
-                setEditValue(value.toString()) // Reset to original value
+                setEditValue(value.toString())
                 setIsEditing(false)
                 return
             }
 
+            // Round currency values (eigen risico) to nearest 50
+            const roundedValue = roundBootWaardeToNearest50(numValue)
+
             setIsSaving(true)
             try {
-                onUpdate(numValue)
+                onUpdate(roundedValue)
                 setIsEditing(false)
             } catch (error) {
                 console.error("Failed to update currency field:", error)
-                setEditValue(value.toString()) // Reset on error
+                setEditValue(value.toString())
             } finally {
                 setIsSaving(false)
             }
@@ -483,7 +597,13 @@ function CalculatedFieldEditor({
     }
 
     const handleCancel = () => {
-        setEditValue(value.toString())
+        if (type === "promillage") {
+            const current = getCurrentValue()
+            setIntegerValue(current.integer)
+            setDecimalValue(current.decimal)
+        } else {
+            setEditValue(value.toString())
+        }
         setIsEditing(false)
     }
 
@@ -491,78 +611,137 @@ function CalculatedFieldEditor({
         if (type === "currency") {
             return formatCurrency(val)
         }
-        return `${val}${suffix}`
+        // For promillage, show as promillage with up to 3 decimals
+        return `${val.toFixed(3)}‰`
     }
 
     return (
         <div>
             <div style={{ color: colors.gray600, marginBottom: "4px" }}>
                 {label}
-                <span style={{ 
-                    fontSize: "12px", 
-                    color: colors.gray500, 
+                <span style={{
+                    fontSize: "12px",
+                    color: colors.gray500,
                     marginLeft: "4px",
                     fontStyle: "italic"
                 }}>
-                    (klik om te bewerken)
+                    (klik om te bewerken
+                    {type === "promillage" && " - max 3 decimalen"}
+                    {type === "currency" && " - wordt afgerond op 50-tallen"}
+                    )
                 </span>
             </div>
             {isEditing ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <input
-                        type="number"
-                        step={type === "promillage" ? "0.1" : "1"}
-                        min="0"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        disabled={isSaving}
-                        style={{
-                            padding: "4px 8px",
-                            border: `2px solid ${colors.primary}`,
-                            borderRadius: "4px",
-                            fontSize: "14px",
-                            fontWeight: "500",
-                            width: "80px",
-                            backgroundColor: isSaving ? colors.gray50 : colors.white,
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSave()
-                            if (e.key === "Escape") handleCancel()
-                        }}
-                        autoFocus
-                    />
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        style={{
-                            padding: "2px 6px",
-                            backgroundColor: colors.primary,
-                            color: colors.white,
-                            border: "none",
-                            borderRadius: "3px",
-                            fontSize: "12px",
-                            cursor: isSaving ? "not-allowed" : "pointer",
-                            opacity: isSaving ? 0.6 : 1,
-                        }}
-                    >
-                        ✓
-                    </button>
-                    <button
-                        onClick={handleCancel}
-                        disabled={isSaving}
-                        style={{
-                            padding: "2px 6px",
-                            backgroundColor: colors.gray400,
-                            color: colors.white,
-                            border: "none",
-                            borderRadius: "3px",
-                            fontSize: "12px",
-                            cursor: isSaving ? "not-allowed" : "pointer",
-                            opacity: isSaving ? 0.6 : 1,
-                        }}
-                    >
-                        ✕
-                    </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* Input field */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        {type === "promillage" ? (
+                            <>
+                                <input
+                                    type="text"
+                                    value={integerValue}
+                                    onChange={(e) => handleIntegerChange(e.target.value)}
+                                    disabled={isSaving}
+                                    placeholder="0"
+                                    style={{
+                                        width: "60px",
+                                        padding: "4px 8px",
+                                        border: `2px solid ${colors.primary}`,
+                                        borderRadius: "4px",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                        textAlign: "right",
+                                        backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSave()
+                                        if (e.key === "Escape") handleCancel()
+                                    }}
+                                    autoFocus
+                                />
+                                <span style={{ fontSize: "16px", fontWeight: "600", color: "#374151" }}>.</span>
+                                <input
+                                    type="text"
+                                    value={decimalValue}
+                                    onChange={(e) => handleDecimalChange(e.target.value)}
+                                    disabled={isSaving}
+                                    placeholder="000"
+                                    maxLength={3}
+                                    style={{
+                                        width: "50px",
+                                        padding: "4px 8px",
+                                        border: `2px solid ${colors.primary}`,
+                                        borderRadius: "4px",
+                                        fontSize: "14px",
+                                        fontWeight: "500",
+                                        backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSave()
+                                        if (e.key === "Escape") handleCancel()
+                                    }}
+                                />
+                                <span style={{ fontSize: "14px", color: colors.gray600, fontWeight: "500" }}>
+                                    ‰
+                                </span>
+                            </>
+                        ) : (
+                            <input
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                disabled={isSaving}
+                                style={{
+                                    padding: "4px 8px",
+                                    border: `2px solid ${colors.primary}`,
+                                    borderRadius: "4px",
+                                    fontSize: "14px",
+                                    fontWeight: "500",
+                                    width: "80px",
+                                    backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSave()
+                                    if (e.key === "Escape") handleCancel()
+                                }}
+                                autoFocus
+                            />
+                        )}
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            style={{
+                                padding: "2px 6px",
+                                backgroundColor: colors.primary,
+                                color: colors.white,
+                                border: "none",
+                                borderRadius: "3px",
+                                fontSize: "12px",
+                                cursor: isSaving ? "not-allowed" : "pointer",
+                                opacity: isSaving ? 0.6 : 1,
+                            }}
+                        >
+                            ✓
+                        </button>
+                        <button
+                            onClick={handleCancel}
+                            disabled={isSaving}
+                            style={{
+                                padding: "2px 6px",
+                                backgroundColor: colors.gray400,
+                                color: colors.white,
+                                border: "none",
+                                borderRadius: "3px",
+                                fontSize: "12px",
+                                cursor: isSaving ? "not-allowed" : "pointer",
+                                opacity: isSaving ? 0.6 : 1,
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div 
@@ -589,6 +768,512 @@ function CalculatedFieldEditor({
                     {formatDisplayValue(value)}
                 </div>
             )}
+        </div>
+    )
+}
+
+// Enhanced Premium Input Component - allows admins to set premium as fixed amount or percentage
+function EnhancedPremiumInput({
+    config,
+    onChange,
+    boatValue,
+}: {
+    config: PremiumConfig
+    onChange: (config: PremiumConfig) => void
+    boatValue: number
+}) {
+    const handleMethodChange = (method: PremiumCalculationMethod) => {
+        // Preserve existing values when switching methods
+        const newConfig: PremiumConfig = {
+            ...config,
+            method,
+            fixedAmount: config.fixedAmount || 0,
+            percentage: config.percentage || 0,
+        }
+        onChange(newConfig)
+    }
+
+    const handleValueChange = (value: string | number) => {
+        // Store raw value to allow partial decimals
+        if (config.method === "fixed") {
+            onChange({ ...config, fixedAmount: value })
+        } else {
+            onChange({ ...config, percentage: value })
+        }
+    }
+
+    const handleBlur = (value: string) => {
+        if (value === "" || value === ".") {
+            // Reset to 0 if empty or just a dot
+            if (config.method === "fixed") {
+                onChange({ ...config, fixedAmount: 0 })
+            } else {
+                onChange({ ...config, percentage: 0 })
+            }
+            return
+        }
+
+        const numValue = parseFloat(value)
+        if (!isNaN(numValue)) {
+            if (config.method === "fixed") {
+                // Round to 2 decimals for fixed amount on blur
+                const roundedValue = Math.round(numValue * 100) / 100
+                onChange({ ...config, fixedAmount: roundedValue })
+            } else {
+                // Round to 2 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 100) / 100
+                onChange({ ...config, percentage: roundedValue })
+            }
+        }
+    }
+
+    // Split value into integer and decimal parts
+    const getCurrentValue = () => {
+        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        if (value === "" || value == null) return { integer: "", decimal: "" }
+        const numValue = typeof value === "string" ? parseFloat(value) : value
+        if (isNaN(numValue)) return { integer: "", decimal: "" }
+        const [intPart, decPart] = numValue.toString().split(".")
+        return { integer: intPart || "", decimal: decPart || "" }
+    }
+
+    const currentValue = getCurrentValue()
+
+    const handleIntegerChange = (newInteger: string) => {
+        // Only allow digits
+        if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        handleValueChange(combinedValue)
+    }
+
+    const handleDecimalChange = (newDecimal: string) => {
+        // Only allow digits, max 3 digits
+        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        const integer = currentValue.integer || "0"
+        const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
+        handleValueChange(combinedValue)
+    }
+
+    const handleIntegerBlur = () => {
+        // Ensure at least "0" if empty
+        if (!currentValue.integer) {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `0.${decimal}` : "0"
+            handleBlur(combinedValue)
+        } else {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            handleBlur(combinedValue)
+        }
+    }
+
+    const handleDecimalBlur = () => {
+        const integer = currentValue.integer || "0"
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${integer}.${decimal}` : integer
+        handleBlur(combinedValue)
+    }
+
+    // Calculate and display final value
+    const calculatedPremium = calculatePremium(config, boatValue)
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ color: colors.gray600, fontSize: "14px", marginBottom: "4px", fontFamily: ENHANCED_FONT_STACK }}>
+                Premie Berekening
+            </div>
+            
+            {/* Value Input - Conditional based on method */}
+            <div>
+                {config.method === "percentage" ? (
+                    // Split Integer and Decimal for percentage
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="text"
+                                value={currentValue.integer}
+                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onBlur={handleIntegerBlur}
+                                placeholder="0"
+                                style={{
+                                    width: "60px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                    textAlign: "right",
+                                }}
+                            />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <input
+                                type="text"
+                                value={currentValue.decimal}
+                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onBlur={handleDecimalBlur}
+                                placeholder="000"
+                                maxLength={3}
+                                style={{
+                                    width: "50px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Percentage (max 3 decimalen) = {formatCurrency(calculatedPremium)}
+                        </span>
+                    </>
+                ) : (
+                    // Regular input for fixed amount
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={config.fixedAmount || ""}
+                                onChange={(e) => handleValueChange(e.target.value)}
+                                onBlur={(e) => handleBlur(e.target.value)}
+                                placeholder="0.00"
+                                style={{
+                                    width: "120px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Euro (max 2 decimalen)
+                        </span>
+                    </>
+                )}
+            </div>
+
+            {/* Method Selection */}
+            <div style={{ display: "flex", gap: "16px" }}>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        fontFamily: ENHANCED_FONT_STACK,
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="premiumMethod"
+                        value="fixed"
+                        checked={config.method === "fixed"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as PremiumCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Vast bedrag
+                </label>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        fontFamily: ENHANCED_FONT_STACK,
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="premiumMethod"
+                        value="percentage"
+                        checked={config.method === "percentage"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as PremiumCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Percentage van bootwaarde
+                </label>
+            </div>
+        </div>
+    )
+}
+
+// Enhanced Own Risk Input Component - allows admins to set eigen risico as fixed amount or percentage
+function EnhancedOwnRiskInput({
+    config,
+    onChange,
+    boatValue,
+}: {
+    config: OwnRiskConfig
+    onChange: (config: OwnRiskConfig) => void
+    boatValue: number
+}) {
+    const handleMethodChange = (method: OwnRiskCalculationMethod) => {
+        // Preserve existing values when switching methods
+        const newConfig: OwnRiskConfig = {
+            ...config,
+            method,
+            fixedAmount: config.fixedAmount || 0,
+            percentage: config.percentage || 0,
+        }
+        onChange(newConfig)
+    }
+
+    const handleValueChange = (value: string | number) => {
+        // Store raw value to allow partial decimals
+        if (config.method === "fixed") {
+            onChange({ ...config, fixedAmount: value })
+        } else {
+            onChange({ ...config, percentage: value })
+        }
+    }
+
+    const handleBlur = (value: string) => {
+        if (value === "" || value === ".") {
+            // Reset to 0 if empty or just a dot
+            if (config.method === "fixed") {
+                onChange({ ...config, fixedAmount: 0 })
+            } else {
+                onChange({ ...config, percentage: 0 })
+            }
+            return
+        }
+
+        const numValue = parseFloat(value)
+        if (!isNaN(numValue)) {
+            if (config.method === "fixed") {
+                // Round to nearest 50 for fixed amount on blur
+                const roundedValue = Math.round(numValue / 50) * 50
+                onChange({ ...config, fixedAmount: roundedValue })
+            } else {
+                // Round to 3 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 1000) / 1000
+                onChange({ ...config, percentage: roundedValue })
+            }
+        }
+    }
+
+    // Split value into integer and decimal parts
+    const getCurrentValue = () => {
+        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        if (value === "" || value == null) return { integer: "", decimal: "" }
+        const numValue = typeof value === "string" ? parseFloat(value) : value
+        if (isNaN(numValue)) return { integer: "", decimal: "" }
+        const [intPart, decPart] = numValue.toString().split(".")
+        return { integer: intPart || "", decimal: decPart || "" }
+    }
+
+    const currentValue = getCurrentValue()
+
+    const handleIntegerChange = (newInteger: string) => {
+        // Only allow digits
+        if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        handleValueChange(combinedValue)
+    }
+
+    const handleDecimalChange = (newDecimal: string) => {
+        // Only allow digits, max 3 digits
+        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        const integer = currentValue.integer || "0"
+        const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
+        handleValueChange(combinedValue)
+    }
+
+    const handleIntegerBlur = () => {
+        // Ensure at least "0" if empty
+        if (!currentValue.integer) {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `0.${decimal}` : "0"
+            handleBlur(combinedValue)
+        } else {
+            const decimal = currentValue.decimal
+            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            handleBlur(combinedValue)
+        }
+    }
+
+    const handleDecimalBlur = () => {
+        const integer = currentValue.integer || "0"
+        const decimal = currentValue.decimal
+        const combinedValue = decimal ? `${integer}.${decimal}` : integer
+        handleBlur(combinedValue)
+    }
+
+    // Calculate and display final value
+    const calculatedOwnRisk = calculateOwnRisk(config, boatValue)
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ color: colors.gray600, fontSize: "14px", marginBottom: "4px", fontFamily: ENHANCED_FONT_STACK }}>
+                Eigen Risico Berekening
+            </div>
+            
+            {/* Value Input - Conditional based on method */}
+            <div>
+                {config.method === "percentage" ? (
+                    // Split Integer and Decimal for percentage
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="text"
+                                value={currentValue.integer}
+                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onBlur={handleIntegerBlur}
+                                placeholder="0"
+                                style={{
+                                    width: "60px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                    textAlign: "right",
+                                }}
+                            />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <input
+                                type="text"
+                                value={currentValue.decimal}
+                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onBlur={handleDecimalBlur}
+                                placeholder="000"
+                                maxLength={3}
+                                style={{
+                                    width: "50px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Percentage (max 3 decimalen) = {formatCurrency(calculatedOwnRisk)}
+                        </span>
+                    </>
+                ) : (
+                    // Regular input for fixed amount
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <input
+                                type="number"
+                                step="50"
+                                value={config.fixedAmount || ""}
+                                onChange={(e) => handleValueChange(e.target.value)}
+                                onBlur={(e) => handleBlur(e.target.value)}
+                                placeholder="0"
+                                style={{
+                                    width: "120px",
+                                    padding: "6px 8px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    fontFamily: ENHANCED_FONT_STACK,
+                                }}
+                            />
+                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                        </div>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                marginTop: "2px",
+                                display: "block",
+                            }}
+                        >
+                            Euro (afgerond op €50)
+                        </span>
+                    </>
+                )}
+            </div>
+
+            {/* Method Selection */}
+            <div style={{ display: "flex", gap: "16px" }}>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        fontFamily: ENHANCED_FONT_STACK,
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="ownRiskMethod"
+                        value="fixed"
+                        checked={config.method === "fixed"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as OwnRiskCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Vast bedrag
+                </label>
+                <label
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: 11,
+                        cursor: "pointer",
+                        fontFamily: ENHANCED_FONT_STACK,
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name="ownRiskMethod"
+                        value="percentage"
+                        checked={config.method === "percentage"}
+                        onChange={(e) =>
+                            handleMethodChange(
+                                e.target.value as OwnRiskCalculationMethod
+                            )
+                        }
+                        style={{ marginRight: "4px" }}
+                    />
+                    Percentage van bootwaarde
+                </label>
+            </div>
         </div>
     )
 }
@@ -701,7 +1386,7 @@ function PendingStatisticsCards({ stats }: { stats: PendingStats }) {
 // Object Type Filter Component
 function ObjectTypeBreakdown({ stats }: { stats: PendingStats }) {
     const typeBreakdown = [
-        { type: "boat", count: stats.boats, label: "Boten", icon: FaShip, color: "#3b82f6" },
+        { type: "boot", count: stats.boats, label: "Boten", icon: FaShip, color: "#3b82f6" },
         { type: "trailer", count: stats.trailers, label: "Trailers", icon: FaTruck, color: "#10b981" },
         { type: "motor", count: stats.motors, label: "Motoren", icon: FaCog, color: "#f59e0b" }
     ]
@@ -927,7 +1612,7 @@ function PendingObjectRow({
     object: PendingInsuredObject
     isSelected: boolean
     onToggleSelect: (objectId: string) => void
-    onApprove: (object: PendingInsuredObject, customValues?: { premiepromillage: number, eigenRisico: number }) => void
+    onApprove: (object: PendingInsuredObject, customValues?: { premiumConfig: PremiumConfig, ownRiskConfig: OwnRiskConfig }) => void
     onDecline: (object: PendingInsuredObject, reason: string) => void
     onViewDetails: (object: PendingInsuredObject) => void
     isLoading: boolean
@@ -938,18 +1623,42 @@ function PendingObjectRow({
     const [declineReason, setDeclineReason] = useState("")
     const [isProcessing, setIsProcessing] = useState(false)
     
-    // State for edited calculated field values
-    const [editedValues, setEditedValues] = useState<{
-        premiepromillage: number
-        eigenRisico: number
-    }>({
-        premiepromillage: object.premiepromillage,
-        eigenRisico: object.eigenRisico,
+    // State for edited calculated field values with calculation methods
+    // Initialize with existing values if available, otherwise use defaults
+    const [premiumConfig, setPremiumConfig] = useState<PremiumConfig>(() => {
+        // Match auto-approver behavior: read from premiumPercentage or premiumFixedAmount
+        if (object.premiumMethod) {
+            return {
+                method: object.premiumMethod,
+                percentage: object.premiumMethod === "percentage" ? (object.premiumPercentage || object.premiepercentage || 0) : 0,
+                fixedAmount: object.premiumMethod === "fixed" ? (object.premiumFixedAmount || 0) : 0
+            }
+        }
+        // Otherwise, default to percentage method with 0
+        return {
+            method: "percentage",
+            percentage: 0,
+            fixedAmount: 0
+        }
+    })
+
+    const [ownRiskConfig, setOwnRiskConfig] = useState<OwnRiskConfig>(() => {
+        // For eigenRisico, we only have the calculated amount, so default to fixed with that amount
+        // Admin can change the method and value as needed
+        return {
+            method: "fixed",
+            fixedAmount: object.eigenRisico || 0,
+            percentage: 0
+        }
     })
     
+    // Calculate final values based on method
+    const finalPremiumValue = calculatePremium(premiumConfig, object.waarde)
+    const finalOwnRiskValue = calculateOwnRisk(ownRiskConfig, object.waarde)
+    
     // Track if values have been edited
-    const hasEditedValues = editedValues.premiepromillage !== object.premiepromillage || 
-                           editedValues.eigenRisico !== object.eigenRisico
+    const hasEditedValues = finalPremiumValue !== object.premiepercentage || 
+                           finalOwnRiskValue !== object.eigenRisico
 
     // Add error handling for utility function calls
     let daysAgo = 0
@@ -997,7 +1706,10 @@ function PendingObjectRow({
         try {
             // Pass custom values if they've been edited
             if (hasEditedValues) {
-                await onApprove(object, editedValues)
+                await onApprove(object, {
+                    premiumConfig: premiumConfig,
+                    ownRiskConfig: ownRiskConfig
+                })
             } else {
                 await onApprove(object)
             }
@@ -1072,19 +1784,6 @@ function PendingObjectRow({
                         gap: "16px",
                     }}
                 >
-                    {/* Selection checkbox */}
-                    <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => onToggleSelect(object.id)}
-                        disabled={isLoading || isProcessing}
-                        style={{
-                            marginTop: "2px",
-                            transform: "scale(1.2)",
-                            cursor: isLoading || isProcessing ? "not-allowed" : "pointer",
-                        }}
-                    />
-
                     {/* Object type icon */}
                     <div
                         style={{
@@ -1180,7 +1879,7 @@ function PendingObjectRow({
 
                                 <button
                                     onClick={handleApprove}
-                                    disabled={isLoading || isProcessing}
+                                    disabled={isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0}
                                     style={{
                                         backgroundColor: hasEditedValues ? "#f59e0b" : "#10b981",
                                         color: colors.white,
@@ -1189,22 +1888,28 @@ function PendingObjectRow({
                                         padding: "8px 12px",
                                         fontSize: "14px",
                                         fontWeight: "500",
-                                        cursor: isLoading || isProcessing ? "not-allowed" : "pointer",
+                                        cursor: (isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0) ? "not-allowed" : "pointer",
                                         display: "flex",
                                         alignItems: "center",
                                         gap: "6px",
                                         fontFamily: ENHANCED_FONT_STACK,
                                         transition: "all 0.2s",
-                                        opacity: isLoading || isProcessing ? 0.6 : 1,
+                                        opacity: (isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0) ? 0.6 : 1,
                                     }}
-                                    title={hasEditedValues ? "Goedkeuren met aangepaste waarden" : "Goedkeuren met standaard waarden"}
+                                    title={
+                                        finalPremiumValue === 0 || finalOwnRiskValue === 0
+                                            ? "Premie promillage en eigen risico moeten beide ingevuld zijn"
+                                            : hasEditedValues
+                                            ? "Goedkeuren met aangepaste waarden"
+                                            : "Goedkeuren met standaard waarden"
+                                    }
                                     onMouseOver={(e) => {
-                                        if (!isLoading && !isProcessing) {
+                                        if (!isLoading && !isProcessing && finalPremiumValue !== 0 && finalOwnRiskValue !== 0) {
                                             (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#d97706" : "#059669"
                                         }
                                     }}
                                     onMouseOut={(e) => {
-                                        if (!isLoading && !isProcessing) {
+                                        if (!isLoading && !isProcessing && finalPremiumValue !== 0 && finalOwnRiskValue !== 0) {
                                             (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#f59e0b" : "#10b981"
                                         }
                                     }}
@@ -1281,27 +1986,168 @@ function PendingObjectRow({
                                     </span>
                                 </div>
                             </div>
-                            <CalculatedFieldEditor
-                                label="Premie Promillage"
-                                value={editedValues.premiepromillage}
-                                suffix="‰"
-                                type="promillage"
-                                objectId={object.id}
-                                onUpdate={(newValue) => {
-                                    setEditedValues(prev => ({ ...prev, premiepromillage: newValue }))
-                                }}
+                            <EnhancedPremiumInput
+                                config={premiumConfig}
+                                onChange={setPremiumConfig}
+                                boatValue={object.waarde}
                             />
-                            <CalculatedFieldEditor
-                                label="Eigen Risico"
-                                value={editedValues.eigenRisico}
-                                suffix=""
-                                type="currency"
-                                objectId={object.id}
-                                onUpdate={(newValue) => {
-                                    setEditedValues(prev => ({ ...prev, eigenRisico: newValue }))
-                                }}
+                            <EnhancedOwnRiskInput
+                                config={ownRiskConfig}
+                                onChange={setOwnRiskConfig}
+                                boatValue={object.waarde}
                             />
                         </div>
+
+                        {/* Validation warning */}
+                        {(finalPremiumValue === 0 || finalOwnRiskValue === 0) && (
+                            <div
+                                style={{
+                                    marginTop: "12px",
+                                    padding: "12px",
+                                    backgroundColor: "#fef3c7",
+                                    borderRadius: "8px",
+                                    border: "1px solid #fde68a",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                }}
+                            >
+                                <FaExclamationTriangle style={{ color: "#92400e", fontSize: "14px" }} />
+                                <div
+                                    style={{
+                                        fontSize: "13px",
+                                        color: "#92400e",
+                                        fontFamily: ENHANCED_FONT_STACK,
+                                    }}
+                                >
+                                    <strong>Let op:</strong> Premie promillage en eigen risico moeten beide ingevuld zijn voordat het object goedgekeurd kan worden.
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Rejection Reasons */}
+                        {object.rejectionReasons && (
+                            <div
+                                style={{
+                                    marginTop: "12px",
+                                    padding: "16px",
+                                    backgroundColor: "#fef2f2",
+                                    borderRadius: "8px",
+                                    border: "1px solid #fecaca",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        marginBottom: "12px",
+                                    }}
+                                >
+                                    <FaExclamationTriangle style={{ color: "#dc2626", fontSize: "16px" }} />
+                                    <div
+                                        style={{
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            color: "#991b1b",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        Waarom dit object niet automatisch is goedgekeurd
+                                    </div>
+                                </div>
+
+                                {object.rejectionReasons.ingangsdatum_override && (
+                                    <div
+                                        style={{
+                                            padding: "8px 12px",
+                                            backgroundColor: "#ffffff",
+                                            borderRadius: "6px",
+                                            marginBottom: "8px",
+                                            border: "1px solid #fca5a5",
+                                        }}
+                                    >
+                                        <div style={{ fontSize: "13px", color: "#7f1d1d", fontFamily: ENHANCED_FONT_STACK }}>
+                                            <strong>Ingangsdatum te ver in het verleden:</strong> De ingangsdatum ligt meer dan één week in het verleden. Objecten met een ingangsdatum ouder dan 7 dagen vereisen altijd handmatige goedkeuring.
+                                        </div>
+                                    </div>
+                                )}
+
+                                {object.rejectionReasons.rules_evaluated && object.rejectionReasons.rules_evaluated.length > 0 && (
+                                    <div
+                                        style={{
+                                            fontSize: "13px",
+                                            color: "#7f1d1d",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        <div style={{ marginBottom: "8px", fontWeight: "500" }}>
+                                            Auto-goedkeuringsregels gecontroleerd: {object.rejectionReasons.rules_evaluated.length}
+                                        </div>
+                                        {object.rejectionReasons.rules_evaluated.map((rule, idx) => (
+                                            <div
+                                                key={idx}
+                                                style={{
+                                                    padding: "12px",
+                                                    backgroundColor: "#ffffff",
+                                                    borderRadius: "6px",
+                                                    marginBottom: "8px",
+                                                    border: "1px solid #fca5a5",
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: "600", marginBottom: "8px" }}>
+                                                    Regel: {rule.rule_name} ({rule.logic})
+                                                </div>
+                                                <div style={{ marginBottom: "4px", color: "#991b1b" }}>
+                                                    Doorstaan: {rule.passed_conditions}/{rule.total_conditions} voorwaarden
+                                                </div>
+                                                {rule.failed_conditions.length > 0 && (
+                                                    <div style={{ marginTop: "8px" }}>
+                                                        <div style={{ fontWeight: "500", marginBottom: "4px" }}>
+                                                            Niet voldaan aan:
+                                                        </div>
+                                                        {rule.failed_conditions.map((condition, cidx) => (
+                                                            <div
+                                                                key={cidx}
+                                                                style={{
+                                                                    padding: "6px 8px",
+                                                                    backgroundColor: "#fef2f2",
+                                                                    borderRadius: "4px",
+                                                                    marginBottom: "4px",
+                                                                    fontSize: "12px",
+                                                                }}
+                                                            >
+                                                                <div>
+                                                                    <strong>{condition.field}:</strong> Verwacht {condition.operator === 'between' ? 'tussen' : condition.operator === 'in' ? 'een van' : condition.operator} {JSON.stringify(condition.expected)}
+                                                                </div>
+                                                                <div style={{ color: "#991b1b" }}>
+                                                                    Daadwerkelijk: {JSON.stringify(condition.actual)}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {!object.rejectionReasons.ingangsdatum_override && (!object.rejectionReasons.rules_evaluated || object.rejectionReasons.rules_evaluated.length === 0) && (
+                                    <div
+                                        style={{
+                                            padding: "8px 12px",
+                                            backgroundColor: "#ffffff",
+                                            borderRadius: "6px",
+                                            fontSize: "13px",
+                                            color: "#7f1d1d",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        {object.rejectionReasons.reason || 'Geen auto-goedkeuringsregels geconfigureerd voor deze organisatie.'}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Notes if available */}
                         {object.notitie && (
@@ -1450,12 +2296,6 @@ function PendingObjectRow({
                     gap: "16px",
                 }}
             >
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(object.id)}
-                    disabled={isLoading}
-                />
                 <FaBox style={{ color: "#6b7280" }} />
                 <div style={{ flex: 1 }}>
                     <div style={{ fontSize: "16px", fontWeight: "600", color: colors.gray800 }}>
@@ -1554,7 +2394,7 @@ function PendingFilters({
                         style={styles.input}
                     >
                         <option value="all">Alle types</option>
-                        <option value="boat">Boten</option>
+                        <option value="boot">Boten</option>
                         <option value="trailer">Trailers</option>
                         <option value="motor">Motoren</option>
                     </select>
@@ -1734,7 +2574,7 @@ export const PendingBoatsOverview: Override = () => {
                     updatedAt: obj.updatedAt || obj.updated_at || new Date().toISOString(),
                     objectType: obj.objectType || (obj.objectType === undefined && obj.motorMerk ? 'motor' : 'boat'),
                     waarde: obj.waarde || 0,
-                    premiepromillage: obj.premiepromillage || 0,
+                    premiepercentage: obj.premiepercentage || 0,
                     eigenRisico: obj.eigenRisico || 0,
                     ingangsdatum: obj.ingangsdatum || obj.startDate || new Date().toISOString(),
                     status: 'Pending' as const // Ensure status is set
@@ -1856,17 +2696,35 @@ export const PendingBoatsOverview: Override = () => {
 
     // Handle individual actions
     const handleApprove = useCallback(async (
-        object: PendingInsuredObject, 
-        customValues?: { premiepromillage: number, eigenRisico: number }
+        object: PendingInsuredObject,
+        customValues?: { premiumConfig: PremiumConfig, ownRiskConfig: OwnRiskConfig }
     ) => {
         try {
             setIsProcessing(true)
-            
-            // Use custom values if provided, otherwise use default approval
+
+            // If custom values are provided, validate them
             if (customValues) {
-                await approveObjectWithCustomValues(object.id, customValues.premiepromillage, customValues.eigenRisico)
+                const finalPremium = calculatePremium(customValues.premiumConfig, object.waarde)
+                const finalOwnRisk = calculateOwnRisk(customValues.ownRiskConfig, object.waarde)
+
+                if (finalPremium === 0 || finalOwnRisk === 0) {
+                    setError("Premiepromillage en eigen risico moeten beide ingevuld zijn voordat u kunt goedkeuren.")
+                    setTimeout(() => setError(null), 5000)
+                    setIsProcessing(false)
+                    return
+                }
+
+                await approveObjectWithCustomValues(object.id, customValues.premiumConfig, customValues.ownRiskConfig)
                 setSuccess(`${getObjectDisplayName(object)} is goedgekeurd met aangepaste waarden.`)
             } else {
+                // Validate default values
+                if (object.premiepercentage === 0 || object.eigenRisico === 0) {
+                    setError("Premiepromillage en eigen risico moeten beide ingevuld zijn voordat u kunt goedkeuren.")
+                    setTimeout(() => setError(null), 5000)
+                    setIsProcessing(false)
+                    return
+                }
+
                 await approveObject(object.id)
                 setSuccess(`${getObjectDisplayName(object)} is goedgekeurd.`)
             }
@@ -2142,7 +3000,6 @@ export const PendingBoatsOverview: Override = () => {
                             {(() => {
                                 const tabs = [
                                     { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
-                                    { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
                                     { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
                                     { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                     { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
@@ -2309,53 +3166,6 @@ export const PendingBoatsOverview: Override = () => {
                                 availableOrganizations={availableOrganizations}
                             />
 
-                            {/* Bulk Actions */}
-                            <BulkActionsBar
-                                selectedCount={selectedObjectIds.size}
-                                onBulkApprove={handleBulkApprove}
-                                onBulkDecline={handleBulkDecline}
-                                onClearSelection={handleClearSelection}
-                                isLoading={isProcessing}
-                            />
-
-                            {/* Select All checkbox */}
-                            {filteredObjects.length > 0 && (
-                                <div
-                                    style={{
-                                        marginBottom: "16px",
-                                        padding: "12px 16px",
-                                        backgroundColor: colors.gray50,
-                                        borderRadius: "8px",
-                                        border: `1px solid ${colors.gray200}`,
-                                    }}
-                                >
-                                    <label
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            fontSize: "14px",
-                                            fontWeight: "500",
-                                            color: colors.gray700,
-                                            cursor: "pointer",
-                                            fontFamily: ENHANCED_FONT_STACK,
-                                        }}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectAll}
-                                            onChange={handleToggleSelectAll}
-                                            disabled={isProcessing}
-                                            style={{
-                                                transform: "scale(1.2)",
-                                                cursor: isProcessing ? "not-allowed" : "pointer",
-                                            }}
-                                        />
-                                        Selecteer alle {filteredObjects.length} zichtbare item{filteredObjects.length !== 1 ? "s" : ""}
-                                    </label>
-                                </div>
-                            )}
-
                             {/* Pending Objects List */}
                             <div>
                                 {filteredObjects.length === 0 ? (
@@ -2445,12 +3255,6 @@ export const PendingBoatsOverview: Override = () => {
                                             }}
                                         >
                                             {filteredObjects.length} van {pendingObjects.length} pending item{filteredObjects.length !== 1 ? "s" : ""}
-                                            {selectedObjectIds.size > 0 &&
-                                            (
-                                               <span style={{ marginLeft: "12px", color: colors.primary }}>
-                                                   • {selectedObjectIds.size} geselecteerd
-                                               </span>
-                                           )}
                                        </div>
 
                                        {/* Objects list */}

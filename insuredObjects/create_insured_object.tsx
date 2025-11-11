@@ -1,7 +1,7 @@
 import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Frame, Override } from "framer"
-import { FaPlus, FaTimes, FaShip, FaTruck, FaCog, FaArrowLeft, FaUser } from "react-icons/fa"
+import { FaPlus, FaTimes, FaShip, FaTruck, FaCog, FaArrowLeft, FaUser, FaExclamationTriangle } from "react-icons/fa"
 import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
 import {
     API_BASE_URL,
@@ -21,7 +21,7 @@ import { useDynamicSchema, useCompleteSchema, getUserInputFieldsForObjectType, t
 
 
 // Object type definitions
-export type ObjectType = "boat" | "trailer" | "motor"
+export type ObjectType = "boot" | "trailer" | "motor"
 
 // User role definitions
 interface UserInfo {
@@ -40,7 +40,7 @@ type InsuredObjectFormState = Record<string, any> & {
 
 // Object type configurations
 export const OBJECT_TYPE_CONFIG = {
-    boat: {
+    boot: {
         label: "Boot",
         icon: FaShip,
         description: "Zeilboten, motorboten, jachten en andere watervoertuigen",
@@ -192,46 +192,47 @@ function getDefaultFormState(objectType: ObjectType, schema: FieldSchema[] | nul
 
 
 // Get fields to render based on dynamic schema - using schema as single source of truth
-// For CREATE FORMS: Show ALL user input fields regardless of organization visible setting
+// For CREATE FORMS: Respects organization's visible configuration
 function getFieldsFromSchemaForCreateForm(schema: FieldSchema[] | null, objectType: ObjectType): FieldSchema[] {
     console.log("🔍 getFieldsFromSchemaForCreateForm DEBUG START")
     console.log("Schema received:", schema)
     console.log("Object type:", objectType)
-    
+
     if (!schema) {
         console.log("❌ No schema provided, returning empty array")
         return []
     }
-    
+
     console.log("📊 Total fields in schema:", schema.length)
     console.log("📋 All schema fields:", schema.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
-    
+
     // Filter for this object type
     const fieldsForType = schema.filter(field => {
         if (!objectType) return !field.objectTypes || field.objectTypes.length === 0
         return !field.objectTypes || field.objectTypes.includes(objectType)
     })
-    
+
     console.log("🎯 Fields matching object type '" + objectType + "':", fieldsForType.length)
     console.log("🎯 Fields for type:", fieldsForType.map(f => ({ key: f.key, label: f.label, objectTypes: f.objectTypes, visible: f.visible, inputType: f.inputType })))
-    
-    // Show ALL user input fields regardless of visible setting (for create forms only)
+
+    // Show user input fields that respect organization visible configuration
     // Exclude 'edit_only' fields from create forms
     const finalFields = fieldsForType.filter(field => {
         const isUserField = field.inputType === 'user'  // Only 'user' fields, not 'edit_only'
         const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
-        
-        console.log(`🔎 Field ${field.key}: isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}`)
-        
-        // IMPORTANT: Do NOT check field.visible here - create forms show all user input fields
+        const isVisible = field.visible !== false  // Respect organization's visible configuration
+
+        console.log(`🔎 Field ${field.key}: isUserField=${isUserField}, isNotOrganizationField=${isNotOrganizationField}, isVisible=${isVisible}, inputType=${field.inputType}, objectTypes=${JSON.stringify(field.objectTypes)}`)
+
+        // IMPORTANT: Respect organization's visible configuration - if visible is false, hide the field
         // IMPORTANT: Exclude 'edit_only' fields from create forms
-        return isUserField && isNotOrganizationField
+        return isUserField && isNotOrganizationField && isVisible
     })
-    
+
     console.log("✅ Final filtered fields for create form:", finalFields.length)
     console.log("✅ Final fields:", finalFields.map(f => ({ key: f.key, label: f.label, visible: f.visible, required: f.required })))
     console.log("🔍 getFieldsFromSchemaForCreateForm DEBUG END")
-    
+
     return finalFields
 }
 
@@ -482,6 +483,7 @@ function InsuredObjectForm({
     onClose,
     onBack,
     onSuccess,
+    userInfo,
     compatibilityMode = 'advanced',
     payloadFormat = 'cleaned',
     dateHandling = 'auto',
@@ -491,7 +493,8 @@ function InsuredObjectForm({
     onClose: () => void
     onBack: () => void
     onSuccess?: () => void
-    
+    userInfo?: UserInfo | null
+
     // Compatibility props for list file integration
     compatibilityMode?: 'simple' | 'advanced'
     payloadFormat?: 'simple' | 'cleaned'
@@ -511,6 +514,16 @@ function InsuredObjectForm({
     const [showConfirmDialog, setShowConfirmDialog] = React.useState(false)
     const [pendingSubmitData, setPendingSubmitData] = React.useState<any>(null)
     const [isLoadingConfig, setIsLoadingConfig] = React.useState(config.useOrgConfig)
+    const [ingangsdatumWarning, setIngangsdatumWarning] = React.useState<string | null>(null)
+
+    // Track custom values when "Anders" is selected
+    const [customValues, setCustomValues] = React.useState<Record<string, string>>({
+        merkMotor: "",
+        ligplaats: "",
+    })
+
+    // Track formatted display value for waarde field (with dots as thousand separators)
+    const [waardeDisplay, setWaardeDisplay] = React.useState<string>("")
     // Legacy state removed - now using useDynamicSchema hook
     
     // Use organization-specific schema but show ALL user input fields in create form
@@ -553,21 +566,85 @@ function InsuredObjectForm({
         }
     }, [schemaLoading, schemaError, orgSchema, objectType, selectedOrganization])
 
+    // Helper functions for waarde field thousand separator formatting
+    const formatNumberWithDots = React.useCallback((num: number | string): string => {
+        if (num === "" || num === null || num === undefined) return ""
+        const numStr = String(num).replace(/\./g, "") // Remove any existing dots
+        return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+    }, [])
+
+    const parseNumberWithDots = React.useCallback((str: string): number => {
+        if (!str) return 0
+        // Remove all dots and parse as number
+        const cleaned = str.replace(/\./g, "")
+        return parseFloat(cleaned) || 0
+    }, [])
+
+    // Sync waardeDisplay with form.waarde value
+    React.useEffect(() => {
+        if (form.waarde !== undefined && form.waarde !== null && form.waarde !== "") {
+            setWaardeDisplay(formatNumberWithDots(form.waarde))
+        } else {
+            setWaardeDisplay("")
+        }
+    }, [form.waarde, formatNumberWithDots])
+
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
         const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
-        
+
+        // Special handling for waarde field with thousand separator
+        if (name === 'waarde') {
+            // Allow only digits and dots
+            const cleanedValue = value.replace(/[^\d.]/g, '')
+            // Parse the number (removing dots)
+            const numericValue = parseNumberWithDots(cleanedValue)
+            // Format it back with dots for display
+            const formattedValue = formatNumberWithDots(cleanedValue)
+
+            setWaardeDisplay(formattedValue)
+            setForm((prev) => ({
+                ...prev,
+                waarde: numericValue,
+            }))
+            return
+        }
+
+        // Check if ingangsdatum is more than one week in the past (skip warning for admins)
+        if (name === 'ingangsdatum' && value && userInfo?.role !== 'admin') {
+            try {
+                const selectedDate = new Date(value)
+                const today = new Date()
+                const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+                if (selectedDate < oneWeekAgo) {
+                    setIngangsdatumWarning(
+                        "Let op: De ingangsdatum ligt meer dan een week in het verleden. " +
+                        "Dit vaartuig zal handmatige goedkeuring vereisen en kan niet automatisch worden goedgekeurd."
+                    )
+                } else {
+                    setIngangsdatumWarning(null)
+                }
+            } catch (err) {
+                // Invalid date format, ignore
+                setIngangsdatumWarning(null)
+            }
+        } else if (name === 'ingangsdatum' && userInfo?.role === 'admin') {
+            // Clear warning for admins
+            setIngangsdatumWarning(null)
+        }
+
         const formValue = type === "number" ? (value === "" ? "" : parseFloat(value)) : value
-        
+
         setForm((prev) => {
             const updated = {
                 ...prev,
                 [name]: formValue,
             }
-            
+
             // No field synchronization needed - using registry field names directly
-            
+
             return updated
         })
     }
@@ -590,6 +667,14 @@ function InsuredObjectForm({
                     delete formData[key]
                 }
             })
+        }
+
+        // Replace "Anders" with custom values if provided
+        if (formData.merkMotor === "Anders" && customValues.merkMotor) {
+            formData.merkMotor = customValues.merkMotor
+        }
+        if (formData.ligplaats === "Anders" && customValues.ligplaats) {
+            formData.ligplaats = customValues.ligplaats
         }
 
         // Store data and show confirmation dialog
@@ -658,7 +743,7 @@ function InsuredObjectForm({
 
         // Skip objectType, organization fields (handled automatically by form logic)
         if (field.key === "objectType" || field.key === "organization") return null
-        
+
         // All system/auto field filtering is now handled by getFieldsFromSchema()
         // No need for hardcoded exclusions here
 
@@ -666,9 +751,15 @@ function InsuredObjectForm({
         const isTextArea = field.type === "textarea"
         const isDateField = field.type === "date"
         const isDropdown = field.type === "dropdown"
-        const inputType = field.type === "currency" ? "number" : 
+
+        // Special handling for waarde field - use text input with formatted display
+        const inputType = field.key === "waarde" ? "text" :
+                         field.type === "currency" ? "number" :
                          field.type === "number" ? "number" :
                          isDateField ? "date" : "text"
+
+        // Use formatted display value for waarde field
+        const displayValue = field.key === "waarde" ? waardeDisplay : (val === null || val === undefined ? "" : val)
 
         const label = field.label
         const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
@@ -684,40 +775,77 @@ function InsuredObjectForm({
                     {field.required && <span style={{ color: colors.red, marginLeft: "4px" }}>*</span>}
                 </label>
                 {isDropdown ? (
-                    <select
-                        id={field.key}
-                        name={field.key}
-                        value={val === null || val === undefined ? "" : val}
-                        onChange={handleChange}
-                        disabled={isSubmitting}
-                        required={field.required}
-                        style={{
-                            ...styles.input,
-                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
-                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                            borderColor: field.required ? colors.gray300 : colors.gray200,
-                        }}
-                        onFocus={(e) => {
-                            if (!isSubmitting) {
-                                hover.input(e.target as HTMLElement)
-                            }
-                        }}
-                        onBlur={(e) => {
-                            hover.resetInput(e.target as HTMLElement)
-                        }}
-                    >
-                        <option value="">Selecteer {label.toLowerCase()}</option>
-                        {field.options?.map((option) => (
-                            <option key={option} value={option}>
-                                {option}
-                            </option>
-                        ))}
-                    </select>
+                    <>
+                        <select
+                            id={field.key}
+                            name={field.key}
+                            value={val === null || val === undefined ? "" : val}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            required={field.required}
+                            style={{
+                                ...styles.input,
+                                backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                borderColor: field.required ? colors.gray300 : colors.gray200,
+                            }}
+                            onFocus={(e) => {
+                                if (!isSubmitting) {
+                                    hover.input(e.target as HTMLElement)
+                                }
+                            }}
+                            onBlur={(e) => {
+                                hover.resetInput(e.target as HTMLElement)
+                            }}
+                        >
+                            <option value="">Selecteer {label.toLowerCase()}</option>
+                            {field.options?.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                        {/* Show custom input when "Anders" is selected */}
+                        {(field.key === "merkMotor" || field.key === "ligplaats") &&
+                            val === "Anders" && (
+                                <input
+                                    type="text"
+                                    placeholder={`Voer ${label.toLowerCase()} in`}
+                                    value={customValues[field.key] || ""}
+                                    onChange={(e) => {
+                                        setCustomValues((prev) => ({
+                                            ...prev,
+                                            [field.key]: e.target.value,
+                                        }))
+                                    }}
+                                    disabled={isSubmitting}
+                                    style={{
+                                        ...styles.input,
+                                        marginTop: "8px",
+                                        backgroundColor: isSubmitting
+                                            ? colors.gray50
+                                            : colors.white,
+                                        cursor: isSubmitting
+                                            ? "not-allowed"
+                                            : "text",
+                                        borderColor: field.required ? colors.gray300 : colors.gray200,
+                                    }}
+                                    onFocus={(e) => {
+                                        if (!isSubmitting) {
+                                            hover.input(e.target as HTMLElement)
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        hover.resetInput(e.target as HTMLElement)
+                                    }}
+                                />
+                            )}
+                    </>
                 ) : (
                     <Component
                         id={field.key}
                         name={field.key}
-                        value={val === null || val === undefined ? "" : val}
+                        value={displayValue}
                         onChange={handleChange}
                         disabled={isSubmitting}
                         required={field.required}
@@ -742,6 +870,40 @@ function InsuredObjectForm({
                             hover.resetInput(e.target as HTMLElement)
                         }}
                     />
+                )}
+                {/* Show warning for ingangsdatum if more than one week in the past */}
+                {field.key === 'ingangsdatum' && ingangsdatumWarning && (
+                    <div
+                        style={{
+                            marginTop: "8px",
+                            padding: "12px",
+                            backgroundColor: "#fef3c7",
+                            border: "1px solid #f59e0b",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "start",
+                            gap: "8px",
+                        }}
+                    >
+                        <FaExclamationTriangle
+                            size={16}
+                            style={{
+                                color: "#f59e0b",
+                                flexShrink: 0,
+                                marginTop: "2px",
+                            }}
+                        />
+                        <span
+                            style={{
+                                fontSize: "13px",
+                                color: "#92400e",
+                                lineHeight: "1.5",
+                                fontFamily: FONT_STACK,
+                            }}
+                        >
+                            {ingangsdatumWarning}
+                        </span>
+                    </div>
                 )}
             </div>
         )
@@ -1195,8 +1357,8 @@ function InsuredObjectFormManager() {
                           onBack={handleClose}
                       />
                   ) : userInfo && currentStep === "selector" ? (
-                      <ObjectTypeSelector 
-                          onSelect={handleTypeSelect} 
+                      <ObjectTypeSelector
+                          onSelect={handleTypeSelect}
                           onClose={handleClose}
                           onBack={availableOrganizations.length > 1 ? handleBackToOrganization : handleClose}
                       />
@@ -1207,6 +1369,7 @@ function InsuredObjectFormManager() {
                           onClose={handleClose}
                           onBack={handleBackToSelector}
                           onSuccess={handleSuccess}
+                          userInfo={userInfo}
                       />
                   ) : null}
               </div>,
@@ -1246,14 +1409,16 @@ function InsuredObjectFormManager() {
 }
 
 // Compatible CreateObjectModal for list file integration
-export function CreateObjectModal({ 
-    onClose, 
+export function CreateObjectModal({
+    onClose,
     onOrganizationSelect,
-    onSuccess = () => window.location.reload()
+    onSuccess = () => window.location.reload(),
+    defaultOrganization = null
 }: {
     onClose: () => void
-    onOrganizationSelect?: (org: string) => void  
+    onOrganizationSelect?: (org: string) => void
     onSuccess?: () => void
+    defaultOrganization?: string | null
 }) {
     const [currentStep, setCurrentStep] = React.useState<"organization" | "selector" | "form">("organization")
     const [selectedType, setSelectedType] = React.useState<ObjectType | null>(null)
@@ -1274,9 +1439,15 @@ export function CreateObjectModal({
                         setUserInfo(detailedUserInfo)
                         const orgs = await fetchUserOrganizations(detailedUserInfo)
                         setAvailableOrganizations(orgs)
-                        
+
+                        // Always skip organization selection if we have a default organization
+                        if (defaultOrganization) {
+                            setSelectedOrganization(defaultOrganization)
+                            onOrganizationSelect?.(defaultOrganization)
+                            setCurrentStep("selector")
+                        }
                         // If user has only one organization, pre-select it
-                        if (orgs.length === 1) {
+                        else if (orgs.length === 1) {
                             setSelectedOrganization(orgs[0])
                             onOrganizationSelect?.(orgs[0])
                             setCurrentStep("selector")
@@ -1289,9 +1460,9 @@ export function CreateObjectModal({
                 setIsLoadingUser(false)
             }
         }
-        
+
         loadUserData()
-    }, [])
+    }, [defaultOrganization])
 
     const handleOrganizationSelect = (organization: string) => {
         setSelectedOrganization(organization)
@@ -1348,8 +1519,8 @@ export function CreateObjectModal({
                     onBack={onClose}
                 />
             ) : userInfo && currentStep === "selector" ? (
-                <ObjectTypeSelector 
-                    onSelect={handleTypeSelect} 
+                <ObjectTypeSelector
+                    onSelect={handleTypeSelect}
                     onClose={onClose}
                     onBack={availableOrganizations.length > 1 ? handleBackToOrganization : onClose}
                 />
@@ -1360,10 +1531,11 @@ export function CreateObjectModal({
                     onClose={onClose}
                     onBack={handleBackToSelector}
                     onSuccess={handleSuccess}
-                    
+                    userInfo={userInfo}
+
                     // Use simple compatibility mode for list file integration
                     compatibilityMode="simple"
-                    payloadFormat="simple" 
+                    payloadFormat="simple"
                     dateHandling="today"
                 />
             ) : null}

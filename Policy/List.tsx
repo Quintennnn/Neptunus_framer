@@ -1914,7 +1914,6 @@ export function PolicyPageOverride(): Override {
                         <div
                             style={{
                                 overflowX: "auto",
-                                maxHeight: "70vh",
                                 position: "relative",
                             }}
                         >
@@ -2032,7 +2031,7 @@ export function PolicyPageOverride(): Override {
                                                             "updatedAt" ? (
                                                             new Date(
                                                                 policy[col.key]
-                                                            ).toLocaleDateString()
+                                                            ).toLocaleDateString("nl-NL")
                                                         ) : (
                                                             String(
                                                                 policy[col.key]

@@ -2,13 +2,18 @@
 // Implements status-aware calculations and improved logic per Phase 3.3
 
 import { formatCurrency } from "./Utils.tsx"
+import { InsuredObjectStatus } from "./Rbac.tsx"
 
 // ——— Types ———
 export interface InsuredObject {
     id: string
-    status: "Insured" | "Pending" | "Rejected" | "OutOfPolicy" | "Not Insured"
+    status: InsuredObjectStatus
     waarde: number
-    premiepromillage: number
+    premiepercentage: number // Legacy field
+    premiepromillage?: number // Old legacy field (per mille - needs conversion)
+    premiumMethod?: "percentage" | "fixed" // New field
+    premiumPercentage?: number // Percentage value (for percentage method)
+    premiumFixedAmount?: number // Fixed amount value (for fixed method)
     ingangsdatum?: string
     uitgangsdatum?: string
     objectType: string
@@ -60,19 +65,42 @@ export interface TotalsCalculation {
 // ——— Status-Aware Calculation Logic ———
 
 /**
+ * Get premium percentage with backward compatibility
+ * Converts old premiepromillage (per mille) to percentage if needed
+ */
+function getPremiumPercentage(object: InsuredObject): number {
+    // Try new fields first
+    if (object.premiumPercentage != null && object.premiumPercentage !== 0) {
+        return Number(object.premiumPercentage)
+    }
+
+    // Try legacy premiepercentage field
+    if (object.premiepercentage != null && object.premiepercentage !== 0) {
+        return Number(object.premiepercentage)
+    }
+
+    // Fall back to old premiepromillage field and convert (promillage / 10 = percentage)
+    if (object.premiepromillage != null && object.premiepromillage !== 0) {
+        return Number(object.premiepromillage) / 10
+    }
+
+    return 0
+}
+
+/**
  * Determines if an object should be included in premium calculations
- * Enhanced logic: Only "Insured" and "OutOfPolicy" objects contribute to premiums
+ * Enhanced logic: Only "Insured" and "Removed" objects contribute to premiums
  */
 export function shouldIncludeInPremiumCalculation(object: InsuredObject): boolean {
-    return object.status === "Insured" || object.status === "OutOfPolicy"
+    return object.status === "Insured" || object.status === "Removed"
 }
 
 /**
  * Determines if an object should be included in total value calculations
- * Enhanced logic: Exclude rejected and out-of-policy objects from value totals
+ * Enhanced logic: Exclude rejected and removed objects from value totals
  */
 export function shouldIncludeInValueCalculation(object: InsuredObject): boolean {
-    return object.status !== "Rejected" && object.status !== "OutOfPolicy"
+    return object.status !== "Rejected" && object.status !== "Removed"
 }
 
 /**
@@ -90,19 +118,22 @@ export function calculateInsurancePeriod(object: InsuredObject): number {
         endDate = new Date(currentYear, 11, 31) // December 31st
     }
 
-    // Ensure positive days calculation
+    // Calculate days difference (inclusive of both start and end dates)
+    // Add 1 to include both the start and end date in the count
+    // For full year: Jan 1 to Dec 31 = 364 days difference + 1 = 365 days
     const timeDifference = endDate.getTime() - startDate.getTime()
-    const daysDifference = Math.max(1, Math.ceil(timeDifference / (1000 * 3600 * 24)))
+    const daysDifference = Math.max(1, Math.floor(timeDifference / (1000 * 3600 * 24)) + 1)
 
     return daysDifference
 }
 
 /**
  * Calculate premiums for a single object with enhanced logic
+ * Supports both percentage and fixed amount methods
+ * Includes backward compatibility for premiepromillage field
  */
 export function calculateObjectPremiums(object: InsuredObject): PremiumCalculationResult {
     const waarde = Number(object.waarde) || 0
-    const promillage = Number(object.premiepromillage) || 0
 
     // Only calculate premiums for objects that should contribute
     if (!shouldIncludeInPremiumCalculation(object)) {
@@ -113,9 +144,22 @@ export function calculateObjectPremiums(object: InsuredObject): PremiumCalculati
         }
     }
 
-    const yearlyPremium = waarde * promillage / 1000
+    let yearlyPremium = 0
 
-    // Calculate actual period premium based on days
+    // Determine premium calculation method
+    const premiumMethod = object.premiumMethod || "percentage"
+
+    if (premiumMethod === "fixed") {
+        // Fixed amount: use the fixed amount as the yearly premium
+        yearlyPremium = Number(object.premiumFixedAmount) || Number(object.premiepercentage) || 0
+    } else {
+        // Percentage: calculate based on boat value
+        // Use helper function for backward compatibility (handles premiepromillage conversion)
+        const percentage = getPremiumPercentage(object)
+        yearlyPremium = waarde * percentage / 100
+    }
+
+    // Calculate actual period premium based on days (always 365 days per year)
     const periodDays = calculateInsurancePeriod(object)
     const periodPremium = yearlyPremium * (periodDays / 365)
 
@@ -149,7 +193,7 @@ export function calculateEnhancedTotals(objects: InsuredObject[]): TotalsCalcula
                 breakdown.insured.totalPeriodPremium += periodPremium
                 breakdown.insured.count++
                 break
-            case "OutOfPolicy":
+            case "Removed":
                 breakdown.outsidePolicy.totalValue += waarde
                 breakdown.outsidePolicy.totalYearlyPremium += yearlyPremium
                 breakdown.outsidePolicy.totalPeriodPremium += periodPremium
@@ -205,23 +249,23 @@ export function updateObjectWithCalculatedPremiums(object: InsuredObject): Insur
 export function formatCalculationResults(totals: TotalsCalculation) {
     return {
         totalValue: formatCurrency(totals.totalValue),
-        totalYearlyPremium: formatCurrency(totals.totalYearlyPremium),
-        totalPeriodPremium: formatCurrency(totals.totalPeriodPremium),
-        difference: formatCurrency(Math.abs(totals.totalYearlyPremium - totals.totalPeriodPremium)),
+        totalYearlyPremium: formatCurrency(totals.totalYearlyPremium, "EUR", 2),
+        totalPeriodPremium: formatCurrency(totals.totalPeriodPremium, "EUR", 2),
+        difference: formatCurrency(Math.abs(totals.totalYearlyPremium - totals.totalPeriodPremium), "EUR", 2),
         percentageDifference: totals.totalYearlyPremium > 0
             ? ((Math.abs(totals.totalYearlyPremium - totals.totalPeriodPremium) / totals.totalYearlyPremium) * 100).toFixed(1) + '%'
             : '0%',
         breakdown: {
             insured: {
                 totalValue: formatCurrency(totals.breakdown.insured.totalValue),
-                totalYearlyPremium: formatCurrency(totals.breakdown.insured.totalYearlyPremium),
-                totalPeriodPremium: formatCurrency(totals.breakdown.insured.totalPeriodPremium),
+                totalYearlyPremium: formatCurrency(totals.breakdown.insured.totalYearlyPremium, "EUR", 2),
+                totalPeriodPremium: formatCurrency(totals.breakdown.insured.totalPeriodPremium, "EUR", 2),
                 count: totals.breakdown.insured.count
             },
             outsidePolicy: {
                 totalValue: formatCurrency(totals.breakdown.outsidePolicy.totalValue),
-                totalYearlyPremium: formatCurrency(totals.breakdown.outsidePolicy.totalYearlyPremium),
-                totalPeriodPremium: formatCurrency(totals.breakdown.outsidePolicy.totalPeriodPremium),
+                totalYearlyPremium: formatCurrency(totals.breakdown.outsidePolicy.totalYearlyPremium, "EUR", 2),
+                totalPeriodPremium: formatCurrency(totals.breakdown.outsidePolicy.totalPeriodPremium, "EUR", 2),
                 count: totals.breakdown.outsidePolicy.count
             },
             pending: {

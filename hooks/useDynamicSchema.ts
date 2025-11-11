@@ -8,6 +8,7 @@ export interface FieldSchema {
     group: "basic" | "metadata"
     required: boolean
     visible: boolean
+    displayOrder?: number  // Display order in forms (lower = earlier) - defaults to 999 if not specified
     filterable: boolean
     editable: boolean
     printable: boolean
@@ -114,8 +115,7 @@ export function getFieldKeysForObjectType(schema: FieldSchema[] | null, objectTy
 
 
 // Helper function to get only user input fields for forms (excludes system and auto fields)
-// NOTE: For create forms, we need the COMPLETE schema without organization overrides
-// The organization-specific 'visible' setting should only affect table columns, not form fields
+// NOTE: Respects organization-specific 'visible' configuration for create forms
 export function getUserInputFieldsForObjectType(schema: FieldSchema[] | null, objectType?: string): FieldSchema[] {
     const fieldsForType = getFieldsForObjectType(schema, objectType)
     return fieldsForType.filter(field => {
@@ -123,14 +123,14 @@ export function getUserInputFieldsForObjectType(schema: FieldSchema[] | null, ob
         // Only accept fields explicitly marked as 'user' input type
         // Exclude 'edit_only' fields from create forms
         const isUserField = field.inputType === 'user'
-        
+
         // Also filter out organization-specific fields from insured object forms
         const isNotOrganizationField = !field.objectTypes || !field.objectTypes.includes('organization')
-        
-        // IMPORTANT: We do NOT check field.visible here - visible is only for table columns!
-        // Create forms should show ALL user input fields regardless of organization visible setting
-        
-        return isUserField && isNotOrganizationField
+
+        // IMPORTANT: Respect organization's visible configuration - if visible is false, hide the field in create forms
+        const isVisible = field.visible !== false
+
+        return isUserField && isNotOrganizationField && isVisible
     })
 }
 

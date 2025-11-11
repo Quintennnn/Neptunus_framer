@@ -22,10 +22,13 @@ import {
     FaShieldAlt,
     FaTruck,
     FaCogs,
+    FaCalendar,
+    FaTimes,
 } from "react-icons/fa"
 
 import { colors, styles, hover, FONT_STACK, animations } from "../theme"
 import { API_BASE_URL, API_PATHS, getIdToken, getUserId } from "../utils"
+import { isAdmin } from "../Rbac"
 
 // Add CSS animation for loading spinner
 if (typeof document !== "undefined") {
@@ -95,6 +98,36 @@ async function fetchPendingCount(): Promise<number> {
     }
 }
 
+async function fetchOrganizations(): Promise<{id: string, name: string}[]> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const res = await fetch(`${API_BASE_URL}${API_PATHS.ORGANIZATION}`, {
+            method: "GET",
+            headers,
+            mode: "cors",
+        })
+
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        const data = await res.json()
+        const organizations = data.items || data.organizations || data || []
+
+        return Array.isArray(organizations)
+            ? organizations.map((org: any) => ({
+                  id: org.id,
+                  name: org.name
+              })).sort((a, b) => a.name.localeCompare(b.name))
+            : []
+    } catch (error) {
+        console.error("Error fetching organizations:", error)
+        return []
+    }
+}
+
 // Helper function to get UX-friendly table name
 function getTableDisplayName(sourceTableTag: string): string {
     switch (sourceTableTag.toLowerCase()) {
@@ -120,9 +153,9 @@ function getInsuredObjectIconAndName(
     if (
         formattedChanges?.merkBoot ||
         formattedChanges?.typeBoot ||
-        formattedChanges?.bootnummer
+        formattedChanges?.rompnummer
     ) {
-        const boatNumber = formattedChanges.bootnummer || ""
+        const boatNumber = formattedChanges.rompnummer || ""
         const displayName = boatNumber ? `Boot: ${boatNumber}` : "Boot: Onbekend"
         return {
             icon: <FaShip style={{ color: colors.primary }} />,
@@ -151,7 +184,7 @@ function getInsuredObjectIconAndName(
     // Check for objectType to determine type
     if (formattedChanges?.objectType) {
         const objectType = formattedChanges.objectType.toLowerCase()
-        if (objectType.includes("boat") || objectType.includes("boot")) {
+        if (objectType.includes("boot")) {
             return {
                 icon: <FaShip style={{ color: colors.primary }} />,
                 displayName: "Boot: Onbekend",
@@ -305,7 +338,7 @@ async function fetchEntityInfo(
                 const obj = data.insuredObject || data
                 if (obj.merkBoot || obj.typeBoot) {
                     const boatName = obj.merkBoot || obj.typeBoot || ""
-                    const boatNumber = obj.bootnummer || ""
+                    const boatNumber = obj.rompnummer || ""
                     displayName = boatName
                         ? boatNumber
                             ? `${boatName} (${boatNumber})`
@@ -364,7 +397,7 @@ function getRelativeTime(timestamp: string): string {
     if (diffHours < 24) return `${diffHours}u geleden`
     if (diffDays < 7) return `${diffDays}d geleden`
 
-    return changeTime.toLocaleDateString()
+    return changeTime.toLocaleDateString("nl-NL")
 }
 
 // ——— Action Styling Helper ———
@@ -1050,6 +1083,18 @@ function ChangelogSearchAndFilterBar({
     selectedTableTags,
     onTableTagChange,
     availableTableTags,
+    startDate,
+    endDate,
+    startTime,
+    endTime,
+    onStartDateChange,
+    onEndDateChange,
+    onStartTimeChange,
+    onEndTimeChange,
+    onClearDateFilter,
+    selectedOrganization,
+    onOrganizationChange,
+    organizations,
 }: {
     searchTerm: string
     onSearchChange: (term: string) => void
@@ -1058,17 +1103,37 @@ function ChangelogSearchAndFilterBar({
     selectedTableTags: Set<string>
     onTableTagChange: (tag: string) => void
     availableTableTags: string[]
+    startDate: string
+    endDate: string
+    startTime: string
+    endTime: string
+    onStartDateChange: (date: string) => void
+    onEndDateChange: (date: string) => void
+    onStartTimeChange: (time: string) => void
+    onEndTimeChange: (time: string) => void
+    onClearDateFilter: () => void
+    selectedOrganization: string
+    onOrganizationChange: (org: string) => void
+    organizations: {id: string, name: string}[]
 }) {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [showTableFilter, setShowTableFilter] = useState(false)
+    const [showOrgFilter, setShowOrgFilter] = useState(false)
+    const [orgSearchTerm, setOrgSearchTerm] = useState("")
     const [buttonRef, setButtonRef] = useState<HTMLButtonElement | null>(null)
     const [tableButtonRef, setTableButtonRef] =
+        useState<HTMLButtonElement | null>(null)
+    const [orgButtonRef, setOrgButtonRef] =
         useState<HTMLButtonElement | null>(null)
     const [dropdownPosition, setDropdownPosition] = useState({
         top: 0,
         right: 0,
     })
     const [tableDropdownPosition, setTableDropdownPosition] = useState({
+        top: 0,
+        right: 0,
+    })
+    const [orgDropdownPosition, setOrgDropdownPosition] = useState({
         top: 0,
         right: 0,
     })
@@ -1092,6 +1157,21 @@ function ChangelogSearchAndFilterBar({
             })
         }
     }, [tableButtonRef, showTableFilter])
+
+    useEffect(() => {
+        if (orgButtonRef && showOrgFilter) {
+            const rect = orgButtonRef.getBoundingClientRect()
+            setOrgDropdownPosition({
+                top: rect.bottom + 8,
+                right: window.innerWidth - rect.right,
+            })
+        }
+    }, [orgButtonRef, showOrgFilter])
+
+    // Filter organizations based on search term
+    const filteredOrganizations = organizations.filter((org) =>
+        org.name.toLowerCase().includes(orgSearchTerm.toLowerCase())
+    )
 
     return (
         <>
@@ -1142,6 +1222,289 @@ function ChangelogSearchAndFilterBar({
                     />
                 </div>
 
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        backgroundColor: colors.white,
+                        border: "1px solid #d1d5db",
+                        borderRadius: "8px",
+                        padding: "8px 12px",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = colors.primary
+                        e.currentTarget.style.boxShadow =
+                            "0 0 0 3px rgba(16, 185, 129, 0.1)"
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#d1d5db"
+                        e.currentTarget.style.boxShadow = "none"
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <FaCalendar
+                                onClick={() => {
+                                    const input = document.getElementById(
+                                        "changelog-start-date"
+                                    ) as HTMLInputElement
+                                    input?.showPicker?.()
+                                }}
+                                style={{
+                                    color: colors.primary,
+                                    fontSize: "16px",
+                                    flexShrink: 0,
+                                    cursor: "pointer",
+                                    transition: "transform 0.2s",
+                                }}
+                                onMouseEnter={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1.15)"
+                                }}
+                                onMouseLeave={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1)"
+                                }}
+                                title="Klik om startdatum te selecteren"
+                            />
+                            <input
+                                id="changelog-start-date"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) =>
+                                    onStartDateChange(e.target.value)
+                                }
+                                style={{
+                                    border: "none",
+                                    outline: "none",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    padding: "4px",
+                                    backgroundColor: "transparent",
+                                    pointerEvents: "none",
+                                    color: startDate
+                                        ? colors.gray900
+                                        : colors.gray500,
+                                    width: "110px",
+                                }}
+                            />
+                            <FaClock
+                                onClick={() => {
+                                    if (startDate) {
+                                        const input = document.getElementById(
+                                            "changelog-start-time"
+                                        ) as HTMLInputElement
+                                        input?.showPicker?.()
+                                    }
+                                }}
+                                style={{
+                                    color: startDate
+                                        ? colors.primary
+                                        : colors.gray300,
+                                    fontSize: "14px",
+                                    flexShrink: 0,
+                                    cursor: startDate ? "pointer" : "not-allowed",
+                                    transition: "transform 0.2s",
+                                    opacity: startDate ? 1 : 0.5,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (startDate) {
+                                        ;(e.target as HTMLElement).style.transform =
+                                            "scale(1.15)"
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1)"
+                                }}
+                                title={
+                                    startDate
+                                        ? "Klik om starttijd te selecteren"
+                                        : "Selecteer eerst een datum"
+                                }
+                            />
+                            <input
+                                id="changelog-start-time"
+                                type="time"
+                                value={startTime}
+                                onChange={(e) =>
+                                    onStartTimeChange(e.target.value)
+                                }
+                                disabled={!startDate}
+                                style={{
+                                    border: "none",
+                                    outline: "none",
+                                    fontSize: "13px",
+                                    fontFamily: FONT_STACK,
+                                    padding: "4px",
+                                    backgroundColor: "transparent",
+                                    pointerEvents: "none",
+                                    color: startTime
+                                        ? colors.gray900
+                                        : colors.gray400,
+                                    opacity: !startDate ? 0.5 : 1,
+                                    width: "60px",
+                                }}
+                            />
+                        </div>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <FaCalendar
+                                onClick={() => {
+                                    const input = document.getElementById(
+                                        "changelog-end-date"
+                                    ) as HTMLInputElement
+                                    input?.showPicker?.()
+                                }}
+                                style={{
+                                    color: colors.primary,
+                                    fontSize: "16px",
+                                    flexShrink: 0,
+                                    cursor: "pointer",
+                                    transition: "transform 0.2s",
+                                }}
+                                onMouseEnter={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1.15)"
+                                }}
+                                onMouseLeave={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1)"
+                                }}
+                                title="Klik om einddatum te selecteren"
+                            />
+                            <input
+                                id="changelog-end-date"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => onEndDateChange(e.target.value)}
+                                style={{
+                                    border: "none",
+                                    outline: "none",
+                                    fontSize: "14px",
+                                    fontFamily: FONT_STACK,
+                                    padding: "4px",
+                                    backgroundColor: "transparent",
+                                    pointerEvents: "none",
+                                    color: endDate
+                                        ? colors.gray900
+                                        : colors.gray500,
+                                    width: "110px",
+                                }}
+                            />
+                            <FaClock
+                                onClick={() => {
+                                    if (endDate) {
+                                        const input = document.getElementById(
+                                            "changelog-end-time"
+                                        ) as HTMLInputElement
+                                        input?.showPicker?.()
+                                    }
+                                }}
+                                style={{
+                                    color: endDate ? colors.primary : colors.gray300,
+                                    fontSize: "14px",
+                                    flexShrink: 0,
+                                    cursor: endDate ? "pointer" : "not-allowed",
+                                    transition: "transform 0.2s",
+                                    opacity: endDate ? 1 : 0.5,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (endDate) {
+                                        ;(e.target as HTMLElement).style.transform =
+                                            "scale(1.15)"
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    ;(e.target as HTMLElement).style.transform =
+                                        "scale(1)"
+                                }}
+                                title={
+                                    endDate
+                                        ? "Klik om eindtijd te selecteren"
+                                        : "Selecteer eerst een datum"
+                                }
+                            />
+                            <input
+                                id="changelog-end-time"
+                                type="time"
+                                value={endTime}
+                                onChange={(e) => onEndTimeChange(e.target.value)}
+                                disabled={!endDate}
+                                style={{
+                                    border: "none",
+                                    outline: "none",
+                                    fontSize: "13px",
+                                    fontFamily: FONT_STACK,
+                                    padding: "4px",
+                                    backgroundColor: "transparent",
+                                    pointerEvents: "none",
+                                    color: endTime
+                                        ? colors.gray900
+                                        : colors.gray400,
+                                    opacity: !endDate ? 0.5 : 1,
+                                    width: "60px",
+                                }}
+                            />
+                        </div>
+                    </div>
+                    {(startDate || endDate || startTime || endTime) && (
+                        <button
+                            onClick={onClearDateFilter}
+                            style={{
+                                backgroundColor: "transparent",
+                                border: "none",
+                                cursor: "pointer",
+                                padding: "6px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: colors.gray500,
+                                transition: "all 0.2s",
+                                borderRadius: "4px",
+                                marginLeft: "4px",
+                                flexShrink: 0,
+                            }}
+                            onMouseOver={(e) => {
+                                ;(e.currentTarget as HTMLElement).style.color =
+                                    colors.error
+                                ;(
+                                    e.currentTarget as HTMLElement
+                                ).style.backgroundColor = "#fee2e2"
+                            }}
+                            onMouseOut={(e) => {
+                                ;(e.currentTarget as HTMLElement).style.color =
+                                    colors.gray500
+                                ;(
+                                    e.currentTarget as HTMLElement
+                                ).style.backgroundColor = "transparent"
+                            }}
+                            title="Wis alle datum- en tijdfilters"
+                        >
+                            <FaTimes size={14} />
+                        </button>
+                    )}
+                </div>
+
                 <div style={{ position: "relative" }}>
                     <button
                         ref={setTableButtonRef}
@@ -1190,6 +1553,57 @@ function ChangelogSearchAndFilterBar({
                         {selectedTableTags.size === 0
                             ? "Selecteer tabellen"
                             : `${selectedTableTags.size} geselecteerd`}
+                    </button>
+                </div>
+
+                <div style={{ position: "relative" }}>
+                    <button
+                        ref={setOrgButtonRef}
+                        onClick={() => setShowOrgFilter(!showOrgFilter)}
+                        style={{
+                            padding: "12px 16px",
+                            backgroundColor:
+                                selectedOrganization
+                                    ? colors.primary
+                                    : colors.white,
+                            color:
+                                selectedOrganization
+                                    ? "white"
+                                    : colors.gray700,
+                            border:
+                                selectedOrganization
+                                    ? "none"
+                                    : "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            cursor: "pointer",
+                            fontFamily: FONT_STACK,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            transition: "all 0.2s",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                        }}
+                        onMouseOver={(e) => {
+                            if (!selectedOrganization) {
+                                ;(
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.gray50
+                            }
+                        }}
+                        onMouseOut={(e) => {
+                            if (!selectedOrganization) {
+                                ;(
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.white
+                            }
+                        }}
+                    >
+                        <FaBuilding />
+                        {!selectedOrganization
+                            ? "Selecteer organisatie"
+                            : organizations.find(o => o.name === selectedOrganization)?.name || selectedOrganization}
                     </button>
                 </div>
 
@@ -1425,6 +1839,216 @@ function ChangelogSearchAndFilterBar({
                                         </label>
                                     )
                                 })}
+                            </div>
+                        </div>
+                    </>,
+                    document.body
+                )}
+
+            {/* Organization Filter Dropdown */}
+            {showOrgFilter &&
+                ReactDOM.createPortal(
+                    <>
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                zIndex: 999,
+                            }}
+                            onClick={() => setShowOrgFilter(false)}
+                        />
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: `${orgDropdownPosition.top}px`,
+                                right: `${orgDropdownPosition.right}px`,
+                                backgroundColor: "#fff",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "12px",
+                                boxShadow:
+                                    "0 20px 50px rgba(0,0,0,0.12), 0 4px 6px rgba(0,0,0,0.06)",
+                                zIndex: 1000,
+                                minWidth: "320px",
+                                maxHeight: "450px",
+                                display: "flex",
+                                flexDirection: "column",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    padding: "16px 20px",
+                                    borderBottom: `1px solid ${colors.gray200}`,
+                                    backgroundColor: colors.gray50,
+                                    borderRadius: "12px 12px 0 0",
+                                }}
+                            >
+                                <h3
+                                    style={{
+                                        margin: "0 0 12px 0",
+                                        fontSize: "15px",
+                                        fontWeight: "600",
+                                        color: colors.gray700,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                >
+                                    Filter op organisatie
+                                </h3>
+
+                                {/* Search Bar */}
+                                <div style={{ position: "relative", marginBottom: "12px" }}>
+                                    <FaSearch
+                                        style={{
+                                            position: "absolute",
+                                            left: "12px",
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            color: colors.gray500,
+                                            fontSize: "12px",
+                                        }}
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Zoek organisatie..."
+                                        value={orgSearchTerm}
+                                        onChange={(e) => setOrgSearchTerm(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            width: "100%",
+                                            padding: "8px 12px 8px 36px",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "6px",
+                                            fontSize: "13px",
+                                            fontFamily: FONT_STACK,
+                                            transition: "border-color 0.2s",
+                                            boxSizing: "border-box",
+                                        }}
+                                        onFocus={(e) =>
+                                            (e.target.style.borderColor = colors.primary)
+                                        }
+                                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                                    />
+                                </div>
+
+                                {/* Clear Filter Button */}
+                                {selectedOrganization && (
+                                    <button
+                                        onClick={() => {
+                                            onOrganizationChange("")
+                                            setOrgSearchTerm("")
+                                        }}
+                                        style={{
+                                            padding: "6px 12px",
+                                            fontSize: "12px",
+                                            backgroundColor: colors.gray100,
+                                            color: colors.gray700,
+                                            border: "none",
+                                            borderRadius: "6px",
+                                            cursor: "pointer",
+                                            fontWeight: "500",
+                                            transition: "background-color 0.2s",
+                                            width: "100%",
+                                        }}
+                                        onMouseOver={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor =
+                                                colors.gray200)
+                                        }
+                                        onMouseOut={(e) =>
+                                            ((e.target as HTMLElement).style.backgroundColor =
+                                                colors.gray100)
+                                        }
+                                    >
+                                        Wis selectie
+                                    </button>
+                                )}
+                            </div>
+                            <div
+                                style={{
+                                    padding: "8px",
+                                    overflowY: "auto",
+                                    flex: 1,
+                                }}
+                            >
+                                {filteredOrganizations.length === 0 ? (
+                                    <div
+                                        style={{
+                                            padding: "20px",
+                                            textAlign: "center",
+                                            color: colors.gray500,
+                                            fontSize: "14px",
+                                        }}
+                                    >
+                                        Geen organisaties gevonden
+                                    </div>
+                                ) : (
+                                    filteredOrganizations.map((org) => {
+                                        const isSelected = selectedOrganization === org.name
+                                        return (
+                                            <div
+                                                key={org.id}
+                                                onClick={() => {
+                                                    onOrganizationChange(
+                                                        isSelected ? "" : org.name
+                                                    )
+                                                    if (!isSelected) {
+                                                        setShowOrgFilter(false)
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: "10px 12px",
+                                                    cursor: "pointer",
+                                                    borderRadius: "8px",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "10px",
+                                                    backgroundColor: isSelected
+                                                        ? colors.primaryBg
+                                                        : "transparent",
+                                                    border: isSelected
+                                                        ? `2px solid ${colors.primary}`
+                                                        : "2px solid transparent",
+                                                    marginBottom: "4px",
+                                                    transition: "all 0.2s",
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (!isSelected) {
+                                                        e.currentTarget.style.backgroundColor =
+                                                            colors.gray50
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (!isSelected) {
+                                                        e.currentTarget.style.backgroundColor =
+                                                            "transparent"
+                                                    }
+                                                }}
+                                            >
+                                                <FaBuilding
+                                                    style={{
+                                                        color: isSelected
+                                                            ? colors.primary
+                                                            : colors.gray400,
+                                                        fontSize: "14px",
+                                                    }}
+                                                />
+                                                <span
+                                                    style={{
+                                                        fontSize: "14px",
+                                                        color: isSelected
+                                                            ? colors.primary
+                                                            : colors.gray700,
+                                                        fontWeight: isSelected ? "600" : "400",
+                                                        fontFamily: FONT_STACK,
+                                                    }}
+                                                >
+                                                    {org.name}
+                                                </span>
+                                            </div>
+                                        )
+                                    })
+                                )}
                             </div>
                         </div>
                     </>,
@@ -1690,11 +2314,21 @@ export function ChangelogPageOverride(): Override {
         new Set()
     )
     const [pendingCount, setPendingCount] = useState<number>(0)
-    
+
     // Pagination states
     const [currentPage, setCurrentPage] = useState<number>(0)
     const [pagination, setPagination] = useState<any | null>(null)
     const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false)
+
+    // Date filter states
+    const [startDate, setStartDate] = useState<string>("")
+    const [endDate, setEndDate] = useState<string>("")
+    const [startTime, setStartTime] = useState<string>("")
+    const [endTime, setEndTime] = useState<string>("")
+
+    // Organization filter states
+    const [selectedOrganization, setSelectedOrganization] = useState<string>("")
+    const [organizations, setOrganizations] = useState<{id: string, name: string}[]>([])
 
     const refresh = useCallback(() => {
         fetchChangelog(0, 50)
@@ -1756,6 +2390,15 @@ export function ChangelogPageOverride(): Override {
         loadPendingCount()
     }, [])
 
+    // Fetch organizations
+    useEffect(() => {
+        const loadOrganizations = async () => {
+            const orgs = await fetchOrganizations()
+            setOrganizations(orgs)
+        }
+        loadOrganizations()
+    }, [])
+
     // Build entity history for before/after comparisons
     const entityHistories = React.useMemo(() => {
         if (!changelog) return new Map()
@@ -1787,6 +2430,75 @@ export function ChangelogPageOverride(): Override {
                 !selectedTableTags.has(item.sourceTableTag)
             ) {
                 return false
+            }
+
+            // Date and time filter
+            if (startDate || endDate || startTime || endTime) {
+                const itemDate = new Date(item.timestamp)
+
+                if (startDate) {
+                    const start = new Date(startDate)
+                    // If time is specified, use it; otherwise start of day
+                    if (startTime) {
+                        const [hours, minutes] = startTime.split(":")
+                        start.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+                    } else {
+                        start.setHours(0, 0, 0, 0)
+                    }
+                    if (itemDate < start) return false
+                }
+
+                if (endDate) {
+                    const end = new Date(endDate)
+                    // If time is specified, use it; otherwise end of day
+                    if (endTime) {
+                        const [hours, minutes] = endTime.split(":")
+                        end.setHours(parseInt(hours), parseInt(minutes), 59, 999)
+                    } else {
+                        end.setHours(23, 59, 59, 999)
+                    }
+                    if (itemDate > end) return false
+                }
+            }
+
+            // Organization filter
+            if (selectedOrganization) {
+                try {
+                    // Get organization from cache or changes
+                    let itemOrganization = ""
+
+                    const entityInfo = entityInfoCache.get(item.entityId)
+                    if (entityInfo?.organization) {
+                        itemOrganization = entityInfo.organization
+                    } else if (item.changes) {
+                        // Try to get from changes
+                        try {
+                            const formattedChanges = formatDynamoDBValue(item.changes)
+                            if (formattedChanges && typeof formattedChanges === 'object') {
+                                if (item.sourceTableTag?.toLowerCase() === "organization") {
+                                    itemOrganization = formattedChanges.name || ""
+                                } else if (item.sourceTableTag?.toLowerCase() === "user") {
+                                    itemOrganization = Array.isArray(formattedChanges.organizations)
+                                        ? (formattedChanges.organizations[0] || "")
+                                        : (formattedChanges.organizations || "")
+                                } else {
+                                    itemOrganization = formattedChanges.organization || ""
+                                }
+                            }
+                        } catch (err) {
+                            console.warn("Error formatting changes for organization filter:", err)
+                        }
+                    }
+
+                    // Check if the item's organization matches the selected organization
+                    if (itemOrganization !== selectedOrganization) {
+                        return false
+                    }
+                } catch (error) {
+                    console.error("Error in organization filter:", error)
+                    // Don't filter out items if there's an error - show them
+                    return true
+                }
             }
 
             return true
@@ -1914,6 +2626,13 @@ export function ChangelogPageOverride(): Override {
         })
     }
 
+    const clearDateFilter = () => {
+        setStartDate("")
+        setEndDate("")
+        setStartTime("")
+        setEndTime("")
+    }
+
     if (changelog === null) {
         return {
             children: (
@@ -1948,6 +2667,90 @@ export function ChangelogPageOverride(): Override {
                     }}
                 >
                     Fout: {error}
+                </div>
+            ),
+        }
+    }
+
+    // Check if user is admin - only admins can access changelog
+    if (userInfo && !isAdmin(userInfo)) {
+        return {
+            children: (
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        height: "100vh",
+                        padding: "24px",
+                        fontFamily: FONT_STACK,
+                        backgroundColor: colors.gray50,
+                    }}
+                >
+                    <div
+                        style={{
+                            padding: "48px",
+                            backgroundColor: colors.white,
+                            borderRadius: "12px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                            maxWidth: "500px",
+                            textAlign: "center",
+                        }}
+                    >
+                        <FaShieldAlt
+                            style={{
+                                fontSize: "64px",
+                                color: colors.error,
+                                marginBottom: "24px",
+                            }}
+                        />
+                        <h2
+                            style={{
+                                fontSize: "24px",
+                                fontWeight: "700",
+                                color: colors.gray700,
+                                marginBottom: "12px",
+                            }}
+                        >
+                            Toegang geweigerd
+                        </h2>
+                        <p
+                            style={{
+                                fontSize: "16px",
+                                color: colors.gray500,
+                                marginBottom: "24px",
+                                lineHeight: "1.5",
+                            }}
+                        >
+                            Alleen administrators hebben toegang tot het wijzigingslogboek.
+                        </p>
+                        <button
+                            onClick={() => (window.location.href = "/organizations")}
+                            style={{
+                                padding: "12px 24px",
+                                backgroundColor: colors.primary,
+                                color: "white",
+                                border: "none",
+                                borderRadius: "8px",
+                                fontSize: "14px",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                fontFamily: FONT_STACK,
+                                transition: "all 0.2s",
+                            }}
+                            onMouseOver={(e) =>
+                                ((e.target as HTMLElement).style.backgroundColor =
+                                    colors.primaryHover)
+                            }
+                            onMouseOut={(e) =>
+                                ((e.target as HTMLElement).style.backgroundColor =
+                                    colors.primary)
+                            }
+                        >
+                            Terug naar Organisaties
+                        </button>
+                    </div>
                 </div>
             ),
         }
@@ -1999,12 +2802,6 @@ export function ChangelogPageOverride(): Override {
                                 label: "Organisaties",
                                 icon: FaBuilding,
                                 href: "/organizations",
-                            },
-                            {
-                                key: "policies",
-                                label: "Polissen",
-                                icon: FaFileContract,
-                                href: "/policies",
                             },
                             {
                                 key: "pending",
@@ -2190,13 +2987,24 @@ export function ChangelogPageOverride(): Override {
                             selectedTableTags={selectedTableTags}
                             onTableTagChange={toggleTableTag}
                             availableTableTags={availableTableTags}
+                            startDate={startDate}
+                            endDate={endDate}
+                            startTime={startTime}
+                            endTime={endTime}
+                            onStartDateChange={setStartDate}
+                            onEndDateChange={setEndDate}
+                            onStartTimeChange={setStartTime}
+                            onEndTimeChange={setEndTime}
+                            onClearDateFilter={clearDateFilter}
+                            selectedOrganization={selectedOrganization}
+                            onOrganizationChange={setSelectedOrganization}
+                            organizations={organizations}
                         />
                     </div>
 
                     <div
                         style={{
                             overflowX: "auto",
-                            overflowY: "auto",
                             flex: 1,
                             position: "relative",
                         }}
@@ -2488,20 +3296,49 @@ export function ChangelogPageOverride(): Override {
                                                                     style={{
                                                                         display:
                                                                             "flex",
-                                                                        alignItems:
-                                                                            "center",
-                                                                        gap: "6px",
+                                                                        flexDirection:
+                                                                            "column",
+                                                                        gap: "2px",
                                                                     }}
                                                                 >
-                                                                    <FaClock
+                                                                    <div
                                                                         style={{
-                                                                            color: colors.gray500,
+                                                                            display:
+                                                                                "flex",
+                                                                            alignItems:
+                                                                                "center",
+                                                                            gap: "6px",
+                                                                        }}
+                                                                    >
+                                                                        <FaClock
+                                                                            style={{
+                                                                                color: colors.gray500,
+                                                                                fontSize:
+                                                                                    "12px",
+                                                                            }}
+                                                                        />
+                                                                        <span
+                                                                            style={{
+                                                                                fontSize:
+                                                                                    "13px",
+                                                                                color: colors.gray700,
+                                                                            }}
+                                                                        >
+                                                                            {getRelativeTime(
+                                                                                cellValue
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span
+                                                                        style={{
                                                                             fontSize:
                                                                                 "12px",
+                                                                            color: colors.gray500,
+                                                                            paddingLeft:
+                                                                                "18px",
                                                                         }}
-                                                                    />
-                                                                    <span
-                                                                        title={(() => {
+                                                                    >
+                                                                        {(() => {
                                                                             const dateValue =
                                                                                 new Date(
                                                                                     cellValue
@@ -2510,14 +3347,44 @@ export function ChangelogPageOverride(): Override {
                                                                                 dateValue.getHours() +
                                                                                     2
                                                                             )
-                                                                            return dateValue.toLocaleString(
-                                                                                "nl-NL"
-                                                                            )
+                                                                            const day =
+                                                                                dateValue
+                                                                                    .getDate()
+                                                                                    .toString()
+                                                                                    .padStart(
+                                                                                        2,
+                                                                                        "0"
+                                                                                    )
+                                                                            const month =
+                                                                                (
+                                                                                    dateValue.getMonth() +
+                                                                                    1
+                                                                                )
+                                                                                    .toString()
+                                                                                    .padStart(
+                                                                                        2,
+                                                                                        "0"
+                                                                                    )
+                                                                            const year =
+                                                                                dateValue.getFullYear()
+                                                                            const hours =
+                                                                                dateValue
+                                                                                    .getHours()
+                                                                                    .toString()
+                                                                                    .padStart(
+                                                                                        2,
+                                                                                        "0"
+                                                                                    )
+                                                                            const minutes =
+                                                                                dateValue
+                                                                                    .getMinutes()
+                                                                                    .toString()
+                                                                                    .padStart(
+                                                                                        2,
+                                                                                        "0"
+                                                                                    )
+                                                                            return `${day}-${month}-${year} ${hours}:${minutes}`
                                                                         })()}
-                                                                    >
-                                                                        {getRelativeTime(
-                                                                            cellValue
-                                                                        )}
                                                                     </span>
                                                                 </div>
                                                             )

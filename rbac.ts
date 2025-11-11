@@ -54,13 +54,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
         // Editor/Broker permissions - matches backend 'editor' role exactly
         // insured_object: ['create', 'read', 'update'] - no delete
         "INSURED_OBJECT_CREATE", "INSURED_OBJECT_READ", "INSURED_OBJECT_UPDATE",
-        // user: ['read'] - can only READ users
-        "USER_VIEW",
-        // organization: ['read'] - can only READ organizations  
+        // organization: ['read'] - can only READ organizations
         "ORG_VIEW", "ORG_EDIT_ADDRESS",
         // policy: ['read', 'create'] - can READ and CREATE policies, no update/delete
-        "POLICY_CREATE", "POLICY_VIEW", "POLICY_EDIT",
-        "CHANGELOG_VIEW"
+        "POLICY_CREATE", "POLICY_VIEW", "POLICY_EDIT"
     ],
     user: [
         // Regular user permissions - matches backend 'user' role exactly
@@ -155,6 +152,112 @@ export function isEditor(userInfo: UserInfo | null): boolean {
 
 export function isUser(userInfo: UserInfo | null): boolean {
     return userInfo?.role === "user"
+}
+
+// Status-based permissions for insured objects
+export type InsuredObjectStatus = "Pending" | "Insured" | "Rejected" | "Removed"
+
+// Check if user can edit an insured object based on status
+export function canEditInsuredObject(userInfo: UserInfo | null, status: InsuredObjectStatus): boolean {
+    if (!userInfo) return false
+
+    // Admins can always edit
+    if (isAdmin(userInfo)) return true
+
+    // Editors and users cannot edit if status is Rejected or Removed
+    // They CAN edit Pending and Insured items
+    const restrictedStatuses: InsuredObjectStatus[] = ["Rejected", "Removed"]
+    if (restrictedStatuses.includes(status)) {
+        return false
+    }
+
+    // Editors and users can edit Pending and Insured objects (but with field restrictions)
+    return true
+}
+
+// Check if user can edit specific fields of an insured object
+export function canEditInsuredObjectField(
+    userInfo: UserInfo | null,
+    status: InsuredObjectStatus,
+    fieldName: string
+): boolean {
+    if (!userInfo) return false
+
+    // Admins can always edit any field
+    if (isAdmin(userInfo)) return true
+
+    // First check if object is editable at all
+    if (!canEditInsuredObject(userInfo, status)) return false
+
+    // For Insured objects, restrict certain fields for non-admins
+    // This includes user input fields and system-calculated fields
+    if (status === "Insured") {
+        const restrictedFields = [
+            "waarde",
+            "ingangsdatum",
+            "uitgangsdatum",
+            // System fields that only admins should be able to edit
+            "premiepercentage",
+            "eigenRisico",
+            "aantalVerzekerdeDagen",
+            "totalePremieOverHetJaar",
+            "totalePremieOverDeVerzekerdePeriode"
+        ]
+        if (restrictedFields.includes(fieldName)) {
+            return false
+        }
+    }
+
+    return true
+}
+
+// Get tooltip text for disabled fields
+export function getFieldDisabledTooltip(
+    userInfo: UserInfo | null,
+    status: InsuredObjectStatus,
+    fieldName: string
+): string {
+    if (!userInfo) return "Niet ingelogd"
+
+    if (isAdmin(userInfo)) return ""
+
+    // Status-based restrictions
+    if (status === "Rejected") {
+        return "Dit vaartuig is afgewezen. Dien een nieuwe aanvraag in"
+    }
+    if (status === "Removed") {
+        return "Dit vaartuig is afgevoerd en kan niet meer worden gewijzigd"
+    }
+
+    // Field-level restrictions for Insured objects
+    if (status === "Insured") {
+        const fieldLabels: Record<string, string> = {
+            waarde: "waarde van het vaartuig",
+            ingangsdatum: "ingangsdatum",
+            uitgangsdatum: "uitgangsdatum",
+            premiepercentage: "premie percentage",
+            eigenRisico: "eigen risico",
+            aantalVerzekerdeDagen: "aantal verzekerde dagen",
+            totalePremieOverHetJaar: "totale premie over het jaar",
+            totalePremieOverDeVerzekerdePeriode: "totale premie over de verzekerde periode"
+        }
+
+        const restrictedFields = [
+            "waarde",
+            "ingangsdatum",
+            "uitgangsdatum",
+            "premiepercentage",
+            "eigenRisico",
+            "aantalVerzekerdeDagen",
+            "totalePremieOverHetJaar",
+            "totalePremieOverDeVerzekerdePeriode"
+        ]
+        if (restrictedFields.includes(fieldName)) {
+            return `De ${fieldLabels[fieldName] || fieldName} kan niet worden gewijzigd voor verzekerde objecten. Neem contact op met de beheerder.`
+        }
+    }
+
+    return ""
 }
 
 export function canManageOrganization(userInfo: UserInfo | null, orgId?: string): boolean {

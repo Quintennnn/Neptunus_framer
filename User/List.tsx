@@ -166,10 +166,13 @@ async function fetchOrganizations(): Promise<any[]> {
 type ColumnKey =
     | "username"
     | "email"
+    | "initials"
+    | "lastName"
     | "role"
     | "organizations"
     | "createdAt"
     | "updatedAt"
+    | "notities"
 
 const COLUMN_GROUPS = {
     essential: { label: "Essentiële", priority: 1 },
@@ -185,8 +188,15 @@ const COLUMNS: {
 }[] = [
     // Essential columns - most important user info
     {
-        key: "username",
-        label: "Gebruikersnaam",
+        key: "initials",
+        label: "Voorletters",
+        priority: 1,
+        group: "essential",
+        width: "100px",
+    },
+    {
+        key: "lastName",
+        label: "Achternaam",
         priority: 1,
         group: "essential",
         width: "150px",
@@ -215,6 +225,13 @@ const COLUMNS: {
         width: "150px",
     },
     {
+        key: "username",
+        label: "Cognito ID",
+        priority: 2,
+        group: "additional",
+        width: "150px",
+    },
+    {
         key: "createdAt",
         label: "Aangemaakt",
         priority: 2,
@@ -227,6 +244,13 @@ const COLUMNS: {
         priority: 2,
         group: "additional",
         width: "110px",
+    },
+    {
+        key: "notities",
+        label: "Notities",
+        priority: 2,
+        group: "additional",
+        width: "200px",
     },
 ]
 
@@ -385,8 +409,11 @@ function ConfirmDeleteDialog({
 // ——— Enhanced Edit Form ———
 type UserFormState = {
     email: string
+    initials: string
+    lastName: string
     role: string
     organizations: string[]
+    notities?: string
 }
 
 function EditUserForm({
@@ -413,8 +440,11 @@ function EditUserForm({
 
     const [form, setForm] = useState<UserFormState>({
         email: user.email || "",
+        initials: user.initials || "",
+        lastName: user.lastName || "",
         role: user.role || "",
         organizations: convertToArray(user.organizations),
+        notities: user.notities || "",
     })
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
@@ -425,6 +455,7 @@ function EditUserForm({
     const [organizationsError, setOrganizationsError] = useState<string | null>(
         null
     )
+    const [orgSearchTerm, setOrgSearchTerm] = useState("")
 
     // Fetch organizations on component mount
     useEffect(() => {
@@ -441,6 +472,12 @@ function EditUserForm({
                 setOrganizationsLoading(false)
             })
     }, [])
+
+    // Filter organizations based on search term
+    const filteredOrganizations = availableOrganizations.filter((org) => {
+        if (!orgSearchTerm) return true
+        return org.name.toLowerCase().includes(orgSearchTerm.toLowerCase())
+    })
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -592,6 +629,40 @@ function EditUserForm({
                 }}
             >
                 <div style={{ display: "flex", flexDirection: "column" }}>
+                    <label htmlFor="initials" style={styles.label}>
+                        Voorletters
+                    </label>
+                    <input
+                        id="initials"
+                        name="initials"
+                        type="text"
+                        value={form.initials}
+                        onChange={handleChange}
+                        placeholder="bijv. J.P."
+                        style={styles.input}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
+                    />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                    <label htmlFor="lastName" style={styles.label}>
+                        Achternaam
+                    </label>
+                    <input
+                        id="lastName"
+                        name="lastName"
+                        type="text"
+                        value={form.lastName}
+                        onChange={handleChange}
+                        placeholder="bijv. van der Berg"
+                        style={styles.input}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
+                    />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
                     <label htmlFor="email" style={styles.label}>
                         Email
                     </label>
@@ -625,12 +696,95 @@ function EditUserForm({
                     >
                         <option value="user">User</option>
                         <option value="editor">Editor</option>
-                        <option value="admin">Admin</option>
                     </select>
+                    <div
+                        style={{
+                            fontSize: "12px",
+                            color: "#6b7280",
+                            marginTop: "4px",
+                        }}
+                    >
+                        Note: Admin users kunnen alleen via backend worden aangemaakt
+                    </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column" }}>
                     <label style={styles.label}>Organisaties</label>
+
+                    {/* Search bar for organizations */}
+                    {!organizationsLoading && !organizationsError && availableOrganizations.length > 0 && (
+                        <div style={{ position: "relative", marginBottom: "8px" }}>
+                            <FaSearch
+                                style={{
+                                    position: "absolute",
+                                    left: "12px",
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    color: "#9ca3af",
+                                    fontSize: "12px",
+                                    pointerEvents: "none",
+                                    zIndex: 1,
+                                }}
+                            />
+                            <input
+                                type="text"
+                                placeholder="Zoek organisaties..."
+                                value={orgSearchTerm}
+                                onChange={(e) => setOrgSearchTerm(e.target.value)}
+                                style={{
+                                    width: "100%",
+                                    padding: "8px 12px 8px 36px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontFamily: FONT_STACK,
+                                    outline: "none",
+                                    transition: "border-color 0.2s, box-shadow 0.2s",
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = colors.primary
+                                    e.target.style.boxShadow = `0 0 0 3px ${colors.primary}20`
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = "#d1d5db"
+                                    e.target.style.boxShadow = "none"
+                                }}
+                            />
+                            {/* Clear search button */}
+                            {orgSearchTerm && (
+                                <button
+                                    type="button"
+                                    onClick={() => setOrgSearchTerm("")}
+                                    style={{
+                                        position: "absolute",
+                                        right: "8px",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        color: "#6b7280",
+                                        fontSize: "16px",
+                                        padding: "4px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: "4px",
+                                        transition: "background-color 0.2s",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#f3f4f6"
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = "transparent"
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+                    )}
+
                     <div
                         style={{
                             border: "1px solid #d1d5db",
@@ -638,7 +792,7 @@ function EditUserForm({
                             padding: "12px",
                             backgroundColor: "#fff",
                             minHeight: "120px",
-                            maxHeight: "200px",
+                            maxHeight: "240px",
                             overflowY: "auto",
                         }}
                     >
@@ -689,6 +843,20 @@ function EditUserForm({
                             >
                                 No organizations available
                             </div>
+                        ) : filteredOrganizations.length === 0 ? (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "80px",
+                                    color: "#6b7280",
+                                    fontSize: "14px",
+                                    textAlign: "center",
+                                }}
+                            >
+                                Geen organisaties gevonden voor "{orgSearchTerm}"
+                            </div>
                         ) : (
                             <div
                                 style={{
@@ -697,7 +865,7 @@ function EditUserForm({
                                     gap: "8px",
                                 }}
                             >
-                                {availableOrganizations.map((org) => (
+                                {filteredOrganizations.map((org) => (
                                     <label
                                         key={org.id}
                                         style={{
@@ -705,9 +873,12 @@ function EditUserForm({
                                             alignItems: "center",
                                             gap: "8px",
                                             cursor: "pointer",
-                                            padding: "4px",
-                                            borderRadius: "4px",
+                                            padding: "6px 8px",
+                                            borderRadius: "6px",
                                             transition: "background-color 0.2s",
+                                            border: form.organizations.includes(org.name)
+                                                ? `1px solid ${colors.primary}40`
+                                                : "1px solid transparent",
                                         }}
                                         onMouseOver={(e) =>
                                             (e.currentTarget.style.backgroundColor =
@@ -731,13 +902,18 @@ function EditUserForm({
                                             }
                                             style={{
                                                 cursor: "pointer",
-                                                accentColor: "#3b82f6",
+                                                accentColor: colors.primary,
+                                                width: "16px",
+                                                height: "16px",
                                             }}
                                         />
                                         <span
                                             style={{
                                                 fontSize: "14px",
                                                 color: "#374151",
+                                                fontWeight: form.organizations.includes(org.name)
+                                                    ? "500"
+                                                    : "400",
                                             }}
                                         >
                                             {org.name}
@@ -752,15 +928,36 @@ function EditUserForm({
                             style={{
                                 fontSize: "12px",
                                 color: "#6b7280",
-                                marginTop: "4px",
+                                marginTop: "8px",
+                                padding: "8px",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "6px",
+                                border: "1px solid #e5e7eb",
                             }}
                         >
-                            Selected:{" "}
+                            <strong>Geselecteerd ({form.organizations.length}):</strong>{" "}
                             {form.organizations.length === 0
-                                ? "none"
+                                ? "geen"
                                 : form.organizations.join(", ")}
                         </div>
                     )}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                    <label htmlFor="notities" style={styles.label}>
+                        Notities
+                    </label>
+                    <input
+                        id="notities"
+                        name="notities"
+                        type="text"
+                        value={form.notities || ""}
+                        onChange={handleChange}
+                        placeholder="Optionele notities"
+                        style={styles.input}
+                        onFocus={(e) => hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
+                    />
                 </div>
 
                 <div
@@ -829,6 +1026,11 @@ function EditUserForm({
 // ——— Create User Form ———
 type CreateUserFormState = {
     email: string
+    initials: string
+    lastName: string
+    role: string
+    organizations: string[]
+    notities?: string
 }
 
 function CreateUserForm({
@@ -840,24 +1042,68 @@ function CreateUserForm({
 }) {
     const [form, setForm] = useState<CreateUserFormState>({
         email: "",
+        initials: "",
+        lastName: "",
+        role: "user",
+        organizations: [],
+        notities: "",
     })
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [availableOrganizations, setAvailableOrganizations] = useState<any[]>([])
+    const [organizationsLoading, setOrganizationsLoading] = useState(true)
+    const [organizationsError, setOrganizationsError] = useState<string | null>(null)
+    const [orgSearchTerm, setOrgSearchTerm] = useState("")
+
+    // Fetch organizations on component mount
+    useEffect(() => {
+        fetchOrganizations()
+            .then((orgs) => {
+                setAvailableOrganizations(orgs)
+                setOrganizationsLoading(false)
+            })
+            .catch((err) => {
+                console.error("Failed to fetch organizations:", err)
+                setOrganizationsError("Could not fetch organizations")
+                setOrganizationsLoading(false)
+            })
+    }, [])
+
+    // Filter organizations based on search term
+    const filteredOrganizations = availableOrganizations.filter((org) => {
+        if (!orgSearchTerm) return true
+        return org.name.toLowerCase().includes(orgSearchTerm.toLowerCase())
+    })
 
     // Validation helper
     function validateForm(form: CreateUserFormState): string[] {
         const errors: string[] = []
         const emailError = validateEmail(form.email)
         if (emailError) errors.push(emailError)
+        if (!form.initials.trim()) errors.push("Initials are required")
+        if (!form.lastName.trim()) errors.push("Last name is required")
+        if (!form.role) errors.push("Role is required")
+        if (form.organizations.length === 0) errors.push("At least one organization must be selected")
         return errors
     }
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         setError(null)
         setSuccess(null)
         setForm((f) => ({ ...f, [name]: value }))
+    }
+
+    const handleOrganizationChange = (orgName: string, checked: boolean) => {
+        setError(null)
+        setSuccess(null)
+        setForm((f) => ({
+            ...f,
+            organizations: checked
+                ? [...f.organizations, orgName]
+                : f.organizations.filter((org) => org !== orgName),
+        }))
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -884,13 +1130,22 @@ function CreateUserForm({
         setIsSubmitting(true)
 
         try {
+            // Prepare submission data with normalized role
+            const submitData = {
+                email: form.email.trim(),
+                initials: form.initials.trim(),
+                lastName: form.lastName.trim(),
+                role: form.role.toLowerCase(), // Normalize to lowercase
+                organizations: form.organizations.length === 0 ? "none" : form.organizations,
+            }
+
             const res = await fetch(API_BASE_URL + API_PATHS.SIGNUP, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify(form),
+                body: JSON.stringify(submitData),
             })
             const data = await res.json()
 
@@ -970,8 +1225,56 @@ function CreateUserForm({
             )}
 
             {/* Form */}
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: "24px" }}>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                    <div>
+                        <label htmlFor="initials" style={styles.label}>
+                            Voorletters
+                            <span style={{ color: colors.error }}>*</span>
+                        </label>
+                        <input
+                            id="initials"
+                            name="initials"
+                            type="text"
+                            value={form.initials}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="bijv. J.P."
+                            style={{
+                                ...styles.input,
+                                backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                            }}
+                            onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                            onBlur={(e) => hover.resetInput(e.target)}
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="lastName" style={styles.label}>
+                            Achternaam
+                            <span style={{ color: colors.error }}>*</span>
+                        </label>
+                        <input
+                            id="lastName"
+                            name="lastName"
+                            type="text"
+                            value={form.lastName}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="bijv. van der Berg"
+                            style={{
+                                ...styles.input,
+                                backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                            }}
+                            onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                            onBlur={(e) => hover.resetInput(e.target)}
+                        />
+                    </div>
+                </div>
+
+                <div>
                     <label htmlFor="email" style={styles.label}>
                         E-mailadres
                         <span style={{ color: colors.error }}>*</span>
@@ -983,7 +1286,7 @@ function CreateUserForm({
                         value={form.email}
                         onChange={handleChange}
                         disabled={isSubmitting}
-                        placeholder="Voer e-mailadres gebruiker in"
+                        placeholder="naam@bedrijf.nl"
                         style={{
                             ...styles.input,
                             backgroundColor: isSubmitting ? colors.gray50 : colors.white,
@@ -993,6 +1296,278 @@ function CreateUserForm({
                         onBlur={(e) => hover.resetInput(e.target)}
                     />
                 </div>
+
+                <div>
+                    <label htmlFor="role" style={styles.label}>
+                        Rol
+                        <span style={{ color: colors.error }}>*</span>
+                    </label>
+                    <select
+                        id="role"
+                        name="role"
+                        value={form.role}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                        }}
+                        onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                        onBlur={(e) => hover.resetInput(e.target)}
+                    >
+                        <option value="user">User</option>
+                        <option value="editor">Editor</option>
+                    </select>
+                    <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+                        User: Kan eigen objecten bekijken | Editor: Kan objecten beheren
+                    </div>
+                </div>
+
+                <div>
+                    <label style={styles.label}>
+                        Organisaties
+                        <span style={{ color: colors.error }}>*</span>
+                    </label>
+
+                    {/* Search bar for organizations */}
+                    {!organizationsLoading && !organizationsError && availableOrganizations.length > 0 && (
+                        <div style={{ position: "relative", marginBottom: "8px" }}>
+                            <FaSearch
+                                style={{
+                                    position: "absolute",
+                                    left: "12px",
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    color: "#9ca3af",
+                                    fontSize: "12px",
+                                    pointerEvents: "none",
+                                    zIndex: 1,
+                                }}
+                            />
+                            <input
+                                type="text"
+                                placeholder="Zoek organisaties..."
+                                value={orgSearchTerm}
+                                onChange={(e) => setOrgSearchTerm(e.target.value)}
+                                disabled={isSubmitting}
+                                style={{
+                                    width: "100%",
+                                    padding: "8px 12px 8px 36px",
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: "6px",
+                                    fontSize: "13px",
+                                    fontFamily: FONT_STACK,
+                                    outline: "none",
+                                    transition: "border-color 0.2s, box-shadow 0.2s",
+                                    backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                                    cursor: isSubmitting ? "not-allowed" : "text",
+                                }}
+                                onFocus={(e) => {
+                                    if (!isSubmitting) {
+                                        e.target.style.borderColor = colors.primary
+                                        e.target.style.boxShadow = `0 0 0 3px ${colors.primary}20`
+                                    }
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = "#d1d5db"
+                                    e.target.style.boxShadow = "none"
+                                }}
+                            />
+                            {orgSearchTerm && !isSubmitting && (
+                                <button
+                                    type="button"
+                                    onClick={() => setOrgSearchTerm("")}
+                                    style={{
+                                        position: "absolute",
+                                        right: "8px",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        background: "none",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        color: "#6b7280",
+                                        fontSize: "16px",
+                                        padding: "4px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        borderRadius: "4px",
+                                        transition: "background-color 0.2s",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = "#f3f4f6"
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = "transparent"
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    <div
+                        style={{
+                            border: "1px solid #d1d5db",
+                            borderRadius: "8px",
+                            padding: "12px",
+                            backgroundColor: isSubmitting ? colors.gray50 : "#fff",
+                            minHeight: "120px",
+                            maxHeight: "200px",
+                            overflowY: "auto",
+                        }}
+                    >
+                        {organizationsLoading ? (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "80px",
+                                    color: "#6b7280",
+                                    fontSize: "14px",
+                                }}
+                            >
+                                <div style={{ ...styles.spinner, marginRight: "8px" }} />
+                                Loading organizations...
+                                <style>{animations}</style>
+                            </div>
+                        ) : organizationsError ? (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "80px",
+                                    color: "#dc2626",
+                                    fontSize: "14px",
+                                    textAlign: "center",
+                                }}
+                            >
+                                Organisaties niet beschikbaar
+                            </div>
+                        ) : availableOrganizations.length === 0 ? (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "80px",
+                                    color: "#6b7280",
+                                    fontSize: "14px",
+                                }}
+                            >
+                                Geen organisaties beschikbaar
+                            </div>
+                        ) : filteredOrganizations.length === 0 ? (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "80px",
+                                    color: "#6b7280",
+                                    fontSize: "14px",
+                                    textAlign: "center",
+                                }}
+                            >
+                                Geen organisaties gevonden voor "{orgSearchTerm}"
+                            </div>
+                        ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                {filteredOrganizations.map((org) => (
+                                    <label
+                                        key={org.id}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            cursor: isSubmitting ? "not-allowed" : "pointer",
+                                            padding: "6px 8px",
+                                            borderRadius: "6px",
+                                            transition: "background-color 0.2s",
+                                            border: form.organizations.includes(org.name)
+                                                ? `1px solid ${colors.primary}40`
+                                                : "1px solid transparent",
+                                            opacity: isSubmitting ? 0.6 : 1,
+                                        }}
+                                        onMouseOver={(e) =>
+                                            !isSubmitting && (e.currentTarget.style.backgroundColor = "#f8fafc")
+                                        }
+                                        onMouseOut={(e) =>
+                                            (e.currentTarget.style.backgroundColor = "transparent")
+                                        }
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={form.organizations.includes(org.name)}
+                                            onChange={(e) =>
+                                                handleOrganizationChange(org.name, e.target.checked)
+                                            }
+                                            disabled={isSubmitting}
+                                            style={{
+                                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                                accentColor: colors.primary,
+                                                width: "16px",
+                                                height: "16px",
+                                            }}
+                                        />
+                                        <span
+                                            style={{
+                                                fontSize: "14px",
+                                                color: "#374151",
+                                                fontWeight: form.organizations.includes(org.name) ? "500" : "400",
+                                            }}
+                                        >
+                                            {org.name}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    {!organizationsLoading && !organizationsError && (
+                        <div
+                            style={{
+                                fontSize: "12px",
+                                color: "#6b7280",
+                                marginTop: "8px",
+                                padding: "8px",
+                                backgroundColor: "#f8fafc",
+                                borderRadius: "6px",
+                                border: "1px solid #e5e7eb",
+                            }}
+                        >
+                            <strong>Geselecteerd ({form.organizations.length}):</strong>{" "}
+                            {form.organizations.length === 0 ? "geen" : form.organizations.join(", ")}
+                        </div>
+                    )}
+                </div>
+
+                {/* Additional Fields */}
+                <div>
+                    <label htmlFor="notities" style={styles.label}>
+                        Notities
+                    </label>
+                        <input
+                            id="notities"
+                            name="notities"
+                            type="text"
+                            value={form.notities || ""}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="Optionele notities"
+                            style={{
+                                ...styles.input,
+                                backgroundColor: isSubmitting ? colors.gray50 : colors.white,
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                            }}
+                            onFocus={(e) => !isSubmitting && hover.input(e.target)}
+                            onBlur={(e) => hover.resetInput(e.target)}
+                        />
+                    </div>
 
                 {/* Submit Buttons */}
                 <div style={styles.buttonGroup}>
@@ -1644,7 +2219,6 @@ export function UserPageOverride(): Override {
                         >
                             {[
                                 { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
-                                { key: "policies", label: "Polissen", icon: FaFileContract, href: "/policies" },
                                 { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending_overview" },
                                 { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
                                 { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
@@ -1813,7 +2387,6 @@ export function UserPageOverride(): Override {
                         <div
                             style={{
                                 overflowX: "auto",
-                                maxHeight: "70vh",
                                 position: "relative",
                             }}
                         >
@@ -1971,7 +2544,7 @@ export function UserPageOverride(): Override {
                                                 ) {
                                                     displayValue = new Date(
                                                         cellValue
-                                                    ).toLocaleDateString()
+                                                    ).toLocaleDateString("nl-NL")
                                                 } else {
                                                     displayValue =
                                                         String(cellValue)

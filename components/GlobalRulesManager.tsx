@@ -35,9 +35,14 @@ export interface GlobalRuleTemplate {
             conditions: Record<string, any>
             logic: "AND" | "OR"
             pricing: {
-                premium_promille: number
+                // Premium configuration
+                premium_method: "fixed" | "percentage"
+                premium_fixed_amount?: number
+                premium_percentage?: number
+                // Eigen risico configuration
                 eigen_risico_method: "fixed" | "percentage"
-                eigen_risico_value: number
+                eigen_risico?: number  // For fixed amount
+                eigen_risico_percentage?: number  // For percentage
             }
         }>
     }

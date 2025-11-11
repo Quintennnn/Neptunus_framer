@@ -285,18 +285,28 @@ function PolicyDropdownMenu({
     const handleToggle = React.useCallback((e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        
+
         if (!buttonRef.current) return
-        
+
         const rect = buttonRef.current.getBoundingClientRect()
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-        
+
+        // Check if dropdown would overflow viewport on the right
+        const dropdownWidth = 140 // minWidth from dropdown style
+        const viewportWidth = window.innerWidth
+        const spaceOnRight = viewportWidth - rect.right
+
+        // If not enough space on right, position to the left of the button
+        const left = spaceOnRight < dropdownWidth + 20
+            ? rect.left + scrollLeft - dropdownWidth - 5  // Position to the left
+            : rect.right + scrollLeft + 5                 // Position to the right
+
         setDropdownPosition({
             top: rect.bottom + scrollTop + 5,
-            left: rect.right + scrollLeft + 5
+            left: left
         })
-        
+
         setIsOpen(prev => !prev)
     }, [])
 
@@ -497,18 +507,28 @@ function ActionDropdownMenu({
     const handleToggle = React.useCallback((e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        
+
         if (!buttonRef.current) return
-        
+
         const rect = buttonRef.current.getBoundingClientRect()
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-        
+
+        // Check if dropdown would overflow viewport on the right
+        const dropdownWidth = 140 // minWidth from dropdown style
+        const viewportWidth = window.innerWidth
+        const spaceOnRight = viewportWidth - rect.right
+
+        // If not enough space on right, position to the left of the button
+        const left = spaceOnRight < dropdownWidth + 20
+            ? rect.left + scrollLeft - dropdownWidth - 5  // Position to the left
+            : rect.right + scrollLeft + 5                 // Position to the right
+
         setDropdownPosition({
             top: rect.bottom + scrollTop + 5,
-            left: rect.right + scrollLeft + 5
+            left: left
         })
-        
+
         setIsOpen(prev => !prev)
     }, [])
 
@@ -689,15 +709,15 @@ function ActionDropdownMenu({
 interface OrganizationActionButtonsProps {
     userInfo: UserInfo | null
     onEdit: () => void
-    onDelete: () => void
+    onDelete?: () => void  // Optional - kept for backwards compatibility but not used
     resourceOrganization?: string
 }
 
-export function OrganizationActionButtons({ 
-    userInfo, 
-    onEdit, 
-    onDelete,
-    resourceOrganization 
+export function OrganizationActionButtons({
+    userInfo,
+    onEdit,
+    onDelete,  // No longer passed to dropdown
+    resourceOrganization
 }: OrganizationActionButtonsProps) {
     // Hide entire action buttons group if user has no management permissions
     if (!canManageOrganizations(userInfo, resourceOrganization)) {
@@ -708,7 +728,6 @@ export function OrganizationActionButtons({
         <OrganizationDropdownMenu
             userInfo={userInfo}
             onEdit={onEdit}
-            onDelete={onDelete}
             resourceOrganization={resourceOrganization}
         />
     )
@@ -718,14 +737,12 @@ export function OrganizationActionButtons({
 interface OrganizationDropdownMenuProps {
     userInfo: UserInfo | null
     onEdit: () => void
-    onDelete: () => void
     resourceOrganization?: string
 }
 
 function OrganizationDropdownMenu({
     userInfo,
     onEdit,
-    onDelete,
     resourceOrganization
 }: OrganizationDropdownMenuProps) {
     const [isOpen, setIsOpen] = React.useState(false)
@@ -736,18 +753,28 @@ function OrganizationDropdownMenu({
     const handleToggle = React.useCallback((e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        
+
         if (!buttonRef.current) return
-        
+
         const rect = buttonRef.current.getBoundingClientRect()
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-        
+
+        // Check if dropdown would overflow viewport on the right
+        const dropdownWidth = 140 // minWidth from dropdown style
+        const viewportWidth = window.innerWidth
+        const spaceOnRight = viewportWidth - rect.right
+
+        // If not enough space on right, position to the left of the button
+        const left = spaceOnRight < dropdownWidth + 20
+            ? rect.left + scrollLeft - dropdownWidth - 5  // Position to the left
+            : rect.right + scrollLeft + 5                 // Position to the right
+
         setDropdownPosition({
             top: rect.bottom + scrollTop + 5,
-            left: rect.right + scrollLeft + 5
+            left: left
         })
-        
+
         setIsOpen(prev => !prev)
     }, [])
 
@@ -826,7 +853,7 @@ function OrganizationDropdownMenu({
                         <div>
                             {/* Edit option - only show if user has ORG_EDIT permission */}
                             {canPerformAction(userInfo, "ORG_EDIT", resourceOrganization) && (
-                                <div 
+                                <div
                                     onMouseDown={(e) => {
                                         e.preventDefault()
                                         e.stopPropagation()
@@ -843,7 +870,7 @@ function OrganizationDropdownMenu({
                                     }}
                                     style={{
                                         width: "100%",
-                                        padding: "12px 16px", 
+                                        padding: "12px 16px",
                                         cursor: "pointer",
                                         backgroundColor: "transparent",
                                         color: colors.actionEdit,
@@ -868,51 +895,8 @@ function OrganizationDropdownMenu({
                                     Bewerken
                                 </div>
                             )}
-                            
-                            {/* Delete option - only show if user has ORG_DELETE permission */}
-                            {canPerformAction(userInfo, "ORG_DELETE", resourceOrganization) && (
-                                <div 
-                                    onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                    }}
-                                    onMouseUp={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                    }}
-                                    onClick={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        onDelete()
-                                        setIsOpen(false)
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        padding: "12px 16px", 
-                                        cursor: "pointer",
-                                        backgroundColor: "transparent",
-                                        color: colors.actionDelete,
-                                        fontSize: "14px",
-                                        fontWeight: "600",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "8px",
-                                        borderRadius: "6px",
-                                        transition: "all 0.2s ease"
-                                    }}
-                                    onMouseOver={(e) => {
-                                        e.target.style.backgroundColor = "#fef2f2"
-                                        e.target.style.color = "#b91c1c"
-                                    }}
-                                    onMouseOut={(e) => {
-                                        e.target.style.backgroundColor = "transparent"
-                                        e.target.style.color = colors.actionDelete
-                                    }}
-                                >
-                                    <FaTrashAlt size={14} />
-                                    Verwijderen
-                                </div>
-                            )}
+
+                            {/* Delete option removed - organizations should not be deleted from frontend */}
                         </div>
                     </div>
                 </>,
@@ -967,18 +951,28 @@ function UserDropdownMenu({
     const handleToggle = React.useCallback((e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        
+
         if (!buttonRef.current) return
-        
+
         const rect = buttonRef.current.getBoundingClientRect()
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
-        
+
+        // Check if dropdown would overflow viewport on the right
+        const dropdownWidth = 140 // minWidth from dropdown style
+        const viewportWidth = window.innerWidth
+        const spaceOnRight = viewportWidth - rect.right
+
+        // If not enough space on right, position to the left of the button
+        const left = spaceOnRight < dropdownWidth + 20
+            ? rect.left + scrollLeft - dropdownWidth - 5  // Position to the left
+            : rect.right + scrollLeft + 5                 // Position to the right
+
         setDropdownPosition({
             top: rect.bottom + scrollTop + 5,
-            left: rect.right + scrollLeft + 5
+            left: left
         })
-        
+
         setIsOpen(prev => !prev)
     }, [])
 

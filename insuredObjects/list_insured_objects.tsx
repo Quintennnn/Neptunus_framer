@@ -10,6 +10,10 @@ import {
     isEditor,
     isAdmin,
     isUser,
+    canEditInsuredObject,
+    canEditInsuredObjectField,
+    getFieldDisabledTooltip,
+    type InsuredObjectStatus,
 } from "../Rbac.tsx"
 import {
     FaEdit,
@@ -31,7 +35,8 @@ import {
     FaPlus,
     FaEllipsisV,
     FaInfoCircle,
-    FaPrint,
+    FaFilePdf,
+    FaExclamationTriangle,
 } from "react-icons/fa"
 import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
 import {
@@ -76,6 +81,105 @@ import {
 
 // Note: Unified field system removed - using direct field names from registry
 
+// ——— XLSX CDN Hook ———
+// Custom hook to load XLSX library from CDN (Framer-compatible)
+const useXLSX = () => {
+    const [XLSX, setXLSX] = useState<any>(null)
+
+    useEffect(() => {
+        // Check if already loaded
+        if ((window as any).XLSX) {
+            setXLSX((window as any).XLSX)
+            return
+        }
+
+        const script = document.createElement("script")
+        script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"
+        script.onload = () => {
+            setXLSX((window as any).XLSX)
+        }
+        script.onerror = () => {
+            console.error("Failed to load XLSX library from CDN")
+        }
+        document.head.appendChild(script)
+
+        return () => {
+            // Cleanup: remove script if component unmounts
+            if (script.parentNode) {
+                script.parentNode.removeChild(script)
+            }
+        }
+    }, [])
+
+    return XLSX
+}
+
+// ——— html2canvas CDN Hook ———
+// Custom hook to load html2canvas library from CDN (Framer-compatible)
+const useHtml2Canvas = () => {
+    const [html2canvas, setHtml2canvas] = useState<any>(null)
+
+    useEffect(() => {
+        // Check if already loaded
+        if ((window as any).html2canvas) {
+            setHtml2canvas(() => (window as any).html2canvas)
+            return
+        }
+
+        const script = document.createElement("script")
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+        script.onload = () => {
+            setHtml2canvas(() => (window as any).html2canvas)
+        }
+        script.onerror = () => {
+            console.error("Failed to load html2canvas library from CDN")
+        }
+        document.head.appendChild(script)
+
+        return () => {
+            // Cleanup: remove script if component unmounts
+            if (script.parentNode) {
+                script.parentNode.removeChild(script)
+            }
+        }
+    }, [])
+
+    return html2canvas
+}
+
+// ——— jsPDF CDN Hook ———
+// Custom hook to load jsPDF library from CDN (Framer-compatible)
+const useJsPDF = () => {
+    const [jsPDF, setJsPDF] = useState<any>(null)
+
+    useEffect(() => {
+        // Check if already loaded
+        if ((window as any).jspdf?.jsPDF) {
+            setJsPDF(() => (window as any).jspdf.jsPDF)
+            return
+        }
+
+        const script = document.createElement("script")
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        script.onload = () => {
+            setJsPDF(() => (window as any).jspdf.jsPDF)
+        }
+        script.onerror = () => {
+            console.error("Failed to load jsPDF library from CDN")
+        }
+        document.head.appendChild(script)
+
+        return () => {
+            // Cleanup: remove script if component unmounts
+            if (script.parentNode) {
+                script.parentNode.removeChild(script)
+            }
+        }
+    }, [])
+
+    return jsPDF
+}
+
 // ——— Simple Create Button Component ———
 function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
     return (
@@ -116,11 +220,11 @@ function CreateObjectButton({ onCreateClick }: { onCreateClick: () => void }) {
     )
 }
 
-// ——— Print Overview Button Component ———
-function PrintOverviewButton({ onPrintClick }: { onPrintClick: () => void }) {
+// ——— Export to PDF Button Component ———
+function ExportPdfButton({ onExportClick }: { onExportClick: () => void }) {
     return (
         <button
-            onClick={onPrintClick}
+            onClick={onExportClick}
             style={{
                 ...styles.secondaryButton,
                 padding: "8px 16px",
@@ -150,8 +254,48 @@ function PrintOverviewButton({ onPrintClick }: { onPrintClick: () => void }) {
                 target.style.boxShadow = `0 1px 2px ${colors.gray400}20`
             }}
         >
-            <FaPrint size={12} />
-            Print overzicht
+            <FaFilePdf size={12} />
+            Exporteer als PDF
+        </button>
+    )
+}
+
+// ——— Export to Excel Button Component ———
+function ExportExcelButton({ onExportClick }: { onExportClick: () => void }) {
+    return (
+        <button
+            onClick={onExportClick}
+            style={{
+                ...styles.secondaryButton,
+                padding: "8px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "14px",
+                fontWeight: "500",
+                backgroundColor: "#10b981",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                boxShadow: "0 1px 2px rgba(16, 185, 129, 0.2)",
+                transition: "all 0.2s ease",
+            }}
+            onMouseOver={(e) => {
+                const target = e.target as HTMLElement
+                target.style.backgroundColor = "#059669"
+                target.style.transform = "translateY(-1px)"
+                target.style.boxShadow = "0 2px 4px rgba(16, 185, 129, 0.3)"
+            }}
+            onMouseOut={(e) => {
+                const target = e.target as HTMLElement
+                target.style.backgroundColor = "#10b981"
+                target.style.transform = "translateY(0)"
+                target.style.boxShadow = "0 1px 2px rgba(16, 185, 129, 0.2)"
+            }}
+        >
+            <FaFileContract size={12} />
+            Export naar Excel
         </button>
     )
 }
@@ -161,7 +305,7 @@ const STATUS_COLORS = {
     Insured: { bg: "#dcfce7", text: "#166534" },
     Pending: { bg: "#fef3c7", text: "#92400e" },
     Rejected: { bg: "#fee2e2", text: "#991b1b" },
-    OutOfPolicy: { bg: "#f3f4f6", text: "#6b7280" }, // Grey/faded for sold boats
+    Removed: { bg: "#f3f4f6", text: "#6b7280" }, // Grey/faded for sold boats
     "Not Insured": { bg: "#f3f4f6", text: "#374151" },
 }
 
@@ -170,8 +314,14 @@ const STATUS_TRANSLATIONS = {
     Insured: "Verzekerd",
     Pending: "In behandeling",
     Rejected: "Afgewezen",
-    OutOfPolicy: "Buiten polis",
+    Removed: "Afgevoerd",
     "Not Insured": "Niet verzekerd",
+}
+
+// ——— Premium Method translation mapping ———
+const PREMIUM_METHOD_TRANSLATIONS = {
+    fixed: "vast",
+    percentage: "percentage",
 }
 
 // ——— Simple Tooltip Component ———
@@ -258,11 +408,38 @@ function UnifiedStatusCell({
                 minWidth: "80px",
             }}
         >
-            {/* Status Badge with Decline Reason */}
-            <StatusTooltip
-                show={object.status === "Rejected" && !!object.declineReason}
-                tooltip={object.declineReason || ""}
-            >
+            {/* Combined Status Badge - with decline reason for rejected objects */}
+            {object.status === "Rejected" && object.declineReason ? (
+                <div
+                    style={{
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        backgroundColor: "#fee2e2",
+                        border: "1px solid #fca5a5",
+                        fontSize: "12px",
+                        lineHeight: "1.5",
+                        color: "#7f1d1d",
+                        maxWidth: "280px",
+                        wordBreak: "break-word",
+                        whiteSpace: "normal",
+                    }}
+                >
+                    <div style={{ 
+                        fontWeight: "600", 
+                        marginBottom: "6px", 
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        whiteSpace: "nowrap"
+                    }}>
+                        {STATUS_TRANSLATIONS[object.status] || object.status}
+                    </div>
+                    <div style={{ fontSize: "11px", lineHeight: "1.4", wordBreak: "break-word" }}>
+                        {object.declineReason}
+                    </div>
+                </div>
+            ) : (
                 <div
                     style={{
                         padding: "4px 8px",
@@ -276,23 +453,14 @@ function UnifiedStatusCell({
                         alignItems: "center",
                         gap: "4px",
                         border:
-                            object.status === "OutOfPolicy"
+                            object.status === "Removed"
                                 ? "1px solid #9ca3af"
                                 : "none",
                     }}
                 >
                     {STATUS_TRANSLATIONS[object.status] || object.status}
-                    {object.status === "Rejected" && object.declineReason && (
-                        <FaInfoCircle
-                            size={10}
-                            style={{
-                                opacity: 0.8,
-                                cursor: "help",
-                            }}
-                        />
-                    )}
                 </div>
-            </StatusTooltip>
+            )}
         </div>
     )
 }
@@ -348,6 +516,57 @@ interface BrokerInfo {
     email: string
     phone: string
     company?: string
+}
+
+// Organization info interface
+interface OrganizationInfo {
+    id: string
+    name: string
+    polisnummer?: string
+    street?: string
+    postal_code?: string
+    city?: string
+    country?: string
+    type_organisatie?: string
+}
+
+// Fetch organization details
+async function fetchOrganizationInfo(
+    organizationName: string
+): Promise<OrganizationInfo | null> {
+    try {
+        const token = getIdToken()
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        }
+
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`
+        }
+
+        const url = `${API_BASE_URL}/neptunus/organization/by-name/${encodeURIComponent(organizationName)}`
+        console.log("Fetching organization from URL:", url)
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers,
+        })
+
+        console.log("Organization fetch response status:", response.status)
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            console.warn(`Failed to fetch organization info: ${response.status} - ${errorText}`)
+            return null
+        }
+
+        const data = await response.json()
+        console.log("Organization API response:", data)
+        return data.organization || null
+    } catch (error) {
+        console.error("Error fetching organization info:", error)
+        return null
+    }
 }
 
 // Fetch broker info from policies for the organization
@@ -462,7 +681,7 @@ function getFieldsFromSchema(
 
         let typeSpecificFields: FieldSchema[] = []
         switch (objectType) {
-            case "boat":
+            case "boot":
                 typeSpecificFields = [
                     {
                         key: "merkBoot",
@@ -611,13 +830,17 @@ function getUserInfo(): UserInfo | null {
 interface BaseInsuredObject {
     id: string
     objectType: ObjectType
-    status: "Insured" | "Pending" | "Rejected" | "OutOfPolicy"
+    status: InsuredObjectStatus
     waarde: number // value
     organization: string
     ingangsdatum: string // insuranceStartDate
     uitgangsdatum?: string // insuranceEndDate
-    premiepromillage: number // premiumPerMille
-    eigenRisico: number // deductible
+    premiepercentage: number // premiumPerMille (for percentage method: stores the %, for fixed: not used)
+    premiepromillage?: number // Old legacy field (per mille - backward compatibility)
+    premiumMethod?: "percentage" | "fixed" // Premium calculation method
+    premiumPercentage?: number // Premium percentage value (when method is percentage)
+    premiumFixedAmount?: number // Premium fixed amount (when method is fixed)
+    eigenRisico: number // deductible (calculated amount)
     naam?: string // name/title
     notitie?: string // notes
     declineReason?: string // reason for rejection
@@ -640,7 +863,7 @@ interface InsuredObject extends BaseInsuredObject {
     typeMotor?: string // Updated from typeMerkMotor
     merkMotor?: string // New field from registry
     bouwjaar?: number
-    bootnummer?: string
+    rompnummer?: string // Updated from bootnummer
     motornummer?: string
     cinNummer?: string
 
@@ -668,7 +891,8 @@ interface InsuredObject extends BaseInsuredObject {
 // Helper function to render cell values using dynamic schema
 function renderObjectCellValue(
     column: FieldSchema | { key: string; label: string },
-    value: any
+    value: any,
+    obj?: any
 ): string {
     if (value === null || value === undefined) return "-"
 
@@ -678,12 +902,24 @@ function renderObjectCellValue(
 
         switch (fieldSchema.type) {
             case "currency":
-                return `€${Number(value).toLocaleString()}`
+                return `€${Number(value).toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })}`
             case "number":
+                // Handle backward compatibility for premiepercentage/premiepromillage
+                if (column.key === "premiepercentage" && obj) {
+                    let percentageValue = Number(value)
+                    if ((percentageValue === 0 || !percentageValue) && obj.premiepromillage) {
+                        // Convert promillage to percentage (divide by 10)
+                        percentageValue = Number(obj.premiepromillage) / 10
+                    }
+                    return `${percentageValue.toFixed(2)}%`
+                }
                 return value ? String(value) : "-"
             case "date":
                 if (!value) return "-"
-                return new Date(value).toLocaleDateString()
+                return new Date(value).toLocaleDateString("nl-NL")
             case "status":
                 return String(value)
             case "textarea":
@@ -696,14 +932,23 @@ function renderObjectCellValue(
         switch (column.key) {
             case "waarde": // value
             case "eigenRisico": // deductible
-                return `€${Number(value).toLocaleString()}`
-            case "premiepromillage": // premiumPerMille
-                return `${Number(value).toFixed(1)}‰`
+                return `€${Math.round(Number(value)).toLocaleString("nl-NL")}`
+            case "totalePremieOverDeVerzekerdePeriode": // period premium
+            case "totalePremieOverHetJaar": // yearly premium
+                return formatCurrency(Number(value), "EUR", 2)
+            case "premiepercentage": // premium percentage
+                // Handle backward compatibility with premiepromillage
+                let percentageValue = Number(value)
+                if ((percentageValue === 0 || !percentageValue) && obj.premiepromillage) {
+                    // Convert promillage to percentage (divide by 10)
+                    percentageValue = Number(obj.premiepromillage) / 10
+                }
+                return `${percentageValue.toFixed(2)}%`
             case "ingangsdatum": // insuranceStartDate
             case "uitgangsdatum": // insuranceEndDate
             case "createdAt":
                 if (!value) return "-"
-                return new Date(value).toLocaleDateString()
+                return new Date(value).toLocaleDateString("nl-NL")
             case "aantalMotoren": // numberOfEngines
             case "trailerAxles":
                 return value ? String(value) : "-"
@@ -721,6 +966,54 @@ function renderObjectCellValue(
     }
 }
 
+// Sort function for objects
+function sortObjects(
+    objects: InsuredObject[],
+    sortColumn: string | null,
+    sortDirection: 'asc' | 'desc' | null
+): InsuredObject[] {
+    if (!sortColumn || !sortDirection) {
+        return objects
+    }
+
+    return [...objects].sort((a, b) => {
+        const aValue = a[sortColumn as keyof InsuredObject]
+        const bValue = b[sortColumn as keyof InsuredObject]
+
+        // Handle null/undefined values - put them at the end
+        if (aValue == null && bValue == null) return 0
+        if (aValue == null) return 1
+        if (bValue == null) return -1
+
+        // Convert to comparable values
+        let aComp: string | number = aValue
+        let bComp: string | number = bValue
+
+        // Handle different data types
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+            aComp = aValue
+            bComp = bValue
+        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+            // Case-insensitive string comparison
+            aComp = aValue.toLowerCase()
+            bComp = bValue.toLowerCase()
+        } else {
+            // Convert to string for comparison
+            aComp = String(aValue).toLowerCase()
+            bComp = String(bValue).toLowerCase()
+        }
+
+        // Compare
+        if (aComp < bComp) {
+            return sortDirection === 'asc' ? -1 : 1
+        }
+        if (aComp > bComp) {
+            return sortDirection === 'asc' ? 1 : -1
+        }
+        return 0
+    })
+}
+
 // Filter function for objects
 function filterObjects(
     objects: InsuredObject[] | null,
@@ -728,7 +1021,8 @@ function filterObjects(
     selectedOrganizations: Set<string>,
     organizations: string[],
     isAdminUser: boolean = false,
-    currentOrganization?: string | null
+    currentOrganization?: string | null,
+    columnFilters?: Record<string, string>
 ): InsuredObject[] {
     // Add null safety check
     if (!objects || !Array.isArray(objects)) {
@@ -749,6 +1043,22 @@ function filterObjects(
                 String(value).toLowerCase().includes(searchTerm.toLowerCase())
             )
             if (!matchesSearch) return false
+        }
+
+        // Column-specific filters
+        if (columnFilters && Object.keys(columnFilters).length > 0) {
+            for (const [columnKey, filterValue] of Object.entries(columnFilters)) {
+                if (filterValue && filterValue.trim() !== "") {
+                    const objectValue = object[columnKey as keyof InsuredObject]
+                    const objectValueStr = String(objectValue || "").toLowerCase()
+                    const filterValueStr = filterValue.toLowerCase().trim()
+
+                    // Case-insensitive partial match
+                    if (!objectValueStr.includes(filterValueStr)) {
+                        return false
+                    }
+                }
+            }
         }
 
         // Object type filter removed - show all object types
@@ -784,6 +1094,7 @@ function SearchAndFilterBar({
     showOrgFilter = true,
     userInfo,
     columns,
+    onResetColumnOrder,
 }: {
     searchTerm: string
     onSearchChange: (term: string) => void
@@ -795,6 +1106,7 @@ function SearchAndFilterBar({
     showOrgFilter?: boolean
     userInfo: UserInfo | null
     columns: FieldSchema[]
+    onResetColumnOrder: () => void
 }) {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [showOrgFilterDropdown, setShowOrgFilterDropdown] = useState(false)
@@ -1116,7 +1428,7 @@ function SearchAndFilterBar({
                                 fontFamily: FONT_STACK,
                             }}
                         >
-                            <div style={{ marginBottom: "12px" }}>
+                            <div style={{ marginBottom: "12px", display: "flex", gap: "8px", flexDirection: "column" }}>
                                 <button
                                     onClick={() => {
                                         // Reset to organization's default visible columns
@@ -1182,8 +1494,35 @@ function SearchAndFilterBar({
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    Reset naar Standaard
+                                    Reset Kolommen naar Standaard
                                 </button>
+                                <button
+                                    onClick={onResetColumnOrder}
+                                    style={{
+                                        padding: "6px 12px",
+                                        backgroundColor: "#6b7280",
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        fontSize: "12px",
+                                        cursor: "pointer",
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                >
+                                    Reset Kolom Volgorde
+                                </button>
+                            </div>
+
+                            <div style={{
+                                fontSize: "11px",
+                                color: "#6b7280",
+                                padding: "8px 12px",
+                                backgroundColor: "#f9fafb",
+                                borderRadius: "4px",
+                                marginBottom: "12px",
+                                fontStyle: "italic"
+                            }}>
+                                💡 Tip: Sleep kolom headers om de volgorde te wijzigen
                             </div>
 
                             {/* List of filterable columns using Field Registry - admins see all, users respect visible:false */}
@@ -1260,9 +1599,20 @@ function ActionDropdownMenu({
     const menuRef = React.useRef<HTMLDivElement>(null)
 
     // Check permissions
-    const canEdit = userInfo
+    const hasEditPermission = userInfo
         ? hasPermission(userInfo, "INSURED_OBJECT_UPDATE")
         : false
+
+    // New RBAC rules for edit button visibility:
+    // - Users: NO edit button at all (removed completely)
+    // - Editors: ONLY show edit button when status = "Insured" or "Pending" (with field restrictions)
+    // - Admins: Always show edit button (all statuses)
+    const canEdit = hasEditPermission && (
+        isAdmin(userInfo) || // Admins can edit all statuses
+        (isEditor(userInfo) && (object.status === "Insured" || object.status === "Pending")) // Editors for Insured and Pending status
+        // Users: no edit button (isUser check removed)
+    )
+
     const canDelete = userInfo
         ? hasPermission(userInfo, "INSURED_OBJECT_DELETE")
         : false
@@ -1533,8 +1883,9 @@ function ConfirmDeleteDialog({
     onConfirm: () => void
     onCancel: () => void
 }) {
-    const objectTypeName =
-        OBJECT_TYPE_CONFIG[object.objectType].label.toLowerCase()
+    // Case-insensitive lookup to handle both "Boot" and "boot"
+    const config = OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
+    const objectTypeName = config?.label?.toLowerCase() || "object"
 
     return (
         <div
@@ -1560,7 +1911,7 @@ function ConfirmDeleteDialog({
                     color: colors.gray800,
                 }}
             >
-                {OBJECT_TYPE_CONFIG[object.objectType].label} Verwijderen
+                {config?.label || "Object"} Verwijderen
             </div>
             <div
                 style={{
@@ -1644,15 +1995,142 @@ function EditInsuredObjectDialog({
     schema: FieldSchema[]
     userInfo: UserInfo | null
 }) {
-    const config = OBJECT_TYPE_CONFIG[object.objectType]
+    // Case-insensitive lookup to handle both "Boot" and "boot"
+    const config = OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
+
+    // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [form, setForm] = useState<InsuredObject>(object)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [ingangsdatumWarning, setIngangsdatumWarning] = useState<string | null>(null)
     const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(
-        config.useOrgConfig
+        config?.useOrgConfig || false
     )
     const [orgConfig, setOrgConfig] = useState<Record<string, any> | null>(null)
+
+    // Track custom values when "Anders" is selected
+    const [customValues, setCustomValues] = useState<Record<string, string>>({
+        merkMotor: "",
+        ligplaats: "",
+    })
+
+    // Check if config exists for this object type
+    if (!config) {
+        return ReactDOM.createPortal(
+            <div
+                style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 1001,
+                }}
+                onClick={onClose}
+            >
+                <div
+                    style={{
+                        backgroundColor: "white",
+                        padding: "32px",
+                        borderRadius: "8px",
+                        maxWidth: "500px",
+                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                        textAlign: "center",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <FaExclamationTriangle size={48} color={colors.error} style={{ marginBottom: "16px" }} />
+                    <h3 style={{ margin: "0 0 16px", fontFamily: FONT_STACK, fontSize: "20px", color: colors.gray900 }}>
+                        Ongeldig objecttype
+                    </h3>
+                    <p style={{ margin: "0 0 24px", fontFamily: FONT_STACK, fontSize: "14px", color: colors.gray700, lineHeight: "1.5" }}>
+                        Het objecttype "{object.objectType}" is niet geldig. Neem contact op met de beheerder.
+                    </p>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            ...styles.button,
+                            backgroundColor: colors.primary,
+                            color: "white",
+                            border: "none",
+                        }}
+                        onMouseOver={(e) => hover.button(e.target as HTMLElement)}
+                        onMouseOut={(e) => {
+                            const target = e.target as HTMLElement
+                            target.style.backgroundColor = colors.primary
+                        }}
+                    >
+                        Sluiten
+                    </button>
+                </div>
+            </div>,
+            document.body
+        )
+    }
+
+    // Check if user can edit this object based on status
+    const objectStatus = object.status as InsuredObjectStatus
+    const canEdit = canEditInsuredObject(userInfo, objectStatus)
+
+    // If user cannot edit, show message and return early
+    if (!canEdit) {
+        const statusMessages: Record<string, string> = {
+            Pending: "Dit vaartuig is in behandeling door de beheerder en kan niet worden gewijzigd.",
+            Rejected: "Dit vaartuig is afgewezen. Dien een nieuwe aanvraag in als u dit vaartuig alsnog wilt verzekeren.",
+            Removed: "Dit vaartuig is afgevoerd en kan niet meer worden gewijzigd."
+        }
+
+        return ReactDOM.createPortal(
+            <div
+                style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 1001,
+                }}
+                onClick={onClose}
+            >
+                <div
+                    style={{
+                        backgroundColor: "white",
+                        padding: "32px",
+                        borderRadius: "8px",
+                        maxWidth: "500px",
+                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                        textAlign: "center",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <FaInfoCircle size={48} color={colors.error} style={{ marginBottom: "16px" }} />
+                    <h3 style={{ margin: "0 0 16px", fontFamily: FONT_STACK, fontSize: "20px", color: colors.gray900 }}>
+                        Bewerken niet toegestaan
+                    </h3>
+                    <p style={{ margin: "0 0 24px", fontFamily: FONT_STACK, fontSize: "14px", color: colors.gray700, lineHeight: "1.5" }}>
+                        {statusMessages[objectStatus] || "Dit vaartuig kan niet worden gewijzigd."}
+                    </p>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            ...styles.primaryButton,
+                            padding: "10px 24px",
+                        }}
+                    >
+                        Sluiten
+                    </button>
+                </div>
+            </div>,
+            document.body
+        )
+    }
 
     // Function to fetch organization configuration (only for boats)
     async function fetchOrganizationConfig(organizationName: string) {
@@ -1689,7 +2167,7 @@ function EditInsuredObjectDialog({
     // Load organization configuration on component mount (only for boats)
     useEffect(() => {
         async function loadConfig() {
-            if (!config.useOrgConfig) {
+            if (!config?.useOrgConfig) {
                 setIsLoadingConfig(false)
                 return
             }
@@ -1713,7 +2191,7 @@ function EditInsuredObjectDialog({
         }
 
         loadConfig()
-    }, [config.useOrgConfig, object.organization])
+    }, [config?.useOrgConfig, object.organization])
 
     function handleChange(
         e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -1721,6 +2199,31 @@ function EditInsuredObjectDialog({
         const { name, value, type } = e.target
         setError(null)
         setSuccess(null)
+
+        // Check if ingangsdatum is more than one week in the past (skip warning for admins)
+        if (name === 'ingangsdatum' && value && userInfo?.role !== 'admin') {
+            try {
+                const selectedDate = new Date(value)
+                const today = new Date()
+                const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+                if (selectedDate < oneWeekAgo) {
+                    setIngangsdatumWarning(
+                        "Let op: De ingangsdatum ligt meer dan een week in het verleden. " +
+                        "Dit vaartuig zal handmatige goedkeuring vereisen en kan niet automatisch worden goedgekeurd."
+                    )
+                } else {
+                    setIngangsdatumWarning(null)
+                }
+            } catch (err) {
+                // Invalid date format, ignore
+                setIngangsdatumWarning(null)
+            }
+        } else if (name === 'ingangsdatum' && userInfo?.role === 'admin') {
+            // Clear warning for admins
+            setIngangsdatumWarning(null)
+        }
+
         setForm((prev) => ({
             ...prev,
             [name]:
@@ -1761,6 +2264,26 @@ function EditInsuredObjectDialog({
         setIsSubmitting(true)
 
         try {
+            // Prepare the update data
+            let updateData = { ...form }
+
+            // Replace "Anders" with custom values if provided
+            if (updateData.merkMotor === "Anders" && customValues.merkMotor) {
+                updateData.merkMotor = customValues.merkMotor
+            }
+            if (updateData.ligplaats === "Anders" && customValues.ligplaats) {
+                updateData.ligplaats = customValues.ligplaats
+            }
+
+            // CRITICAL: If editor is editing an Insured or Rejected object, change status to Pending for re-approval
+            if (isEditor(userInfo) && (object.status === "Insured" || object.status === "Rejected")) {
+                updateData = {
+                    ...updateData,
+                    status: "Pending"
+                }
+                console.log(`Editor editing ${object.status} object - status changed to Pending for re-approval`)
+            }
+
             const res = await fetch(
                 `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${object.id}`,
                 {
@@ -1769,25 +2292,49 @@ function EditInsuredObjectDialog({
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${getIdToken()}`,
                     },
-                    body: JSON.stringify(form),
+                    body: JSON.stringify(updateData),
                 }
             )
 
+            const data = await res.json()
+
             if (!res.ok) {
-                const data = await res.json()
                 throw new Error(
                     data.message ||
                         `Failed to update: ${res.status} ${res.statusText}`
                 )
             }
 
-            setSuccess(`${config.label} succesvol bijgewerkt!`)
+            // Show appropriate success message based on actual final status
+            if (isEditor(userInfo) && (object.status === "Insured" || object.status === "Rejected")) {
+                // Editor edited an Insured/Rejected object
+                if (data.status === "Insured") {
+                    // Auto-approved!
+                    setSuccess(`${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`)
+                } else if (data.status === "Pending") {
+                    // Needs manual review
+                    setSuccess(`${config.label} succesvol bijgewerkt! Status is gewijzigd naar "In behandeling" voor hergoedkeuring.`)
+                } else {
+                    setSuccess(`${config.label} succesvol bijgewerkt!`)
+                }
+            } else if (object.status === "Pending") {
+                // Anyone editing a Pending object
+                if (data.status === "Insured") {
+                    // Auto-approved!
+                    setSuccess(`${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`)
+                } else if (data.status === "Pending") {
+                    // Stayed Pending
+                    setSuccess(`${config.label} succesvol bijgewerkt! Blijft in behandeling voor beoordeling.`)
+                } else {
+                    setSuccess(`${config.label} succesvol bijgewerkt!`)
+                }
+            } else {
+                setSuccess(`${config.label} succesvol bijgewerkt!`)
+            }
 
-            // Auto-close after success
-            setTimeout(() => {
-                onSuccess()
-                onClose()
-            }, 1500)
+            // Call onSuccess to refresh the list, but don't auto-close
+            // User will manually close by clicking the Cancel/Close button
+            onSuccess()
         } catch (err: any) {
             setError(err.message || "Kon object niet bijwerken")
         } finally {
@@ -1807,6 +2354,7 @@ function EditInsuredObjectDialog({
         // Use schema type information if available, otherwise fall back to legacy logic
         let inputType = "text"
         let isTextArea = false
+        let isDropdown = false
         let isRequired = false
         let label = key
 
@@ -1815,6 +2363,7 @@ function EditInsuredObjectDialog({
             label = fieldSchema.label
             isRequired = fieldSchema.required
             isTextArea = fieldSchema.type === "textarea"
+            isDropdown = fieldSchema.type === "dropdown"
 
             switch (fieldSchema.type) {
                 case "number":
@@ -1827,6 +2376,9 @@ function EditInsuredObjectDialog({
                 case "textarea":
                     inputType = "text"
                     isTextArea = true
+                    break
+                case "dropdown":
+                    // dropdown is handled separately
                     break
                 default:
                     inputType = "text"
@@ -1845,7 +2397,7 @@ function EditInsuredObjectDialog({
             const commonRequired = [
                 "waarde",
                 "ingangsdatum",
-                "premiepromillage",
+                "premiepercentage",
                 "eigenRisico",
             ]
             const typeSpecificRequired = {
@@ -1859,7 +2411,7 @@ function EditInsuredObjectDialog({
 
             label = formatLabel(key)
         }
-        const Component = isTextArea ? "textarea" : "input"
+        const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
 
         return (
             <div key={key} style={{ marginBottom: "16px", width: "100%" }}>
@@ -1869,33 +2421,136 @@ function EditInsuredObjectDialog({
                         <span style={{ color: colors.error }}> *</span>
                     )}
                 </label>
-                <Component
-                    id={key}
-                    name={key}
-                    value={val === null || val === undefined ? "" : val}
-                    onChange={handleChange}
-                    disabled={isSubmitting}
-                    required={isRequired}
-                    {...(Component === "input"
-                        ? { type: inputType }
-                        : { rows: 3 })}
-                    placeholder={`Enter ${label.toLowerCase()}`}
-                    style={{
-                        ...styles.input,
-                        backgroundColor: isSubmitting
-                            ? colors.gray50
-                            : colors.white,
-                        cursor: isSubmitting ? "not-allowed" : "text",
-                    }}
-                    onFocus={(e) => {
-                        if (!isSubmitting) {
-                            hover.input(e.target as HTMLElement)
-                        }
-                    }}
-                    onBlur={(e) => {
-                        hover.resetInput(e.target as HTMLElement)
-                    }}
-                />
+                {isDropdown && fieldSchema?.options ? (
+                    <>
+                        <select
+                            id={key}
+                            name={key}
+                            value={val === null || val === undefined ? "" : val}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            required={isRequired}
+                            style={{
+                                ...styles.input,
+                                backgroundColor: isSubmitting
+                                    ? colors.gray50
+                                    : colors.white,
+                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                            }}
+                            onFocus={(e) => {
+                                if (!isSubmitting) {
+                                    hover.input(e.target as HTMLElement)
+                                }
+                            }}
+                            onBlur={(e) => {
+                                hover.resetInput(e.target as HTMLElement)
+                            }}
+                        >
+                            <option value="">Selecteer {label.toLowerCase()}</option>
+                            {fieldSchema.options.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                        {/* Show custom input when "Anders" is selected */}
+                        {(key === "merkMotor" || key === "ligplaats") &&
+                            val === "Anders" && (
+                                <input
+                                    type="text"
+                                    placeholder={`Voer ${label.toLowerCase()} in`}
+                                    value={customValues[key] || ""}
+                                    onChange={(e) => {
+                                        setCustomValues((prev) => ({
+                                            ...prev,
+                                            [key]: e.target.value,
+                                        }))
+                                    }}
+                                    disabled={isSubmitting}
+                                    style={{
+                                        ...styles.input,
+                                        marginTop: "8px",
+                                        backgroundColor: isSubmitting
+                                            ? colors.gray50
+                                            : colors.white,
+                                        cursor: isSubmitting
+                                            ? "not-allowed"
+                                            : "text",
+                                    }}
+                                    onFocus={(e) => {
+                                        if (!isSubmitting) {
+                                            hover.input(e.target as HTMLElement)
+                                        }
+                                    }}
+                                    onBlur={(e) => {
+                                        hover.resetInput(e.target as HTMLElement)
+                                    }}
+                                />
+                            )}
+                    </>
+                ) : (
+                    <Component
+                        id={key}
+                        name={key}
+                        value={val === null || val === undefined ? "" : val}
+                        onChange={handleChange}
+                        disabled={isSubmitting}
+                        required={isRequired}
+                        {...(Component === "input"
+                            ? { type: inputType }
+                            : { rows: 3 })}
+                        placeholder={`Enter ${label.toLowerCase()}`}
+                        style={{
+                            ...styles.input,
+                            backgroundColor: isSubmitting
+                                ? colors.gray50
+                                : colors.white,
+                            cursor: isSubmitting ? "not-allowed" : "text",
+                        }}
+                        onFocus={(e) => {
+                            if (!isSubmitting) {
+                                hover.input(e.target as HTMLElement)
+                            }
+                        }}
+                        onBlur={(e) => {
+                            hover.resetInput(e.target as HTMLElement)
+                        }}
+                    />
+                )}
+                {/* Show warning for ingangsdatum if more than one week in the past */}
+                {key === 'ingangsdatum' && ingangsdatumWarning && (
+                    <div
+                        style={{
+                            marginTop: "8px",
+                            padding: "12px",
+                            backgroundColor: "#fef3c7",
+                            border: "1px solid #f59e0b",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "start",
+                            gap: "8px",
+                        }}
+                    >
+                        <FaExclamationTriangle
+                            size={16}
+                            style={{
+                                color: "#f59e0b",
+                                flexShrink: 0,
+                                marginTop: "2px",
+                            }}
+                        />
+                        <span
+                            style={{
+                                fontSize: "13px",
+                                color: "#92400e",
+                                lineHeight: "1.5",
+                                fontFamily: FONT_STACK,
+                            }}
+                        >
+                            {ingangsdatumWarning}
+                        </span>
+                    </div>
+                )}
             </div>
         )
     }
@@ -1934,11 +2589,16 @@ function EditInsuredObjectDialog({
     }
 
     const IconComponent = config.icon
-    // ADMIN BYPASS: Admin users can edit all user input fields, regular users only editable fields
+    // ADMIN BYPASS: Admin users can edit ALL fields (user, edit_only, AND system fields)
     // This allows admins to modify fields that are normally read-only for regular users
+    // including premium tariff (premiepercentage) and deductible (eigenRisico)
     const fieldsToRender = isAdmin(userInfo)
         ? getSchemaFieldsForObjectType(schema, object.objectType)
-              .filter((field) => field.inputType === "user") // Admins can edit all user input fields
+              .filter((field) =>
+                  field.inputType === "user" ||
+                  field.inputType === "edit_only" ||
+                  field.inputType === "system"
+              ) // Admins can edit user, edit_only, AND system fields
               .map((field) => field.key)
         : getEditableFieldsForObjectType(schema, object.objectType).map(
               (field) => field.key
@@ -2522,10 +3182,7 @@ function AutoAcceptRulesDisplay({
     const [isExpanded, setIsExpanded] = useState(false)
     const [config, setConfig] = useState<AutoApprovalConfig | null>(null)
     const [isLoading, setIsLoading] = useState(true)
-    const [isEditing, setIsEditing] = useState(false)
-    const [editingConfig, setEditingConfig] =
-        useState<AutoApprovalConfig | null>(null)
-    const [isSaving, setIsSaving] = useState(false)
+    // Editing state removed - dropdown is now read-only
 
     useEffect(() => {
         async function loadConfig() {
@@ -2651,42 +3308,7 @@ function AutoAcceptRulesDisplay({
         return "<geen waarde>"
     }
 
-    const duplicateRule = (rule: AutoApprovalRule) => {
-        if (!editingConfig) return
-
-        const duplicatedRule: AutoApprovalRule = {
-            ...rule,
-            name: `${rule.name} (Kopie)`,
-        }
-
-        setEditingConfig({
-            ...editingConfig,
-            rules: [...editingConfig.rules, duplicatedRule],
-        })
-    }
-
-    const deleteRule = (indexToDelete: number) => {
-        if (!editingConfig) return
-
-        setEditingConfig({
-            ...editingConfig,
-            rules: editingConfig.rules.filter(
-                (_, index) => index !== indexToDelete
-            ),
-        })
-    }
-
-    const updateRule = (ruleIndex: number, updatedRule: AutoApprovalRule) => {
-        if (!editingConfig) return
-
-        const updatedRules = [...editingConfig.rules]
-        updatedRules[ruleIndex] = updatedRule
-
-        setEditingConfig({
-            ...editingConfig,
-            rules: updatedRules,
-        })
-    }
+    // Editing helper functions removed - dropdown is now read-only
 
     const renderRule = (
         rule: AutoApprovalRule,
@@ -2750,72 +3372,7 @@ function AutoAcceptRulesDisplay({
                         </div>
                     )
                 )}
-
-                {/* Action buttons - only show in editing mode */}
-                {isEditing && (
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: "8px",
-                            marginTop: "12px",
-                            paddingTop: "12px",
-                            borderTop: "1px solid #e5e7eb",
-                        }}
-                    >
-                        <button
-                            onClick={() => duplicateRule(rule)}
-                            style={{
-                                padding: "4px 8px",
-                                fontSize: "11px",
-                                backgroundColor: colors.primary,
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                transition: "all 0.2s",
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                    colors.primaryHover
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                    colors.primary
-                            }}
-                        >
-                            📋 Dupliceren
-                        </button>
-                        <button
-                            onClick={() => deleteRule(index)}
-                            style={{
-                                padding: "4px 8px",
-                                fontSize: "11px",
-                                backgroundColor: colors.error,
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                transition: "all 0.2s",
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                    "#dc2626"
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                    colors.error
-                            }}
-                        >
-                            🗑️ Verwijderen
-                        </button>
-                    </div>
-                )}
+                {/* Duplicate/Delete buttons removed - dropdown is read-only */}
             </div>
         )
     }
@@ -2940,86 +3497,7 @@ function AutoAcceptRulesDisplay({
                                 {config.enabled ? "ACTIEF" : "INACTIEF"}
                             </div>
                         </div>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                            {isEditing ? (
-                                <>
-                                    <button
-                                        onClick={async () => {
-                                            if (editingConfig) {
-                                                setIsSaving(true)
-                                                const success =
-                                                    await saveOrganizationAutoApprovalConfig(
-                                                        organizationName,
-                                                        editingConfig
-                                                    )
-                                                if (success) {
-                                                    setConfig(editingConfig)
-                                                    setIsEditing(false)
-                                                    setEditingConfig(null)
-                                                } else {
-                                                    alert(
-                                                        "Kon regels niet opslaan. Probeer het opnieuw."
-                                                    )
-                                                }
-                                                setIsSaving(false)
-                                            }
-                                        }}
-                                        disabled={isSaving}
-                                        style={{
-                                            padding: "4px 8px",
-                                            fontSize: "11px",
-                                            backgroundColor: colors.success,
-                                            color: "white",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: isSaving
-                                                ? "wait"
-                                                : "pointer",
-                                            opacity: isSaving ? 0.7 : 1,
-                                        }}
-                                    >
-                                        {isSaving ? "Opslaan..." : "💾 Opslaan"}
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setIsEditing(false)
-                                            setEditingConfig(null)
-                                        }}
-                                        style={{
-                                            padding: "4px 8px",
-                                            fontSize: "11px",
-                                            backgroundColor: colors.gray400,
-                                            color: "white",
-                                            border: "none",
-                                            borderRadius: "4px",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        ❌ Annuleren
-                                    </button>
-                                </>
-                            ) : (
-                                <button
-                                    onClick={() => {
-                                        setIsEditing(true)
-                                        setEditingConfig(
-                                            config ? { ...config } : null
-                                        )
-                                    }}
-                                    style={{
-                                        padding: "4px 8px",
-                                        fontSize: "11px",
-                                        backgroundColor: colors.primary,
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: "4px",
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    ✏️ Bewerken
-                                </button>
-                            )}
-                        </div>
+                        {/* Edit buttons removed - dropdown is read-only */}
                     </div>
 
                     {!config.enabled ? (
@@ -3061,37 +3539,18 @@ function AutoAcceptRulesDisplay({
                                     color: colors.gray600,
                                     marginBottom: "12px",
                                     padding: "8px",
-                                    backgroundColor: isEditing
-                                        ? "#fef3c7"
-                                        : "#f1f5f9",
+                                    backgroundColor: "#f1f5f9",
                                     borderRadius: "4px",
-                                    border: isEditing
-                                        ? "1px solid #fcd34d"
-                                        : "none",
                                 }}
                             >
-                                {isEditing ? (
-                                    <>
-                                        <strong>Bewerkmodus:</strong> Klik op
-                                        "Dupliceren" om een regel te kopiëren of
-                                        "Verwijderen" om een regel te
-                                        verwijderen.
-                                    </>
-                                ) : (
-                                    <>
-                                        Boten worden automatisch goedgekeurd als
-                                        ze voldoen aan{" "}
-                                        <strong>
-                                            één van de onderstaande regels
-                                        </strong>
-                                        :
-                                    </>
-                                )}
+                                Boten worden automatisch goedgekeurd als
+                                ze voldoen aan{" "}
+                                <strong>
+                                    één van de onderstaande regels
+                                </strong>
+                                :
                             </div>
-                            {(isEditing
-                                ? editingConfig?.rules || []
-                                : config.rules
-                            ).map((rule, index, array) =>
+                            {config.rules.map((rule, index, array) =>
                                 renderRule(
                                     rule,
                                     index,
@@ -3135,6 +3594,20 @@ function InsuredObjectList() {
     const [searchTerm, setSearchTerm] = useState("")
     const [brokerInfo, setBrokerInfo] = useState<BrokerInfo | null>(null)
 
+    // Load XLSX library from CDN
+    const XLSX = useXLSX()
+
+    // Load html2canvas and jsPDF libraries from CDN
+    const html2canvas = useHtml2Canvas()
+    const jsPDF = useJsPDF()
+
+    // Sorting state - default to newest first (createdAt DESC)
+    const [sortColumn, setSortColumn] = useState<string | null>("createdAt")
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>("desc")
+
+    // Column-specific filters state
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
+
     // Uitgangsdatum management state
     const [editingUitgangsdatum, setEditingUitgangsdatum] = useState<
         string | null
@@ -3147,13 +3620,34 @@ function InsuredObjectList() {
 
     // Uitgangsdatum validation function
     const validateUitgangsdatum = (
-        date: string
+        date: string,
+        objectId?: string
     ): { isValid: boolean; error?: string } => {
         const selectedDate = new Date(date)
         const today = new Date()
         const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
         const endOfYear = new Date(today.getFullYear(), 11, 31) // December 31st of current year
 
+        // Check if uitgangsdatum is before ingangsdatum
+        if (objectId) {
+            const object = objects.find(obj => obj.id === objectId)
+            if (object && object.ingangsdatum) {
+                const ingangsdatum = new Date(object.ingangsdatum)
+                if (selectedDate < ingangsdatum) {
+                    return {
+                        isValid: false,
+                        error: "Uitgangsdatum mag niet vóór de ingangsdatum liggen.",
+                    }
+                }
+            }
+        }
+
+        // Admins can set any date (except uitgangsdatum before ingangsdatum which is checked above)
+        if (userInfo?.role === 'admin') {
+            return { isValid: true }
+        }
+
+        // Non-admin restrictions
         // Check if date is more than 1 week in the past
         if (selectedDate < oneWeekAgo) {
             return {
@@ -3173,6 +3667,34 @@ function InsuredObjectList() {
         return { isValid: true }
     }
 
+    // Sorting handler - implements 3-state cycle: none → asc → desc → none
+    const handleSort = useCallback((columnKey: string) => {
+        setSortColumn(prevColumn => {
+            // If clicking a different column, start with ascending
+            if (prevColumn !== columnKey) {
+                setSortDirection('asc')
+                return columnKey
+            }
+
+            // Same column - cycle through states
+            setSortDirection(prevDirection => {
+                if (prevDirection === null || prevDirection === 'desc') {
+                    // none → asc OR desc → none
+                    return prevDirection === 'desc' ? null : 'asc'
+                } else {
+                    // asc → desc
+                    return 'desc'
+                }
+            })
+
+            // If we're going back to null, clear the column too
+            if (sortDirection === 'desc') {
+                return null
+            }
+            return columnKey
+        })
+    }, [sortDirection])
+
     // Dynamic schema hook
     const {
         schema,
@@ -3184,6 +3706,62 @@ function InsuredObjectList() {
     const COLUMNS = schema || []
 
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set())
+
+    // Column order state management with localStorage persistence
+    const [columnOrder, setColumnOrder] = useState<string[]>([])
+    const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+    const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+
+    // Default column order
+    const defaultColumnOrder = [
+        "objectType", // type
+        "status", // status
+        "waarde", // waarde
+        "naam", // custom name
+        "brand", // Unified brand/merk
+        "type", // Unified model/type
+        "cinNummer", // CIN nummer
+    ]
+
+    // Load column order from localStorage or use default
+    useEffect(() => {
+        const savedOrder = localStorage.getItem('insuredObjects_columnOrder')
+        if (savedOrder) {
+            try {
+                const parsedOrder = JSON.parse(savedOrder)
+                if (Array.isArray(parsedOrder)) {
+                    setColumnOrder(parsedOrder)
+                } else {
+                    setColumnOrder(defaultColumnOrder)
+                }
+            } catch (error) {
+                console.warn('Failed to parse saved column order, using default:', error)
+                setColumnOrder(defaultColumnOrder)
+            }
+        } else {
+            setColumnOrder(defaultColumnOrder)
+        }
+    }, [])
+
+    // Save column order to localStorage whenever it changes
+    useEffect(() => {
+        if (columnOrder.length > 0) {
+            localStorage.setItem('insuredObjects_columnOrder', JSON.stringify(columnOrder))
+        }
+    }, [columnOrder])
+
+    // Update column order when new columns are available (but preserve user customizations)
+    useEffect(() => {
+        if (COLUMNS.length > 0 && columnOrder.length > 0) {
+            const availableColumnKeys = COLUMNS.map(col => col.key)
+            const newColumns = availableColumnKeys.filter(key => !columnOrder.includes(key))
+
+            if (newColumns.length > 0) {
+                // Add new columns at the end of the user's custom order
+                setColumnOrder(prev => [...prev, ...newColumns])
+            }
+        }
+    }, [COLUMNS, columnOrder.length])
 
     // Update visible columns when schema changes - use filterable fields from Field Registry
     useEffect(() => {
@@ -3223,8 +3801,178 @@ function InsuredObjectList() {
     )
     const [showCreateForm, setShowCreateForm] = useState<boolean>(false)
 
-    // Print modal state
+    // PDF export modal state
     const [showPrintModal, setShowPrintModal] = useState<boolean>(false)
+
+    // Export to Excel function
+    const handleExportToExcel = async () => {
+        // Check if XLSX library is loaded
+        if (!XLSX) {
+            alert("Excel bibliotheek wordt nog geladen. Probeer het over een paar seconden opnieuw.")
+            return
+        }
+
+        if (!filteredObjects || filteredObjects.length === 0) {
+            alert("Geen objecten om te exporteren")
+            return
+        }
+
+        try {
+            // Get visible columns
+            const columnsToExport = visibleColumnsList
+
+            // Create data array with formatted values
+            const data = filteredObjects.map(obj => {
+                const row: any = {}
+                columnsToExport.forEach(col => {
+                    let value = obj[col.key as keyof InsuredObject]
+
+                    // Handle null/undefined
+                    if (value === null || value === undefined) {
+                        row[col.label] = ""
+                        return
+                    }
+
+                    // Format dates
+                    if (col.key.includes("datum") || col.key.includes("date")) {
+                        row[col.label] = value ? new Date(value).toLocaleDateString("nl-NL") : ""
+                        return
+                    }
+
+                    // Format currency as numbers (Excel will handle formatting)
+                    if (col.key.includes("waarde") || col.key.includes("premie") || col.key === "eigenRisico") {
+                        row[col.label] = typeof value === "number" ? value : value
+                        return
+                    }
+
+                    // Format objectType to use Dutch labels (case-insensitive)
+                    if (col.key === "objectType" && typeof value === "string") {
+                        const lowerValue = value.toLowerCase()
+                        if (lowerValue in OBJECT_TYPE_CONFIG) {
+                            row[col.label] = OBJECT_TYPE_CONFIG[lowerValue as ObjectType].label
+                        } else {
+                            row[col.label] = value
+                        }
+                        return
+                    }
+
+                    // Translate status to Dutch
+                    if (col.key === "status" && typeof value === "string") {
+                        row[col.label] = STATUS_TRANSLATIONS[value as keyof typeof STATUS_TRANSLATIONS] || value
+                        return
+                    }
+
+                    // Translate premiumMethod to Dutch
+                    if (col.key === "premiumMethod" && typeof value === "string") {
+                        row[col.label] = PREMIUM_METHOD_TRANSLATIONS[value as keyof typeof PREMIUM_METHOD_TRANSLATIONS] || value
+                        return
+                    }
+
+                    row[col.label] = value
+                })
+                return row
+            })
+
+            // Create worksheet from data
+            const worksheet = XLSX.utils.json_to_sheet(data)
+
+            // Set column widths (auto-size based on content)
+            const columnWidths = columnsToExport.map(col => ({
+                wch: Math.max(col.label.length + 2, 15) // Min width of 15 characters, add padding
+            }))
+            worksheet['!cols'] = columnWidths
+
+            // Add autofilter to enable Excel's filter dropdowns
+            const ref = worksheet['!ref']
+            if (ref) {
+                worksheet['!autofilter'] = { ref: ref }
+            }
+
+            // Style the header row (row 1)
+            const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+            for (let col = range.s.c; col <= range.e.c; col++) {
+                const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col })
+                if (!worksheet[cellAddress]) continue
+
+                // Apply header styling
+                worksheet[cellAddress].s = {
+                    font: {
+                        bold: true,
+                        color: { rgb: "FFFFFF" },
+                        sz: 12
+                    },
+                    fill: {
+                        fgColor: { rgb: "4472C4" } // Blue background
+                    },
+                    alignment: {
+                        horizontal: "center",
+                        vertical: "center",
+                        wrapText: true
+                    },
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } }
+                    }
+                }
+            }
+
+            // Style data rows with alternating colors and borders
+            for (let row = range.s.r + 1; row <= range.e.r; row++) {
+                const isEvenRow = row % 2 === 0
+                for (let col = range.s.c; col <= range.e.c; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+                    if (!worksheet[cellAddress]) continue
+
+                    // Determine if this is a currency column
+                    const colHeader = columnsToExport[col]
+                    const isCurrency = colHeader && (
+                        colHeader.key.includes("waarde") ||
+                        colHeader.key.includes("premie") ||
+                        colHeader.key === "eigenRisico"
+                    )
+
+                    worksheet[cellAddress].s = {
+                        fill: {
+                            fgColor: { rgb: isEvenRow ? "F2F2F2" : "FFFFFF" } // Alternating row colors
+                        },
+                        alignment: {
+                            horizontal: isCurrency ? "right" : "left",
+                            vertical: "center"
+                        },
+                        border: {
+                            top: { style: "thin", color: { rgb: "D3D3D3" } },
+                            bottom: { style: "thin", color: { rgb: "D3D3D3" } },
+                            left: { style: "thin", color: { rgb: "D3D3D3" } },
+                            right: { style: "thin", color: { rgb: "D3D3D3" } }
+                        }
+                    }
+
+                    // Apply number formatting for currency
+                    if (isCurrency && typeof worksheet[cellAddress].v === 'number') {
+                        worksheet[cellAddress].z = '€#,##0.00' // Euro currency format
+                    }
+                }
+            }
+
+            // Freeze the header row
+            worksheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+
+            // Create workbook and add worksheet
+            const workbook = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Vloot Overzicht")
+
+            // Generate filename
+            const filename = `vloot_overzicht_${currentOrganization || "alle_organisaties"}_${new Date().toISOString().split("T")[0]}.xlsx`
+
+            // Write file with cellStyles option enabled
+            XLSX.writeFile(workbook, filename, { cellStyles: true })
+        } catch (error) {
+            console.error("Excel export failed:", error)
+            alert("Fout bij exporteren naar Excel")
+        }
+    }
     const [selectedPrintObjects, setSelectedPrintObjects] = useState<
         Set<string>
     >(new Set())
@@ -3241,7 +3989,7 @@ function InsuredObjectList() {
             // Admins can print all user and system fields (exclude only auto fields like IDs)
             // Admins ignore visible:false restrictions - they can see all fields
             // Get fields from ALL object types for mixed printing
-            const allObjectTypes = ["boat", "trailer", "motor"]
+            const allObjectTypes = ["boot", "trailer", "motor"]
             const allFields = new Map<string, FieldSchema>()
 
             // Get fields for each object type
@@ -3265,7 +4013,7 @@ function InsuredObjectList() {
             // Regular users can only print fields marked as printable in field registry
             // Regular users respect visible:false restrictions set by organization
             // Get printable fields from ALL object types for mixed printing
-            const allObjectTypes = ["boat", "trailer", "motor"]
+            const allObjectTypes = ["boot", "trailer", "motor"]
             const allFields = new Map<string, FieldSchema>()
 
             // Get printable fields for each object type
@@ -3291,13 +4039,37 @@ function InsuredObjectList() {
     }, [schema, userInfo])
 
     // PDF Generation Function
-    const generatePDF = () => {
+    const generatePDF = async () => {
+        // Check if libraries are loaded
+        if (!html2canvas || !jsPDF) {
+            alert("PDF bibliotheken worden nog geladen. Probeer het over een paar seconden opnieuw.")
+            return
+        }
+
         const selectedObjects = filteredObjects.filter((obj) =>
             selectedPrintObjects.has(obj.id)
         )
-        const selectedFields = printableFields.filter((col) =>
-            selectedPrintFields.has(col.key)
-        )
+        // Filter selected fields and sort them according to user's column order
+        const selectedFields = printableFields
+            .filter((col) => selectedPrintFields.has(col.key))
+            .sort((a, b) => {
+                const aIndex = columnOrder.indexOf(a.key)
+                const bIndex = columnOrder.indexOf(b.key)
+
+                // If both fields are in the user's order list, sort by their position
+                if (aIndex !== -1 && bIndex !== -1) {
+                    return aIndex - bIndex
+                }
+
+                // If only 'a' is in the order list, it comes first
+                if (aIndex !== -1) return -1
+
+                // If only 'b' is in the order list, it comes first
+                if (bIndex !== -1) return 1
+
+                // If neither is in the order list, maintain original order (by key alphabetically)
+                return a.key.localeCompare(b.key)
+            })
 
         // Calculate enhanced totals for selected objects with status awareness
         const enhancedTotals = calculateEnhancedTotals(
@@ -3307,15 +4079,39 @@ function InsuredObjectList() {
         const totalPremieVerzekerdePeriode = enhancedTotals.totalPeriodPremium
         const totalPremieJaar = enhancedTotals.totalYearlyPremium
 
-        // Create a new window/tab for PDF content
-        const printWindow = window.open("", "_blank", "width=800,height=600")
-        if (!printWindow) {
-            alert("Popup geblokkeerd. Sta popups toe voor deze website.")
-            return
-        }
-
         const currentDate = new Date().toLocaleDateString("nl-NL")
         const organizationName = currentOrganization || "Alle organisaties"
+
+        // Fetch organization details for address information
+        let organizationInfo: OrganizationInfo | null = null
+        if (currentOrganization) {
+            try {
+                console.log("Fetching organization info for:", currentOrganization)
+                organizationInfo = await fetchOrganizationInfo(currentOrganization)
+                console.log("Organization info received:", organizationInfo)
+            } catch (error) {
+                console.error("Failed to fetch organization info for PDF:", error)
+            }
+        } else {
+            console.log("No current organization set for PDF generation")
+        }
+
+        // Fetch organization logo if we have an organization ID
+        let logoSrc: string | null = null
+        if (organizationInfo?.id) {
+            try {
+                console.log("Fetching logo for organization ID:", organizationInfo.id)
+                const logoData = await getOrganizationLogo(organizationInfo.id)
+                if (logoData?.logoData) {
+                    logoSrc = `data:image/png;base64,${logoData.logoData}`
+                    console.log("Logo loaded successfully")
+                } else {
+                    console.log("No logo found for organization")
+                }
+            } catch (error) {
+                console.error("Failed to fetch organization logo for print:", error)
+            }
+        }
 
         // Generate HTML content for PDF
         const htmlContent = `
@@ -3325,62 +4121,115 @@ function InsuredObjectList() {
     <meta charset="UTF-8">
     <title>Vloot Overzicht - ${organizationName}</title>
     <style>
-        body { 
-            font-family: ${FONT_STACK}; 
-            margin: 40px; 
-            color: #1f2937; 
+        @page {
+            size: A4 landscape;
+            margin: 15mm;
+        }
+        body {
+            font-family: ${FONT_STACK};
+            margin: 0;
+            color: #1f2937;
+            line-height: 1.3;
+            font-size: 11px;
+        }
+        .header {
+            border-bottom: 3px solid ${colors.primary};
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .header-logo {
+            width: 120px;
+            height: auto;
+            margin-right: 20px;
+        }
+        .header-logo-placeholder {
+            width: 120px;
+            height: 60px;
+            background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryHover} 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+            text-align: center;
+            padding: 8px;
+            margin-right: 20px;
+        }
+        .header-left h1 {
+            color: ${colors.primary};
+            margin: 0 0 8px 0;
+            font-size: 32px;
+            font-weight: 700;
+        }
+        .header-left .organization-name {
+            color: #1f2937;
+            margin: 0 0 6px 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .header-left .organization-address {
+            color: #6b7280;
+            margin: 0;
+            font-size: 14px;
             line-height: 1.4;
         }
-        .header { 
-            border-bottom: 2px solid ${colors.primary}; 
-            padding-bottom: 20px; 
-            margin-bottom: 30px; 
-        }
-        .header h1 { 
-            color: ${colors.primary}; 
-            margin: 0; 
-            font-size: 28px; 
-            font-weight: 600;
-        }
-        .header .subtitle { 
-            color: #6b7280; 
-            margin: 8px 0 0 0; 
-            font-size: 16px; 
+        .header-right {
+            text-align: right;
+            color: #6b7280;
+            font-size: 13px;
         }
         .meta-info {
             background-color: #f8fafc;
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 24px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
             border-left: 4px solid ${colors.primary};
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
         }
         .meta-info div {
-            margin-bottom: 4px;
-            font-size: 14px;
+            font-size: 12px;
+            white-space: nowrap;
         }
         .meta-info strong {
             color: #374151;
         }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 30px; 
-            font-size: 12px;
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 9px;
+            table-layout: auto;
         }
-        th, td { 
-            padding: 8px 6px; 
-            text-align: left; 
+        th, td {
+            padding: 4px 3px;
+            text-align: left;
             border-bottom: 1px solid #e5e7eb;
             vertical-align: top;
+            word-wrap: break-word;
+            max-width: 80px;
+            overflow: hidden;
         }
-        th { 
-            background-color: ${colors.gray100}; 
-            font-weight: 600; 
-            color: #374151; 
+        th {
+            background-color: ${colors.gray100};
+            font-weight: 600;
+            color: #374151;
             border-bottom: 2px solid ${colors.gray300};
+            font-size: 8px;
+            position: sticky;
+            top: 0;
         }
-        tr:hover { 
-            background-color: #f9fafb; 
+        td {
+            font-size: 8px;
+        }
+        tr:nth-child(even) {
+            background-color: #f9fafb;
         }
         .totals { 
             background-color: #f0f9ff; 
@@ -3420,23 +4269,48 @@ function InsuredObjectList() {
             color: ${colors.primary};
         }
         @media print {
-            body { margin: 20px; }
+            body { margin: 0; }
             .header { page-break-after: avoid; }
-            table { page-break-inside: avoid; }
-            .totals { page-break-before: avoid; }
+            table {
+                page-break-inside: auto;
+                font-size: 8px;
+            }
+            th { font-size: 7px; }
+            td { font-size: 7px; }
+            .totals {
+                page-break-before: avoid;
+                font-size: 10px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Vloot Overzicht</h1>
-        <div class="subtitle">${organizationName}</div>
-    </div>
-    
-    <div class="meta-info">
-        <div><strong>Datum:</strong> ${currentDate}</div>
-        <div><strong>Aantal objecten:</strong> ${selectedObjects.length}</div>
-        <div><strong>Geselecteerde velden:</strong> ${selectedFields.length}</div>
+        ${logoSrc ? `
+        <img src="${logoSrc}" class="header-logo" alt="${organizationName} logo" />
+        ` : ``}
+        <div class="header-left">
+            <h1>Vloot Overzicht</h1>
+            <div class="organization-name">${organizationName}</div>
+            ${organizationInfo && (organizationInfo.polisnummer || organizationInfo.street || organizationInfo.postal_code || organizationInfo.city || organizationInfo.country) ? `
+            <div class="organization-address">
+                ${organizationInfo.polisnummer ? `<strong>Polisnummer:</strong> ${organizationInfo.polisnummer}<br>` : ''}
+                ${organizationInfo.street ? `${organizationInfo.street}<br>` : ''}
+                ${organizationInfo.postal_code || organizationInfo.city ?
+                    `${organizationInfo.postal_code || ''} ${organizationInfo.city || ''}`.trim() + '<br>' : ''}
+                ${organizationInfo.country || ''}
+            </div>
+            ` : `
+            <div class="organization-address" style="color: #ef4444; font-size: 12px;">
+                Adresgegevens niet beschikbaar
+            </div>
+            `}
+        </div>
+        <div class="header-right">
+            <div><strong>Datum:</strong> ${currentDate}</div>
+            <div><strong>Aantal objecten:</strong> ${selectedObjects.length}</div>
+            <div><strong>Geselecteerde velden:</strong> ${selectedFields.length}</div>
+        </div>
     </div>
 
     <table>
@@ -3455,12 +4329,7 @@ function InsuredObjectList() {
                             let value = obj[field.key as keyof typeof obj]
 
                             // Format specific fields
-                            if (
-                                field.key === "waarde" ||
-                                field.key === "totalePremieOverHetJaar" ||
-                                field.key ===
-                                    "totalePremieOverDeVerzekerdePeriode"
-                            ) {
+                            if (field.key === "waarde" || field.key === "eigenRisico") {
                                 const numValue = Number(value) || 0
                                 value = numValue.toLocaleString("nl-NL", {
                                     style: "currency",
@@ -3468,9 +4337,32 @@ function InsuredObjectList() {
                                     minimumFractionDigits: 0,
                                     maximumFractionDigits: 0,
                                 })
-                            } else if (field.key === "premiepromillage") {
+                            } else if (
+                                field.key === "totalePremieOverHetJaar" ||
+                                field.key === "totalePremieOverDeVerzekerdePeriode"
+                            ) {
                                 const numValue = Number(value) || 0
-                                value = numValue.toFixed(2) + "‰"
+                                value = numValue.toLocaleString("nl-NL", {
+                                    style: "currency",
+                                    currency: "EUR",
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })
+                            } else if (field.key === "premiepercentage") {
+                                const numValue = Number(value) || 0
+                                value = numValue.toFixed(2) + "%"
+                            } else if (field.key === "objectType" && typeof value === "string") {
+                                // Format objectType to use Dutch labels (case-insensitive)
+                                const lowerValue = value.toLowerCase()
+                                if (lowerValue in OBJECT_TYPE_CONFIG) {
+                                    value = OBJECT_TYPE_CONFIG[lowerValue as ObjectType].label
+                                }
+                            } else if (field.key === "status" && typeof value === "string") {
+                                // Translate status to Dutch
+                                value = STATUS_TRANSLATIONS[value as keyof typeof STATUS_TRANSLATIONS] || value
+                            } else if (field.key === "premiumMethod" && typeof value === "string") {
+                                // Translate premiumMethod to Dutch
+                                value = PREMIUM_METHOD_TRANSLATIONS[value as keyof typeof PREMIUM_METHOD_TRANSLATIONS] || value
                             }
 
                             return `<td>${value || "-"}</td>`
@@ -3490,57 +4382,159 @@ function InsuredObjectList() {
         <h3>Totaaloverzicht (Status-bewuste berekening)</h3>
         <div class="totals-grid">
             <div class="totals-item">
-                <div class="totals-label">Totale waarde van de verzekerde objecten</div>
+                <div class="totals-label">Totale verzekerde waarde van de objecten</div>
                 <div class="totals-value currency">€${totalWaarde.toLocaleString("nl-NL")}</div>
             </div>
             <div class="totals-item">
-                <div class="totals-label">Premie verzekerde periode (verzekerd + buiten polis)</div>
-                <div class="totals-value currency">€${Math.round(totalPremieVerzekerdePeriode).toLocaleString("nl-NL")}</div>
+                <div class="totals-label">Totale premie over de verzekerde periode</div>
+                <div class="totals-value currency">€${totalPremieVerzekerdePeriode.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
             <div class="totals-item">
-                <div class="totals-label">Jaarpremie (verzekerd + buiten polis)</div>
-                <div class="totals-value currency">€${Math.round(totalPremieJaar).toLocaleString("nl-NL")}</div>
-            </div>
-            <div class="totals-item">
-                <div class="totals-label">Status verdeling</div>
-                <div class="totals-value">
-                    Verzekerd: ${enhancedTotals.insuredCount}<br>
-                    Buiten polis: ${enhancedTotals.outsidePolicyCount}<br>
-                    In behandeling: ${enhancedTotals.pendingCount}<br>
-                    Afgewezen: ${enhancedTotals.rejectedCount}
-                </div>
+                <div class="totals-label">Totale jaarpremie over het kalenderjaar</div>
+                <div class="totals-value currency">€${totalPremieJaar.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
         </div>
         <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
-            * Alleen objecten met status "Verzekerd" en "Buiten polis" worden meegerekend in premieberekeningen
+            * Alleen objecten met status "Verzekerd" en "Afgevoerd" worden meegerekend in premieberekeningen
         </div>
     </div>
     `
             : ""
     }
-
-    <script>
-        window.onload = function() {
-            // Automatically trigger print dialog
-            setTimeout(() => {
-                window.print();
-                // Close window after printing (user can cancel this)
-                window.onafterprint = function() {
-                    setTimeout(() => {
-                        window.close();
-                    }, 1000);
-                }
-            }, 500);
-        }
-    </script>
 </body>
 </html>`
 
-        printWindow.document.write(htmlContent)
-        printWindow.document.close()
+        // Create a temporary container to hold the HTML content
+        const tempContainer = document.createElement("div")
+        tempContainer.id = "pdf-temp-container"
 
-        // Close the modal
-        setShowPrintModal(false)
+        // Set the full HTML including styles
+        tempContainer.innerHTML = htmlContent.replace('<!DOCTYPE html>', '').replace(/<\/?html[^>]*>/g, '').replace(/<\/?head[^>]*>/g, '').replace(/<\/?body[^>]*>/g, '')
+
+        // Style the container - position it in viewport
+        tempContainer.style.position = "fixed"
+        tempContainer.style.top = "0"
+        tempContainer.style.left = "0"
+        tempContainer.style.width = "1120px" // Approximate A4 landscape width in pixels
+        tempContainer.style.minHeight = "100px" // Force minimum height
+        tempContainer.style.fontFamily = FONT_STACK
+        tempContainer.style.fontSize = "11px"
+        tempContainer.style.color = "#1f2937"
+        tempContainer.style.backgroundColor = "#ffffff"
+        tempContainer.style.padding = "20px"
+        tempContainer.style.boxSizing = "border-box"
+        tempContainer.style.zIndex = "999999" // On top for capture
+        tempContainer.style.pointerEvents = "none" // Don't intercept clicks
+        document.body.appendChild(tempContainer)
+
+        // Wait for browser to calculate dimensions and load images
+        await new Promise(resolve => setTimeout(resolve, 300))
+
+        console.log("Container dimensions:", tempContainer.offsetWidth, "x", tempContainer.offsetHeight)
+        console.log("Container child count:", tempContainer.children.length)
+
+        // Check if we have content
+        if (tempContainer.offsetHeight === 0) {
+            console.error("Container has no height! Content may not be rendering.")
+            console.log("Container HTML:", tempContainer.innerHTML.substring(0, 500))
+        }
+
+        // Configure PDF options
+        const opt = {
+            margin: [15, 15, 15, 15],
+            filename: `Vloot_Overzicht_${organizationName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                logging: true,
+                backgroundColor: '#ffffff'
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        }
+
+        // Generate PDF using direct html2canvas call for better debugging
+        try {
+            console.log("Starting PDF generation...")
+
+            // Manually call html2canvas with detailed options
+            console.log("Calling html2canvas directly on element...")
+            const canvas = await html2canvas(tempContainer, {
+                scale: 2,
+                useCORS: true,
+                logging: true,
+                backgroundColor: '#ffffff',
+                width: tempContainer.offsetWidth,
+                height: tempContainer.offsetHeight,
+                windowWidth: tempContainer.scrollWidth,
+                windowHeight: tempContainer.scrollHeight
+            })
+
+            console.log("Canvas created:", canvas.width, "x", canvas.height)
+
+            if (canvas.width === 0 || canvas.height === 0) {
+                console.error("Canvas has invalid dimensions!")
+                alert("Failed to generate PDF: Canvas has no dimensions")
+                document.body.removeChild(tempContainer)
+                return
+            }
+
+            // Check if canvas has content
+            const ctx = canvas.getContext('2d')
+            const imageData = ctx?.getImageData(0, 0, Math.min(100, canvas.width), Math.min(100, canvas.height))
+            const hasContent = imageData?.data.some((pixel, i) => i % 4 === 3 && pixel > 0) || false
+            console.log("Canvas has content:", hasContent)
+
+            // Convert canvas to image data URL
+            const imgData = canvas.toDataURL('image/jpeg', 0.98)
+            console.log("Image data URL created, length:", imgData.length)
+
+            // Create jsPDF instance
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            })
+
+            // Calculate dimensions to fit on page
+            const pageWidth = pdf.internal.pageSize.getWidth()
+            const pageHeight = pdf.internal.pageSize.getHeight()
+            const margin = 15
+
+            const availableWidth = pageWidth - (2 * margin)
+            const availableHeight = pageHeight - (2 * margin)
+
+            const imgWidth = canvas.width
+            const imgHeight = canvas.height
+            const ratio = Math.min(availableWidth / (imgWidth * 0.264583), availableHeight / (imgHeight * 0.264583))
+
+            const finalWidth = imgWidth * 0.264583 * ratio
+            const finalHeight = imgHeight * 0.264583 * ratio
+
+            console.log("Adding image to PDF:", finalWidth, "x", finalHeight)
+
+            // Add image to PDF
+            pdf.addImage(imgData, 'JPEG', margin, margin, finalWidth, finalHeight)
+
+            // Save the PDF
+            const filename = `Vloot_Overzicht_${organizationName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+            pdf.save(filename)
+
+            console.log("PDF saved successfully")
+
+            // Clean up
+            if (document.body.contains(tempContainer)) {
+                document.body.removeChild(tempContainer)
+            }
+            setShowPrintModal(false)
+
+        } catch (error) {
+            console.error("Failed to generate PDF:", error)
+            if (document.body.contains(tempContainer)) {
+                document.body.removeChild(tempContainer)
+            }
+            throw error
+        }
     }
 
     // Toggle functions
@@ -3552,6 +4546,73 @@ function InsuredObjectList() {
             newVisibleColumns.add(column)
         }
         setVisibleColumns(newVisibleColumns)
+    }
+
+    // Column reordering functions
+    const moveColumn = (dragIndex: number, hoverIndex: number) => {
+        const newOrder = [...columnOrder]
+        const draggedColumn = newOrder[dragIndex]
+
+        // Remove the dragged column from its current position
+        newOrder.splice(dragIndex, 1)
+        // Insert it at the new position
+        newOrder.splice(hoverIndex, 0, draggedColumn)
+
+        setColumnOrder(newOrder)
+    }
+
+    const resetColumnOrder = () => {
+        setColumnOrder([...defaultColumnOrder])
+        localStorage.removeItem('insuredObjects_columnOrder')
+    }
+
+    // Drag and drop event handlers
+    const handleDragStart = (e: React.DragEvent, columnKey: string) => {
+        setDraggedColumn(columnKey)
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', columnKey)
+
+        // Add some visual feedback
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '0.5'
+        }
+    }
+
+    const handleDragEnd = (e: React.DragEvent) => {
+        setDraggedColumn(null)
+        setDragOverColumn(null)
+
+        // Reset visual feedback
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '1'
+        }
+    }
+
+    const handleDragOver = (e: React.DragEvent, columnKey: string) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDragOverColumn(columnKey)
+    }
+
+    const handleDragLeave = () => {
+        setDragOverColumn(null)
+    }
+
+    const handleDrop = (e: React.DragEvent, targetColumnKey: string) => {
+        e.preventDefault()
+
+        const draggedColumnKey = e.dataTransfer.getData('text/plain')
+        if (draggedColumnKey && draggedColumnKey !== targetColumnKey) {
+            const dragIndex = columnOrder.indexOf(draggedColumnKey)
+            const hoverIndex = columnOrder.indexOf(targetColumnKey)
+
+            if (dragIndex !== -1 && hoverIndex !== -1) {
+                moveColumn(dragIndex, hoverIndex)
+            }
+        }
+
+        setDraggedColumn(null)
+        setDragOverColumn(null)
     }
 
     const toggleOrganization = (org: string) => {
@@ -3734,29 +4795,22 @@ function InsuredObjectList() {
 
     const filteredObjects =
         objects && Array.isArray(objects)
-            ? filterObjects(
-                  objects,
-                  searchTerm,
-                  selectedOrganizations,
-                  organizations,
-                  isAdmin(userInfo),
-                  currentOrganization // Pass current organization for filtering
-              ).map((obj) => updateObjectWithCalculatedPremiums(obj)) // Ensure calculated fields are up-to-date
+            ? sortObjects(
+                  filterObjects(
+                      objects,
+                      searchTerm,
+                      selectedOrganizations,
+                      organizations,
+                      isAdmin(userInfo),
+                      currentOrganization, // Pass current organization for filtering
+                      columnFilters // Pass column-specific filters
+                  ).map((obj) => updateObjectWithCalculatedPremiums(obj)), // Ensure calculated fields are up-to-date
+                  sortColumn,
+                  sortDirection
+              )
             : []
 
     const getVisibleColumnsList = () => {
-        // Define the desired column order: actions, type, status, waarde, naam, brand, model/type, CIN nummer
-        const columnOrder = [
-            "objectType", // type
-            "status", // status
-            "waarde", // waarde
-            "naam", // custom name
-            "brand", // Unified brand/merk
-            "type", // Unified model/type
-            "cinNummer", // CIN nummer
-            // All other fields follow in their original order
-        ]
-
         // Filter columns based on visibility and filterable flag from field registry
         // REMOVED data availability filtering to show ALL filterable fields
         const filteredColumns = COLUMNS.filter((col) => {
@@ -3770,12 +4824,12 @@ function InsuredObjectList() {
             return true
         })
 
-        // Sort columns based on the desired order
+        // Sort columns based on user-defined column order
         return filteredColumns.sort((a, b) => {
             const aIndex = columnOrder.indexOf(a.key)
             const bIndex = columnOrder.indexOf(b.key)
 
-            // If both columns are in the order list, sort by their position
+            // If both columns are in the user's order list, sort by their position
             if (aIndex !== -1 && bIndex !== -1) {
                 return aIndex - bIndex
             }
@@ -3827,8 +4881,9 @@ function InsuredObjectList() {
             }
 
             // Show success message
+            const objectLabel = OBJECT_TYPE_CONFIG[deletingObject.objectType?.toLowerCase() as ObjectType]?.label || "Object"
             setSuccessMessage(
-                `${OBJECT_TYPE_CONFIG[deletingObject.objectType].label} deleted successfully!`
+                `${objectLabel} deleted successfully!`
             )
 
             // Refresh the list
@@ -3936,8 +4991,8 @@ function InsuredObjectList() {
     const handleUitgangsdatumConfirm = useCallback(async () => {
         if (!editingUitgangsdatum || !selectedUitgangsdatum) return
 
-        // Validate the date
-        const validation = validateUitgangsdatum(selectedUitgangsdatum)
+        // Validate the date with object ID for ingangsdatum comparison
+        const validation = validateUitgangsdatum(selectedUitgangsdatum, editingUitgangsdatum)
         if (!validation.isValid) {
             setUitgangsdatumError(validation.error || "Invalid date")
             return
@@ -3955,7 +5010,7 @@ function InsuredObjectList() {
                     },
                     body: JSON.stringify({
                         uitgangsdatum: selectedUitgangsdatum,
-                        status: "OutOfPolicy",
+                        status: "Removed",
                     }),
                 }
             )
@@ -4220,12 +5275,52 @@ function InsuredObjectList() {
                             >
                                 {filteredObjects.length} objecten
                             </div>
-                            <PrintOverviewButton
-                                onPrintClick={() => setShowPrintModal(true)}
+                            {/* Clear filters button - show when filters are active */}
+                            {Object.keys(columnFilters).some(key => columnFilters[key]?.trim()) && (
+                                <button
+                                    onClick={() => setColumnFilters({})}
+                                    style={{
+                                        padding: "8px 12px",
+                                        backgroundColor: colors.primary,
+                                        color: "#ffffff",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        fontSize: "13px",
+                                        fontWeight: "500",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        transition: "background-color 0.2s",
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.backgroundColor = colors.primaryHover
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.backgroundColor = colors.primary
+                                    }}
+                                >
+                                    <FaTimes size={12} />
+                                    Clear Filters
+                                </button>
+                            )}
+                            <ExportPdfButton
+                                onExportClick={() => setShowPrintModal(true)}
                             />
-                            <CreateObjectButton
-                                onCreateClick={() => setShowCreateForm(true)}
+                            <ExportExcelButton
+                                onExportClick={handleExportToExcel}
                             />
+                            {userInfo &&
+                                hasPermission(
+                                    userInfo,
+                                    "INSURED_OBJECT_CREATE"
+                                ) && (
+                                    <CreateObjectButton
+                                        onCreateClick={() =>
+                                            setShowCreateForm(true)
+                                        }
+                                    />
+                                )}
                         </div>
                     </div>
 
@@ -4259,13 +5354,13 @@ function InsuredObjectList() {
                         }
                         userInfo={userInfo}
                         columns={COLUMNS}
+                        onResetColumnOrder={resetColumnOrder}
                     />
                 </div>
 
                 <div
                     style={{
                         overflowX: "auto",
-                        maxHeight: "70vh",
                         position: "relative",
                     }}
                 >
@@ -4275,6 +5370,7 @@ function InsuredObjectList() {
                             borderCollapse: "collapse",
                             fontSize: "14px",
                             minWidth: "1000px",
+                            tableLayout: "auto", // Dynamic column widths based on content
                         }}
                     >
                         <thead
@@ -4307,6 +5403,12 @@ function InsuredObjectList() {
                                 {visibleColumnsList.map((col) => (
                                     <th
                                         key={col.key}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, col.key)}
+                                        onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => handleDragOver(e, col.key)}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={(e) => handleDrop(e, col.key)}
                                         style={{
                                             padding: "12px 8px",
                                             textAlign: "left",
@@ -4314,17 +5416,98 @@ function InsuredObjectList() {
                                             fontWeight: "600",
                                             color: "#475569",
                                             fontSize: "13px",
-                                            cursor: col.sortable
-                                                ? "pointer"
-                                                : "default",
-                                            width: col.width,
+                                            cursor: col.sortable ? "pointer" : "move", // Show pointer for sortable columns
+                                            minWidth: col.width, // Use minWidth instead of width for dynamic sizing
+                                            whiteSpace: "nowrap", // Prevent text wrapping for better readability
+                                            backgroundColor:
+                                                dragOverColumn === col.key
+                                                    ? "#e2e8f0"
+                                                    : draggedColumn === col.key
+                                                    ? "#f1f5f9"
+                                                    : "transparent",
+                                            transition: "background-color 0.2s ease",
+                                            userSelect: "none",
+                                            position: "relative",
                                         }}
                                         onClick={() =>
-                                            col.sortable &&
-                                            console.log("Sort by", col.key)
+                                            col.sortable && handleSort(col.key)
                                         }
                                     >
                                         {col.label}
+                                        {col.sortable && sortColumn === col.key && (
+                                            <span style={{ marginLeft: "4px", fontSize: "12px" }}>
+                                                {sortDirection === 'asc' ? '↑' : '↓'}
+                                            </span>
+                                        )}
+                                        {dragOverColumn === col.key && (
+                                            <div style={{
+                                                position: "absolute",
+                                                left: "0",
+                                                top: "0",
+                                                bottom: "0",
+                                                width: "3px",
+                                                backgroundColor: "#3b82f6",
+                                                borderRadius: "1px"
+                                            }} />
+                                        )}
+                                    </th>
+                                ))}
+                            </tr>
+                            {/* Filter row */}
+                            <tr>
+                                {/* Empty cell for Actions column */}
+                                {canPerformActions && (
+                                    <th
+                                        style={{
+                                            padding: "8px",
+                                            borderBottom: "1px solid #e2e8f0",
+                                            backgroundColor: "#f8fafc",
+                                        }}
+                                    />
+                                )}
+
+                                {/* Filter inputs for each column */}
+                                {visibleColumnsList.map((col) => (
+                                    <th
+                                        key={`filter-${col.key}`}
+                                        style={{
+                                            padding: "8px",
+                                            borderBottom: "1px solid #e2e8f0",
+                                            backgroundColor: "#f8fafc",
+                                        }}
+                                    >
+                                        {col.filterable && (
+                                            <input
+                                                type="text"
+                                                placeholder={`Filter ${col.label}...`}
+                                                value={columnFilters[col.key] || ""}
+                                                onChange={(e) => {
+                                                    setColumnFilters(prev => ({
+                                                        ...prev,
+                                                        [col.key]: e.target.value
+                                                    }))
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{
+                                                    width: "100%",
+                                                    padding: "6px 8px",
+                                                    fontSize: "12px",
+                                                    border: "1px solid #cbd5e1",
+                                                    borderRadius: "4px",
+                                                    backgroundColor: "#ffffff",
+                                                    color: "#1e293b",
+                                                    outline: "none",
+                                                }}
+                                                onFocus={(e) => {
+                                                    e.target.style.borderColor = colors.primary
+                                                    e.target.style.boxShadow = `0 0 0 1px ${colors.primary}`
+                                                }}
+                                                onBlur={(e) => {
+                                                    e.target.style.borderColor = "#cbd5e1"
+                                                    e.target.style.boxShadow = "none"
+                                                }}
+                                            />
+                                        )}
                                     </th>
                                 ))}
                             </tr>
@@ -4335,27 +5518,27 @@ function InsuredObjectList() {
                                     key={object.id}
                                     style={{
                                         backgroundColor:
-                                            object.status === "OutOfPolicy"
+                                            object.status === "Removed"
                                                 ? "#f9fafb"
                                                 : index % 2 === 0
                                                   ? "#ffffff"
                                                   : "#f8fafc",
                                         opacity:
-                                            object.status === "OutOfPolicy"
+                                            object.status === "Removed"
                                                 ? 0.6
                                                 : 1,
                                         transition:
                                             "background-color 0.2s, opacity 0.2s",
                                     }}
                                     onMouseOver={(e) => {
-                                        if (object.status !== "OutOfPolicy") {
+                                        if (object.status !== "Removed") {
                                             e.currentTarget.style.backgroundColor =
                                                 "#f1f5f9"
                                         }
                                     }}
                                     onMouseOut={(e) => {
                                         const originalBg =
-                                            object.status === "OutOfPolicy"
+                                            object.status === "Removed"
                                                 ? "#f9fafb"
                                                 : index % 2 === 0
                                                   ? "#ffffff"
@@ -4387,10 +5570,28 @@ function InsuredObjectList() {
                                     {visibleColumnsList.map((col) => {
                                         // Special handling for objectType column to show icon + label
                                         if (col.key === "objectType") {
+                                            // Case-insensitive lookup to handle both "Boot" and "boot"
                                             const config =
                                                 OBJECT_TYPE_CONFIG[
-                                                    object.objectType
+                                                    object.objectType?.toLowerCase() as ObjectType
                                                 ]
+                                            if (!config) {
+                                                return (
+                                                    <td
+                                                        key={col.key}
+                                                        style={{
+                                                            padding: "12px 8px",
+                                                            borderBottom:
+                                                                "1px solid #f1f5f9",
+                                                            color: "#374151",
+                                                            fontSize: "13px",
+                                                            lineHeight: "1.3",
+                                                        }}
+                                                    >
+                                                        <span>{object.objectType || "Onbekend"}</span>
+                                                    </td>
+                                                )
+                                            }
                                             const IconComponent = config.icon
                                             return (
                                                 <td
@@ -4446,13 +5647,16 @@ function InsuredObjectList() {
                                             )
                                         }
 
-                                        // Special handling for uitgangsdatum column to make it clickable
+                                        // Special handling for uitgangsdatum column to make it clickable (Admin/Editor only)
                                         if (col.key === "uitgangsdatum") {
                                             const cellValue =
                                                 object.uitgangsdatum
                                             const hasValue =
                                                 cellValue &&
                                                 cellValue.trim() !== ""
+
+                                            // Check if user has permission to edit uitgangsdatum
+                                            const canEditUitgangsdatum = userInfo && (isAdmin(userInfo) || isEditor(userInfo))
 
                                             return (
                                                 <td
@@ -4465,15 +5669,16 @@ function InsuredObjectList() {
                                                         fontSize: "13px",
                                                         lineHeight: "1.3",
                                                         cursor:
-                                                            object.status !==
-                                                            "OutOfPolicy"
+                                                            canEditUitgangsdatum && object.status !==
+                                                            "Removed"
                                                                 ? "pointer"
                                                                 : "default",
                                                     }}
                                                     onClick={() => {
                                                         if (
+                                                            canEditUitgangsdatum &&
                                                             object.status !==
-                                                            "OutOfPolicy"
+                                                            "Removed"
                                                         ) {
                                                             handleUitgangsdatumClick(
                                                                 object.id,
@@ -4483,8 +5688,9 @@ function InsuredObjectList() {
                                                     }}
                                                     onMouseOver={(e) => {
                                                         if (
+                                                            canEditUitgangsdatum &&
                                                             object.status !==
-                                                                "OutOfPolicy" &&
+                                                                "Removed" &&
                                                             !hasValue
                                                         ) {
                                                             const div =
@@ -4503,8 +5709,9 @@ function InsuredObjectList() {
                                                     }}
                                                     onMouseOut={(e) => {
                                                         if (
+                                                            canEditUitgangsdatum &&
                                                             object.status !==
-                                                                "OutOfPolicy" &&
+                                                                "Removed" &&
                                                             !hasValue
                                                         ) {
                                                             const div =
@@ -4522,8 +5729,10 @@ function InsuredObjectList() {
                                                         }
                                                     }}
                                                     title={
-                                                        object.status !==
-                                                        "OutOfPolicy"
+                                                        !canEditUitgangsdatum
+                                                            ? "Alleen Admin en Editors kunnen uitgangsdatum instellen"
+                                                            : object.status !==
+                                                              "Removed"
                                                             ? "Klik om uitgangsdatum in te stellen"
                                                             : "Uitgangsdatum is al ingesteld"
                                                     }
@@ -4535,30 +5744,30 @@ function InsuredObjectList() {
                                                                 : "8px 16px",
                                                             borderRadius: "8px",
                                                             backgroundColor:
-                                                                object.status !==
-                                                                "OutOfPolicy"
+                                                                canEditUitgangsdatum && object.status !==
+                                                                "Removed"
                                                                     ? hasValue
                                                                         ? "#f8fafc"
                                                                         : "#dbeafe"
                                                                     : "transparent",
                                                             border:
-                                                                object.status !==
-                                                                    "OutOfPolicy" &&
+                                                                canEditUitgangsdatum && object.status !==
+                                                                    "Removed" &&
                                                                 !hasValue
                                                                     ? "1px solid #3b82f6"
                                                                     : hasValue
                                                                       ? "1px solid #e5e7eb"
                                                                       : "none",
                                                             color:
-                                                                object.status !==
-                                                                "OutOfPolicy"
+                                                                canEditUitgangsdatum && object.status !==
+                                                                "Removed"
                                                                     ? hasValue
                                                                         ? "#374151"
                                                                         : "#1d4ed8"
                                                                     : "#d1d5db",
                                                             fontWeight: hasValue
                                                                 ? "normal"
-                                                                : "500",
+                                                                : canEditUitgangsdatum ? "500" : "normal",
                                                             fontSize: hasValue
                                                                 ? "13px"
                                                                 : "12px",
@@ -4567,12 +5776,12 @@ function InsuredObjectList() {
                                                             textAlign: "center",
                                                             minWidth: hasValue
                                                                 ? "auto"
-                                                                : "160px",
+                                                                : canEditUitgangsdatum ? "160px" : "auto",
                                                             transition:
                                                                 "all 0.2s ease",
                                                             opacity:
                                                                 object.status ===
-                                                                "OutOfPolicy"
+                                                                "Removed" || !canEditUitgangsdatum
                                                                     ? 0.8
                                                                     : 1,
                                                         }}
@@ -4580,9 +5789,8 @@ function InsuredObjectList() {
                                                         {hasValue
                                                             ? new Date(
                                                                   cellValue
-                                                              ).toLocaleDateString()
-                                                            : object.status !==
-                                                                "OutOfPolicy"
+                                                              ).toLocaleDateString("nl-NL")
+                                                            : canEditUitgangsdatum && object.status !== "Removed"
                                                               ? "Klik hier om een uitgangsdatum aan te geven"
                                                               : "-"}
                                                     </div>
@@ -4613,7 +5821,8 @@ function InsuredObjectList() {
                                             >
                                                 {renderObjectCellValue(
                                                     col,
-                                                    cellValue
+                                                    cellValue,
+                                                    object
                                                 )}
                                             </td>
                                         )
@@ -4717,8 +5926,9 @@ function InsuredObjectList() {
                             onClose={() => setEditingObject(null)}
                             onSuccess={async () => {
                                 await fetchObjects()
+                                const objectLabel = OBJECT_TYPE_CONFIG[editingObject.objectType?.toLowerCase() as ObjectType]?.label || "Object"
                                 setSuccessMessage(
-                                    `${OBJECT_TYPE_CONFIG[editingObject.objectType].label} updated successfully!`
+                                    `${objectLabel} updated successfully!`
                                 )
                             }}
                             schema={COLUMNS}
@@ -4755,6 +5965,7 @@ function InsuredObjectList() {
                 <CreateObjectModal
                     onClose={() => setShowCreateForm(false)}
                     onOrganizationSelect={setCurrentOrganization}
+                    defaultOrganization={currentOrganization}
                 />
             )}
 
@@ -4898,7 +6109,7 @@ function InsuredObjectList() {
                     document.body
                 )}
 
-            {/* Print Modal */}
+            {/* PDF Export Modal */}
             {showPrintModal &&
                 ReactDOM.createPortal(
                     <>
@@ -4925,7 +6136,7 @@ function InsuredObjectList() {
                                         fontFamily: FONT_STACK,
                                     }}
                                 >
-                                    Print Overzicht
+                                    Exporteer als PDF
                                 </h3>
 
                                 <div style={{ marginBottom: "24px" }}>
@@ -5051,7 +6262,7 @@ function InsuredObjectList() {
 
                                                         if (
                                                             objectType ===
-                                                            "boat"
+                                                            "boot"
                                                         ) {
                                                             brand =
                                                                 obj.merkBoot ||
@@ -5060,7 +6271,7 @@ function InsuredObjectList() {
                                                                 obj.typeBoot ||
                                                                 "Onbekend type"
                                                             identifier =
-                                                                obj.bootnummer ||
+                                                                obj.rompnummer ||
                                                                 obj.cinNummer ||
                                                                 ""
                                                         } else if (
@@ -5103,24 +6314,18 @@ function InsuredObjectList() {
                                                                 obj.typeTrailer ||
                                                                 "Onbekend type"
                                                             identifier =
-                                                                obj.bootnummer ||
+                                                                obj.rompnummer ||
                                                                 obj.motornummer ||
                                                                 obj.chassisnummer ||
                                                                 obj.cinNummer ||
                                                                 ""
                                                         }
 
-                                                        const typeLabel =
-                                                            objectType ===
-                                                            "boat"
-                                                                ? "boot"
-                                                                : objectType ===
-                                                                    "motor"
-                                                                  ? "motor"
-                                                                  : objectType ===
-                                                                      "trailer"
-                                                                    ? "trailer"
-                                                                    : objectType
+                                                        // Get proper Dutch label from OBJECT_TYPE_CONFIG (case-insensitive)
+                                                        const lowerObjectType = objectType?.toLowerCase()
+                                                        const typeLabel = lowerObjectType && lowerObjectType in OBJECT_TYPE_CONFIG
+                                                            ? OBJECT_TYPE_CONFIG[lowerObjectType as ObjectType].label
+                                                            : objectType
 
                                                         // Include naam in the display if it exists
                                                         const nameDisplay = naam
@@ -5182,7 +6387,7 @@ function InsuredObjectList() {
                                                     "merkMotor",
                                                     "typeMotor",
                                                     "waarde",
-                                                    "premiepromillage",
+                                                    "premiepercentage",
                                                     "status",
                                                 ]
                                                 setSelectedPrintFields(
@@ -5329,7 +6534,7 @@ function InsuredObjectList() {
                                                 selectedPrintObjects.size === 0
                                             ) {
                                                 alert(
-                                                    "Selecteer minimaal één object om te printen."
+                                                    "Selecteer minimaal één object om te exporteren."
                                                 )
                                                 return
                                             }
@@ -5337,11 +6542,14 @@ function InsuredObjectList() {
                                                 selectedPrintFields.size === 0
                                             ) {
                                                 alert(
-                                                    "Selecteer minimaal één veld om te printen."
+                                                    "Selecteer minimaal één veld om te exporteren."
                                                 )
                                                 return
                                             }
-                                            generatePDF()
+                                            generatePDF().catch(error => {
+                                                console.error("Failed to generate PDF:", error)
+                                                alert("Er is een fout opgetreden bij het genereren van de PDF.")
+                                            })
                                         }}
                                         style={{
                                             ...styles.primaryButton,
@@ -5353,8 +6561,8 @@ function InsuredObjectList() {
                                                     : 1,
                                         }}
                                     >
-                                        <FaPrint size={14} />
-                                        PDF Genereren
+                                        <FaFilePdf size={14} />
+                                        Genereer PDF
                                     </button>
                                 </div>
                             </div>
@@ -5399,7 +6607,7 @@ const calculateInsurancePeriod_LEGACY = (obj: InsuredObject): number => {
 // Legacy function - replaced by enhanced version in utils/premiumCalculations.ts
 const calculateObjectPremiums_LEGACY = (obj: InsuredObject) => {
     const waarde = Number(obj.waarde) || 0
-    const promillage = Number(obj.premiepromillage) || 0
+    const promillage = Number(obj.premiepercentage) || 0
     const yearlyPremium = (waarde * promillage) / 1000
 
     // Calculate actual period premium based on days
@@ -5471,12 +6679,19 @@ function TotalsDisplay({
             totalPremieJaar > 0 ? (difference / totalPremieJaar) * 100 : 0
 
         console.log("💰 Calculated totals:", {
-            totalWaarde: totalWaarde.toLocaleString(),
-            totalPremieJaar: Math.round(totalPremieJaar).toLocaleString(),
-            totalPremieVerzekerdePeriode: Math.round(
-                totalPremieVerzekerdePeriode
-            ).toLocaleString(),
-            difference: Math.round(Math.abs(difference)).toLocaleString(),
+            totalWaarde: totalWaarde.toLocaleString("nl-NL"),
+            totalPremieJaar: totalPremieJaar.toLocaleString("nl-NL", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }),
+            totalPremieVerzekerdePeriode: totalPremieVerzekerdePeriode.toLocaleString("nl-NL", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }),
+            difference: Math.abs(difference).toLocaleString("nl-NL", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }),
             percentageDifference: percentageDifference.toFixed(1) + "%",
         })
 
@@ -5563,7 +6778,7 @@ function TotalsDisplay({
                             color: "#1f2937",
                         }}
                     >
-                        €{totalWaarde.toLocaleString()}
+                        €{totalWaarde.toLocaleString("nl-NL")}
                     </div>
                 </div>
 
@@ -5593,9 +6808,10 @@ function TotalsDisplay({
                         }}
                     >
                         €
-                        {Math.round(
-                            totalPremieVerzekerdePeriode
-                        ).toLocaleString()}
+                        {totalPremieVerzekerdePeriode.toLocaleString("nl-NL", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}
                     </div>
                 </div>
 
@@ -5624,7 +6840,10 @@ function TotalsDisplay({
                             color: colors.primary,
                         }}
                     >
-                        €{Math.round(totalPremieJaar).toLocaleString()}
+                        €{totalPremieJaar.toLocaleString("nl-NL", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}
                     </div>
                 </div>
 
@@ -5653,7 +6872,10 @@ function TotalsDisplay({
                             color: difference > 0 ? "#dc2626" : "#16a34a",
                         }}
                     >
-                        €{Math.round(Math.abs(difference)).toLocaleString()}
+                        €{Math.abs(difference).toLocaleString("nl-NL", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        })}
                     </div>
                     <div
                         style={{

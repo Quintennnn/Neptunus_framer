@@ -1,14 +1,19 @@
 # Insurance Boat Management System - Framer Frontend
 
+> **For Human-Readable Documentation**: See [README.md](README.md) for comprehensive developer onboarding and architecture overview.
+>
+> **This Document**: AI assistant context with implementation details and project-specific guidelines.
+
 ## MOST IMPORTANT
 You are able to do CRUD operations on all files and folders you need, without asking me permission, to keep the workflow efficient!
 
 ## IMPORTANT
-whenever you make changes, always list the files you have changed!
-
+Whenever you make changes, always list the files you have changed!
 
 ## Project Overview
 This is a Framer-based frontend for an insurance company's boat management system that handles insured objects (boats, motors, trailers) and policy management. The system serves three distinct user types with role-based access control.
+
+**Key Technologies**: React 19.1.0, TypeScript, Framer (override deployment), AWS Cognito (Managed Login), REST API
 
 ## User Types & Workflows
 
@@ -25,13 +30,17 @@ This is a Framer-based frontend for an insurance company's boat management syste
 - **Access**: Can work across assigned organizations
 
 ### **Admins**
-- **Login Flow**: Login → Organizations page → Full system access
-- **Primary Functions**: 
+- **Login Flow**: AWS Cognito Managed Login (ONLY) → Callback → Organizations page → Full system access
+- **Primary Functions**:
   - Monitor pending items in `/pending-overview`
-  - Create/edit organizations and policies
+  - Create/edit organizations
   - Full system management
-- **Workflow**: System oversight → Policy management → User support
+- **Workflow**: System oversight → User support
 - **Access**: Full system access
+- **⚠️ Important**:
+  - Cannot create admin users in UI - must create user, then manually edit DynamoDB `role` field to `"admin"`
+  - NO custom login page - AWS Cognito Managed Login ONLY
+  - Policy management removed from frontend
 
 ## Architecture & Page Structure
 
@@ -43,10 +52,11 @@ This is a Framer-based frontend for an insurance company's boat management syste
 
 ### **Page Structure**
 ```
-/login_old          → Uses loginOverrides.ts
-/organizations      → Main landing page after login (Organization/List.tsx)
+/login             → AWS Cognito Managed Login initiation (login/loginOverrides.ts)
+/callback          → OAuth callback handler (callback/callbackOverrides.ts)
+/organizations     → Main landing page after login (Organization/List.tsx)
 /policies          → Policy management (Policy/List.tsx)
-/users             → User management (User/List.tsx) 
+/users             → User management (User/List.tsx)
 /insuredobjects    → Insured objects fleet (insuredObjects/list_insured_objects.tsx)
 /pending-overview  → Pending items review (pendingOverview/List.tsx)
 /changelog         → System changelog (Changelog/List.tsx)
@@ -74,11 +84,16 @@ insuredObjects/
 pendingOverview/
   └── List.tsx                    # Pending items review page
 login/
-  └── loginOverrides.ts          # Login functionality
+  └── loginOverrides.ts          # AWS Cognito login initiation
+callback/
+  └── callbackOverrides.ts       # OAuth callback handler
 components/
   ├── UserInfoBanner.tsx         # User information display
   ├── RoleBasedButton.tsx        # RBAC-aware buttons
-  └── InsuranceButtons.tsx       # Insurance-specific UI elements
+  ├── InsuranceButtons.tsx       # Insurance-specific UI elements
+  ├── LogoManager.tsx            # Multi-tenant logo management
+  ├── EnhancedTotalsDisplay.tsx  # Status-aware premium calculations
+  └── GlobalRulesManager.tsx     # Admin-only global acceptance rules
 ```
 
 ## Data Model & Core Concepts
@@ -112,18 +127,16 @@ Defined in `rbac.ts` with three permission levels:
 - User role assignment
 - Complete organization management
 
-### **Editor/Broker Permissions** 
-- Insured objects: Create, Read, Update (no delete)
-- Users: Read only
-- Organizations: Read only  
-- Policies: Create, Read (no update/delete)
-- Changelog access
+### **Editor/Broker Permissions**
+- Insured objects: Create, Read, Update (no delete, own org only)
+- Organizations: Read only (own org only)
+- **Cannot**: Delete insured objects, access changelog, manage users, access other organizations
 
 ### **User Permissions**
-- Insured objects: Create, Read, Update (no delete, own org only)
-- Policies: Read only
+- Insured objects: Read only (own org only)
 - Organizations: Read only (own org only)
-- Changelog access
+- Changelog: Read access
+- **Cannot**: Create, update, or delete anything; access other organizations
 
 ## Technical Implementation
 
@@ -136,10 +149,18 @@ Defined in `rbac.ts` with three permission levels:
 
 ### **Backend Integration**
 - **API Endpoint**: `https://dev.api.hienfeld.io`
-- **Authentication**: AWS Cognito with JWT tokens
+- **Authentication**: AWS Cognito Managed Login with JWT tokens
+  - **Important**: Uses AWS hosted UI (not custom login form)
+  - Flow: Login page → AWS Cognito UI → Callback page → Token exchange
 - **API Paths**: Centralized in `utils.ts`
+  - `/neptunus/user` - User management
+  - `/neptunus/organization` - Organizations
+  - `/neptunus/policy` - Policies
+  - `/neptunus/insured-object` - Insured objects
+  - `/neptunus/schema` - Dynamic field schemas
+  - `/neptunus/changelog` - System changelog
 - **Session Storage**: Token management for authentication state
-- **Field Registry**: Single source of truth for all field definitions in `..APIs/lib/Neptunus/resources/layers/python/utils/field_registry.py`
+- **Field Registry**: Single source of truth for all field definitions in `../APIs/lib/Neptunus/resources/layers/python/utils/field_registry.py`
 
 ### **Key Files**
 
@@ -150,9 +171,14 @@ Defined in `rbac.ts` with three permission levels:
 - `main_styling.tsx` - Additional CSS styling
 
 #### **Business Logic**
-- `hooks/useDynamicSchema.ts` - Dynamic form field management
-- `components/UserInfoBanner.tsx` - User context display
-- `components/RoleBasedButton.tsx` - Permission-aware UI components
+- `premiumCalculations.tsx` - Premium calculation engine with status-aware calculations
+- `hooks/useDynamicSchema.ts` - Dynamic form field management, integrates with Field Registry
+- `components/UserInfoBanner.tsx` - User context display with role-based styling
+- `components/RoleBasedButton.tsx` - Permission-aware UI components with hide/disable/request behaviors
+- `components/InsuranceButtons.tsx` - Pre-configured action buttons for insurance operations
+- `components/LogoManager.tsx` - Multi-tenant logo upload and management
+- `components/EnhancedTotalsDisplay.tsx` - Status-aware premium calculations display
+- `components/GlobalRulesManager.tsx` - Admin-only global acceptance rules management
 
 #### **Page Components**
 - Each folder's `List.tsx` serves as the main page component
@@ -215,16 +241,19 @@ The main pages feature a tab-based navigation system:
 - Active migration from hardcoded field values to Field Registry system
 - **Full Admin Field Control**: Admins can now configure visibility and requirements for ALL fields
 
-### **Known Issues**
-- **Scope Limitation**: Field Registry currently only covers insured objects, needs expansion
+### **Known Issues & Limitations**
+- **Field Registry Scope**: Field Registry currently only covers insured objects, needs expansion to organizations, policies, and users
+- **Admin Creation**: Cannot create admin users in UI - requires manual DynamoDB `role` field edit from `"user"` to `"admin"`
+- **Theme System**: Not centralized - styles exist in multiple files with hardcoded colors (theme.tsx not uniformly used, main_styling.tsx not actively used)
+- **Deprecated Components**: login/loginOverrides.ts is deprecated (AWS Cognito Managed Login only), Policy pages completely removed
 
 ### **Backlog/Future Improvements**
 - **Complete Field Registry Migration**: Remove all hardcoded field definitions from frontend
 - **Expand Field Registry Scope**: Add organization, policy, and user field definitions to single source of truth
-- **Field Registry Integration**: Frontend reference system for Field Registry definitions
-- Unified theme system (single source of truth)
-- Enhanced UI/UX consistency
-- Advanced reporting features
+- **Unified Theme System**: Centralize all styling in single theme file (single source of truth)
+- **Enhanced UI/UX**: Improve mobile responsiveness, loading states, error messages
+- **Advanced Reporting**: Export capabilities, custom report builder, scheduled reports
+- **Performance Optimizations**: Data caching, pagination, bundle size optimization, lazy loading
 
 ## Key Architecture Decisions
 

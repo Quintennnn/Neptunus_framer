@@ -94,7 +94,8 @@ const useXLSX = () => {
         }
 
         const script = document.createElement("script")
-        script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"
+        script.src =
+            "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"
         script.onload = () => {
             setXLSX((window as any).XLSX)
         }
@@ -127,7 +128,8 @@ const useHtml2Canvas = () => {
         }
 
         const script = document.createElement("script")
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+        script.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
         script.onload = () => {
             setHtml2canvas(() => (window as any).html2canvas)
         }
@@ -160,7 +162,8 @@ const useJsPDF = () => {
         }
 
         const script = document.createElement("script")
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        script.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
         script.onload = () => {
             setJsPDF(() => (window as any).jspdf.jsPDF)
         }
@@ -424,18 +427,26 @@ function UnifiedStatusCell({
                         whiteSpace: "normal",
                     }}
                 >
-                    <div style={{ 
-                        fontWeight: "600", 
-                        marginBottom: "6px", 
-                        fontSize: "12px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        whiteSpace: "nowrap"
-                    }}>
+                    <div
+                        style={{
+                            fontWeight: "600",
+                            marginBottom: "6px",
+                            fontSize: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
                         {STATUS_TRANSLATIONS[object.status] || object.status}
                     </div>
-                    <div style={{ fontSize: "11px", lineHeight: "1.4", wordBreak: "break-word" }}>
+                    <div
+                        style={{
+                            fontSize: "11px",
+                            lineHeight: "1.4",
+                            wordBreak: "break-word",
+                        }}
+                    >
                         {object.declineReason}
                     </div>
                 </div>
@@ -556,7 +567,9 @@ async function fetchOrganizationInfo(
 
         if (!response.ok) {
             const errorText = await response.text()
-            console.warn(`Failed to fetch organization info: ${response.status} - ${errorText}`)
+            console.warn(
+                `Failed to fetch organization info: ${response.status} - ${errorText}`
+            )
             return null
         }
 
@@ -904,13 +917,16 @@ function renderObjectCellValue(
             case "currency":
                 return `€${Number(value).toLocaleString("nl-NL", {
                     minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
+                    maximumFractionDigits: 2,
                 })}`
             case "number":
                 // Handle backward compatibility for premiepercentage/premiepromillage
                 if (column.key === "premiepercentage" && obj) {
                     let percentageValue = Number(value)
-                    if ((percentageValue === 0 || !percentageValue) && obj.premiepromillage) {
+                    if (
+                        (percentageValue === 0 || !percentageValue) &&
+                        obj.premiepromillage
+                    ) {
                         // Convert promillage to percentage (divide by 10)
                         percentageValue = Number(obj.premiepromillage) / 10
                     }
@@ -939,7 +955,10 @@ function renderObjectCellValue(
             case "premiepercentage": // premium percentage
                 // Handle backward compatibility with premiepromillage
                 let percentageValue = Number(value)
-                if ((percentageValue === 0 || !percentageValue) && obj.premiepromillage) {
+                if (
+                    (percentageValue === 0 || !percentageValue) &&
+                    obj.premiepromillage
+                ) {
                     // Convert promillage to percentage (divide by 10)
                     percentageValue = Number(obj.premiepromillage) / 10
                 }
@@ -970,7 +989,7 @@ function renderObjectCellValue(
 function sortObjects(
     objects: InsuredObject[],
     sortColumn: string | null,
-    sortDirection: 'asc' | 'desc' | null
+    sortDirection: "asc" | "desc" | null
 ): InsuredObject[] {
     if (!sortColumn || !sortDirection) {
         return objects
@@ -990,10 +1009,10 @@ function sortObjects(
         let bComp: string | number = bValue
 
         // Handle different data types
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
+        if (typeof aValue === "number" && typeof bValue === "number") {
             aComp = aValue
             bComp = bValue
-        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        } else if (typeof aValue === "string" && typeof bValue === "string") {
             // Case-insensitive string comparison
             aComp = aValue.toLowerCase()
             bComp = bValue.toLowerCase()
@@ -1005,10 +1024,10 @@ function sortObjects(
 
         // Compare
         if (aComp < bComp) {
-            return sortDirection === 'asc' ? -1 : 1
+            return sortDirection === "asc" ? -1 : 1
         }
         if (aComp > bComp) {
-            return sortDirection === 'asc' ? 1 : -1
+            return sortDirection === "asc" ? 1 : -1
         }
         return 0
     })
@@ -1047,10 +1066,14 @@ function filterObjects(
 
         // Column-specific filters
         if (columnFilters && Object.keys(columnFilters).length > 0) {
-            for (const [columnKey, filterValue] of Object.entries(columnFilters)) {
+            for (const [columnKey, filterValue] of Object.entries(
+                columnFilters
+            )) {
                 if (filterValue && filterValue.trim() !== "") {
                     const objectValue = object[columnKey as keyof InsuredObject]
-                    const objectValueStr = String(objectValue || "").toLowerCase()
+                    const objectValueStr = String(
+                        objectValue || ""
+                    ).toLowerCase()
                     const filterValueStr = filterValue.toLowerCase().trim()
 
                     // Case-insensitive partial match
@@ -1428,7 +1451,14 @@ function SearchAndFilterBar({
                                 fontFamily: FONT_STACK,
                             }}
                         >
-                            <div style={{ marginBottom: "12px", display: "flex", gap: "8px", flexDirection: "column" }}>
+                            <div
+                                style={{
+                                    marginBottom: "12px",
+                                    display: "flex",
+                                    gap: "8px",
+                                    flexDirection: "column",
+                                }}
+                            >
                                 <button
                                     onClick={() => {
                                         // Reset to organization's default visible columns
@@ -1513,16 +1543,19 @@ function SearchAndFilterBar({
                                 </button>
                             </div>
 
-                            <div style={{
-                                fontSize: "11px",
-                                color: "#6b7280",
-                                padding: "8px 12px",
-                                backgroundColor: "#f9fafb",
-                                borderRadius: "4px",
-                                marginBottom: "12px",
-                                fontStyle: "italic"
-                            }}>
-                                💡 Tip: Sleep kolom headers om de volgorde te wijzigen
+                            <div
+                                style={{
+                                    fontSize: "11px",
+                                    color: "#6b7280",
+                                    padding: "8px 12px",
+                                    backgroundColor: "#f9fafb",
+                                    borderRadius: "4px",
+                                    marginBottom: "12px",
+                                    fontStyle: "italic",
+                                }}
+                            >
+                                💡 Tip: Sleep kolom headers om de volgorde te
+                                wijzigen
                             </div>
 
                             {/* List of filterable columns using Field Registry - admins see all, users respect visible:false */}
@@ -1607,11 +1640,12 @@ function ActionDropdownMenu({
     // - Users: NO edit button at all (removed completely)
     // - Editors: ONLY show edit button when status = "Insured" or "Pending" (with field restrictions)
     // - Admins: Always show edit button (all statuses)
-    const canEdit = hasEditPermission && (
-        isAdmin(userInfo) || // Admins can edit all statuses
-        (isEditor(userInfo) && (object.status === "Insured" || object.status === "Pending")) // Editors for Insured and Pending status
-        // Users: no edit button (isUser check removed)
-    )
+    const canEdit =
+        hasEditPermission &&
+        (isAdmin(userInfo) || // Admins can edit all statuses
+            (isEditor(userInfo) &&
+                (object.status === "Insured" || object.status === "Pending"))) // Editors for Insured and Pending status
+    // Users: no edit button (isUser check removed)
 
     const canDelete = userInfo
         ? hasPermission(userInfo, "INSURED_OBJECT_DELETE")
@@ -1884,7 +1918,8 @@ function ConfirmDeleteDialog({
     onCancel: () => void
 }) {
     // Case-insensitive lookup to handle both "Boot" and "boot"
-    const config = OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
+    const config =
+        OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
     const objectTypeName = config?.label?.toLowerCase() || "object"
 
     return (
@@ -1996,14 +2031,17 @@ function EditInsuredObjectDialog({
     userInfo: UserInfo | null
 }) {
     // Case-insensitive lookup to handle both "Boot" and "boot"
-    const config = OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
+    const config =
+        OBJECT_TYPE_CONFIG[object.objectType?.toLowerCase() as ObjectType]
 
     // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
     const [form, setForm] = useState<InsuredObject>(object)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [ingangsdatumWarning, setIngangsdatumWarning] = useState<string | null>(null)
+    const [ingangsdatumWarning, setIngangsdatumWarning] = useState<
+        string | null
+    >(null)
     const [isLoadingConfig, setIsLoadingConfig] = useState<boolean>(
         config?.useOrgConfig || false
     )
@@ -2014,6 +2052,99 @@ function EditInsuredObjectDialog({
         merkMotor: "",
         ligplaats: "",
     })
+
+    // Track formatted display value for waarde field (with dots as thousand separators)
+    const [waardeDisplay, setWaardeDisplay] = useState<string>("")
+
+    // Track formatted display values for premium fields (2 decimal places)
+    const [premiumDisplayValues, setPremiumDisplayValues] = useState<
+        Record<string, string>
+    >({
+        totalePremieOverDeVerzekerdePeriode: "",
+        totalePremieOverHetJaar: "",
+    })
+
+    // Helper functions for waarde field thousand separator formatting
+    const formatNumberWithDots = React.useCallback(
+        (num: number | string): string => {
+            if (num === "" || num === null || num === undefined) return ""
+            const numStr = String(num).replace(/\./g, "") // Remove any existing dots
+            return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+        },
+        []
+    )
+
+    const parseNumberWithDots = React.useCallback((str: string): number => {
+        if (!str) return 0
+        // Remove all dots and parse as number
+        const cleaned = str.replace(/\./g, "")
+        return parseFloat(cleaned) || 0
+    }, [])
+
+    // Helper functions for premium fields (2 decimal places)
+    const formatPremiumValue = React.useCallback(
+        (num: number | string): string => {
+            if (num === "" || num === null || num === undefined) return ""
+            const numValue = typeof num === "string" ? parseFloat(num) : num
+            if (isNaN(numValue)) return ""
+            // Format to 2 decimal places
+            return numValue.toFixed(2)
+        },
+        []
+    )
+
+    const parsePremiumValue = React.useCallback((str: string): number => {
+        if (!str) return 0
+        const parsed = parseFloat(str)
+        return isNaN(parsed) ? 0 : parsed
+    }, [])
+
+    // Sync waardeDisplay with form.waarde value
+    React.useEffect(() => {
+        if (
+            form.waarde !== undefined &&
+            form.waarde !== null &&
+            form.waarde !== ""
+        ) {
+            setWaardeDisplay(formatNumberWithDots(form.waarde))
+        } else {
+            setWaardeDisplay("")
+        }
+    }, [form.waarde, formatNumberWithDots])
+
+    // Sync premium display values with form values
+    React.useEffect(() => {
+        const newDisplayValues: Record<string, string> = {}
+
+        if (
+            form.totalePremieOverDeVerzekerdePeriode !== undefined &&
+            form.totalePremieOverDeVerzekerdePeriode !== null &&
+            form.totalePremieOverDeVerzekerdePeriode !== ""
+        ) {
+            newDisplayValues.totalePremieOverDeVerzekerdePeriode =
+                formatPremiumValue(form.totalePremieOverDeVerzekerdePeriode)
+        } else {
+            newDisplayValues.totalePremieOverDeVerzekerdePeriode = ""
+        }
+
+        if (
+            form.totalePremieOverHetJaar !== undefined &&
+            form.totalePremieOverHetJaar !== null &&
+            form.totalePremieOverHetJaar !== ""
+        ) {
+            newDisplayValues.totalePremieOverHetJaar = formatPremiumValue(
+                form.totalePremieOverHetJaar
+            )
+        } else {
+            newDisplayValues.totalePremieOverHetJaar = ""
+        }
+
+        setPremiumDisplayValues(newDisplayValues)
+    }, [
+        form.totalePremieOverDeVerzekerdePeriode,
+        form.totalePremieOverHetJaar,
+        formatPremiumValue,
+    ])
 
     // Check if config exists for this object type
     if (!config) {
@@ -2043,12 +2174,32 @@ function EditInsuredObjectDialog({
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <FaExclamationTriangle size={48} color={colors.error} style={{ marginBottom: "16px" }} />
-                    <h3 style={{ margin: "0 0 16px", fontFamily: FONT_STACK, fontSize: "20px", color: colors.gray900 }}>
+                    <FaExclamationTriangle
+                        size={48}
+                        color={colors.error}
+                        style={{ marginBottom: "16px" }}
+                    />
+                    <h3
+                        style={{
+                            margin: "0 0 16px",
+                            fontFamily: FONT_STACK,
+                            fontSize: "20px",
+                            color: colors.gray900,
+                        }}
+                    >
                         Ongeldig objecttype
                     </h3>
-                    <p style={{ margin: "0 0 24px", fontFamily: FONT_STACK, fontSize: "14px", color: colors.gray700, lineHeight: "1.5" }}>
-                        Het objecttype "{object.objectType}" is niet geldig. Neem contact op met de beheerder.
+                    <p
+                        style={{
+                            margin: "0 0 24px",
+                            fontFamily: FONT_STACK,
+                            fontSize: "14px",
+                            color: colors.gray700,
+                            lineHeight: "1.5",
+                        }}
+                    >
+                        Het objecttype "{object.objectType}" is niet geldig.
+                        Neem contact op met de beheerder.
                     </p>
                     <button
                         onClick={onClose}
@@ -2058,7 +2209,9 @@ function EditInsuredObjectDialog({
                             color: "white",
                             border: "none",
                         }}
-                        onMouseOver={(e) => hover.button(e.target as HTMLElement)}
+                        onMouseOver={(e) =>
+                            hover.button(e.target as HTMLElement)
+                        }
                         onMouseOut={(e) => {
                             const target = e.target as HTMLElement
                             target.style.backgroundColor = colors.primary
@@ -2079,9 +2232,12 @@ function EditInsuredObjectDialog({
     // If user cannot edit, show message and return early
     if (!canEdit) {
         const statusMessages: Record<string, string> = {
-            Pending: "Dit vaartuig is in behandeling door de beheerder en kan niet worden gewijzigd.",
-            Rejected: "Dit vaartuig is afgewezen. Dien een nieuwe aanvraag in als u dit vaartuig alsnog wilt verzekeren.",
-            Removed: "Dit vaartuig is afgevoerd en kan niet meer worden gewijzigd."
+            Pending:
+                "Dit vaartuig is in behandeling door de beheerder en kan niet worden gewijzigd.",
+            Rejected:
+                "Dit vaartuig is afgewezen. Dien een nieuwe aanvraag in als u dit vaartuig alsnog wilt verzekeren.",
+            Removed:
+                "Dit vaartuig is afgevoerd en kan niet meer worden gewijzigd.",
         }
 
         return ReactDOM.createPortal(
@@ -2110,12 +2266,32 @@ function EditInsuredObjectDialog({
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <FaInfoCircle size={48} color={colors.error} style={{ marginBottom: "16px" }} />
-                    <h3 style={{ margin: "0 0 16px", fontFamily: FONT_STACK, fontSize: "20px", color: colors.gray900 }}>
+                    <FaInfoCircle
+                        size={48}
+                        color={colors.error}
+                        style={{ marginBottom: "16px" }}
+                    />
+                    <h3
+                        style={{
+                            margin: "0 0 16px",
+                            fontFamily: FONT_STACK,
+                            fontSize: "20px",
+                            color: colors.gray900,
+                        }}
+                    >
                         Bewerken niet toegestaan
                     </h3>
-                    <p style={{ margin: "0 0 24px", fontFamily: FONT_STACK, fontSize: "14px", color: colors.gray700, lineHeight: "1.5" }}>
-                        {statusMessages[objectStatus] || "Dit vaartuig kan niet worden gewijzigd."}
+                    <p
+                        style={{
+                            margin: "0 0 24px",
+                            fontFamily: FONT_STACK,
+                            fontSize: "14px",
+                            color: colors.gray700,
+                            lineHeight: "1.5",
+                        }}
+                    >
+                        {statusMessages[objectStatus] ||
+                            "Dit vaartuig kan niet worden gewijzigd."}
                     </p>
                     <button
                         onClick={onClose}
@@ -2200,17 +2376,59 @@ function EditInsuredObjectDialog({
         setError(null)
         setSuccess(null)
 
+        // Special handling for waarde field with thousand separator
+        if (name === "waarde") {
+            // Allow only digits and dots
+            const cleanedValue = value.replace(/[^\d.]/g, "")
+            // Parse the number (removing dots)
+            const numericValue = parseNumberWithDots(cleanedValue)
+            // Format it back with dots for display
+            const formattedValue = formatNumberWithDots(cleanedValue)
+
+            setWaardeDisplay(formattedValue)
+            setForm((prev) => ({
+                ...prev,
+                waarde: numericValue,
+            }))
+            return
+        }
+
+        // Special handling for premium fields (2 decimal places)
+        if (
+            name === "totalePremieOverDeVerzekerdePeriode" ||
+            name === "totalePremieOverHetJaar"
+        ) {
+            // Allow only digits, dots, and commas
+            const cleanedValue = value.replace(/[^\d.,]/g, "").replace(",", ".")
+            // Parse the number
+            const numericValue = parsePremiumValue(cleanedValue)
+            // Format it back with 2 decimal places for display
+            const formattedValue = cleanedValue // Keep user input as-is during typing
+
+            setPremiumDisplayValues((prev) => ({
+                ...prev,
+                [name]: formattedValue,
+            }))
+            setForm((prev) => ({
+                ...prev,
+                [name]: numericValue,
+            }))
+            return
+        }
+
         // Check if ingangsdatum is more than one week in the past (skip warning for admins)
-        if (name === 'ingangsdatum' && value && userInfo?.role !== 'admin') {
+        if (name === "ingangsdatum" && value && userInfo?.role !== "admin") {
             try {
                 const selectedDate = new Date(value)
                 const today = new Date()
-                const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+                const oneWeekAgo = new Date(
+                    today.getTime() - 7 * 24 * 60 * 60 * 1000
+                )
 
                 if (selectedDate < oneWeekAgo) {
                     setIngangsdatumWarning(
                         "Let op: De ingangsdatum ligt meer dan een week in het verleden. " +
-                        "Dit vaartuig zal handmatige goedkeuring vereisen en kan niet automatisch worden goedgekeurd."
+                            "Dit vaartuig zal handmatige goedkeuring vereisen en kan niet automatisch worden goedgekeurd."
                     )
                 } else {
                     setIngangsdatumWarning(null)
@@ -2219,7 +2437,7 @@ function EditInsuredObjectDialog({
                 // Invalid date format, ignore
                 setIngangsdatumWarning(null)
             }
-        } else if (name === 'ingangsdatum' && userInfo?.role === 'admin') {
+        } else if (name === "ingangsdatum" && userInfo?.role === "admin") {
             // Clear warning for admins
             setIngangsdatumWarning(null)
         }
@@ -2276,12 +2494,17 @@ function EditInsuredObjectDialog({
             }
 
             // CRITICAL: If editor is editing an Insured or Rejected object, change status to Pending for re-approval
-            if (isEditor(userInfo) && (object.status === "Insured" || object.status === "Rejected")) {
+            if (
+                isEditor(userInfo) &&
+                (object.status === "Insured" || object.status === "Rejected")
+            ) {
                 updateData = {
                     ...updateData,
-                    status: "Pending"
+                    status: "Pending",
                 }
-                console.log(`Editor editing ${object.status} object - status changed to Pending for re-approval`)
+                console.log(
+                    `Editor editing ${object.status} object - status changed to Pending for re-approval`
+                )
             }
 
             const res = await fetch(
@@ -2306,14 +2529,21 @@ function EditInsuredObjectDialog({
             }
 
             // Show appropriate success message based on actual final status
-            if (isEditor(userInfo) && (object.status === "Insured" || object.status === "Rejected")) {
+            if (
+                isEditor(userInfo) &&
+                (object.status === "Insured" || object.status === "Rejected")
+            ) {
                 // Editor edited an Insured/Rejected object
                 if (data.status === "Insured") {
                     // Auto-approved!
-                    setSuccess(`${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`)
+                    setSuccess(
+                        `${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`
+                    )
                 } else if (data.status === "Pending") {
                     // Needs manual review
-                    setSuccess(`${config.label} succesvol bijgewerkt! Status is gewijzigd naar "In behandeling" voor hergoedkeuring.`)
+                    setSuccess(
+                        `${config.label} succesvol bijgewerkt! Status is gewijzigd naar "In behandeling" voor hergoedkeuring.`
+                    )
                 } else {
                     setSuccess(`${config.label} succesvol bijgewerkt!`)
                 }
@@ -2321,10 +2551,14 @@ function EditInsuredObjectDialog({
                 // Anyone editing a Pending object
                 if (data.status === "Insured") {
                     // Auto-approved!
-                    setSuccess(`${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`)
+                    setSuccess(
+                        `${config.label} succesvol bijgewerkt en automatisch goedgekeurd!`
+                    )
                 } else if (data.status === "Pending") {
                     // Stayed Pending
-                    setSuccess(`${config.label} succesvol bijgewerkt! Blijft in behandeling voor beoordeling.`)
+                    setSuccess(
+                        `${config.label} succesvol bijgewerkt! Blijft in behandeling voor beoordeling.`
+                    )
                 } else {
                     setSuccess(`${config.label} succesvol bijgewerkt!`)
                 }
@@ -2411,7 +2645,11 @@ function EditInsuredObjectDialog({
 
             label = formatLabel(key)
         }
-        const Component = isDropdown ? "select" : isTextArea ? "textarea" : "input"
+        const Component = isDropdown
+            ? "select"
+            : isTextArea
+              ? "textarea"
+              : "input"
 
         return (
             <div key={key} style={{ marginBottom: "16px", width: "100%" }}>
@@ -2435,7 +2673,9 @@ function EditInsuredObjectDialog({
                                 backgroundColor: isSubmitting
                                     ? colors.gray50
                                     : colors.white,
-                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                cursor: isSubmitting
+                                    ? "not-allowed"
+                                    : "pointer",
                             }}
                             onFocus={(e) => {
                                 if (!isSubmitting) {
@@ -2446,7 +2686,9 @@ function EditInsuredObjectDialog({
                                 hover.resetInput(e.target as HTMLElement)
                             }}
                         >
-                            <option value="">Selecteer {label.toLowerCase()}</option>
+                            <option value="">
+                                Selecteer {label.toLowerCase()}
+                            </option>
                             {fieldSchema.options.map((option) => (
                                 <option key={option} value={option}>
                                     {option}
@@ -2483,7 +2725,9 @@ function EditInsuredObjectDialog({
                                         }
                                     }}
                                     onBlur={(e) => {
-                                        hover.resetInput(e.target as HTMLElement)
+                                        hover.resetInput(
+                                            e.target as HTMLElement
+                                        )
                                     }}
                                 />
                             )}
@@ -2492,12 +2736,30 @@ function EditInsuredObjectDialog({
                     <Component
                         id={key}
                         name={key}
-                        value={val === null || val === undefined ? "" : val}
+                        value={
+                            key === "waarde"
+                                ? waardeDisplay
+                                : key ===
+                                        "totalePremieOverDeVerzekerdePeriode" ||
+                                    key === "totalePremieOverHetJaar"
+                                  ? premiumDisplayValues[key] || ""
+                                  : val === null || val === undefined
+                                    ? ""
+                                    : val
+                        }
                         onChange={handleChange}
                         disabled={isSubmitting}
                         required={isRequired}
                         {...(Component === "input"
-                            ? { type: inputType }
+                            ? {
+                                  type:
+                                      key === "waarde" ||
+                                      key ===
+                                          "totalePremieOverDeVerzekerdePeriode" ||
+                                      key === "totalePremieOverHetJaar"
+                                          ? "text"
+                                          : inputType,
+                              }
                             : { rows: 3 })}
                         placeholder={`Enter ${label.toLowerCase()}`}
                         style={{
@@ -2514,11 +2776,30 @@ function EditInsuredObjectDialog({
                         }}
                         onBlur={(e) => {
                             hover.resetInput(e.target as HTMLElement)
+                            // Format premium fields to exactly 2 decimal places on blur
+                            if (
+                                key === "totalePremieOverDeVerzekerdePeriode" ||
+                                key === "totalePremieOverHetJaar"
+                            ) {
+                                const currentValue = form[key]
+                                if (
+                                    currentValue !== null &&
+                                    currentValue !== undefined &&
+                                    currentValue !== ""
+                                ) {
+                                    const formatted =
+                                        formatPremiumValue(currentValue)
+                                    setPremiumDisplayValues((prev) => ({
+                                        ...prev,
+                                        [key]: formatted,
+                                    }))
+                                }
+                            }
                         }}
                     />
                 )}
                 {/* Show warning for ingangsdatum if more than one week in the past */}
-                {key === 'ingangsdatum' && ingangsdatumWarning && (
+                {key === "ingangsdatum" && ingangsdatumWarning && (
                     <div
                         style={{
                             marginTop: "8px",
@@ -2594,10 +2875,11 @@ function EditInsuredObjectDialog({
     // including premium tariff (premiepercentage) and deductible (eigenRisico)
     const fieldsToRender = isAdmin(userInfo)
         ? getSchemaFieldsForObjectType(schema, object.objectType)
-              .filter((field) =>
-                  field.inputType === "user" ||
-                  field.inputType === "edit_only" ||
-                  field.inputType === "system"
+              .filter(
+                  (field) =>
+                      field.inputType === "user" ||
+                      field.inputType === "edit_only" ||
+                      field.inputType === "system"
               ) // Admins can edit user, edit_only, AND system fields
               .map((field) => field.key)
         : getEditableFieldsForObjectType(schema, object.objectType).map(
@@ -3092,6 +3374,7 @@ async function fetchFullOrganizations(): Promise<
 // ——— Auto Accept Rules Display Component ———
 interface AutoApprovalRule {
     name: string
+    objectType?: string
     conditions: Record<string, any>
     logic: "AND" | "OR"
 }
@@ -3257,16 +3540,39 @@ function AutoAcceptRulesDisplay({
         return operatorMap[operator] || operator
     }
 
-    const formatConditionValue = (condition: any): string => {
+    const formatConditionValue = (
+        condition: any,
+        fieldKey?: string
+    ): string => {
+        // Helper function to format numbers with thousand separators
+        const formatNumber = (num: any): string => {
+            const numValue = Number(num)
+            if (isNaN(numValue)) return String(num)
+            const numStr = String(numValue).replace(/\./g, "")
+            return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+        }
+
         // Handle multi-value conditions (e.g., 'in', 'between')
         if (Array.isArray(condition.values) && condition.values.length > 0) {
             if (
                 condition.operator === "between" &&
                 condition.values.length === 2
             ) {
-                return `${condition.values[0]} en ${condition.values[1]}`
+                const val1 =
+                    fieldKey === "waarde"
+                        ? formatNumber(condition.values[0])
+                        : condition.values[0]
+                const val2 =
+                    fieldKey === "waarde"
+                        ? formatNumber(condition.values[1])
+                        : condition.values[1]
+                return `${val1} en ${val2}`
             }
-            return condition.values.join(", ")
+            const formattedValues =
+                fieldKey === "waarde"
+                    ? condition.values.map((v: any) => formatNumber(v))
+                    : condition.values
+            return formattedValues.join(", ")
         }
 
         // Handle single-value conditions from 'value' property
@@ -3275,7 +3581,9 @@ function AutoAcceptRulesDisplay({
             condition.value !== undefined &&
             condition.value !== ""
         ) {
-            return String(condition.value)
+            return fieldKey === "waarde"
+                ? formatNumber(condition.value)
+                : String(condition.value)
         }
 
         // Check if the condition has the value directly as a property with the field name
@@ -3294,12 +3602,26 @@ function AutoAcceptRulesDisplay({
                         condition.operator === "between" &&
                         value.length === 2
                     ) {
-                        return `${value[0]} en ${value[1]}`
+                        const val1 =
+                            fieldKey === "waarde"
+                                ? formatNumber(value[0])
+                                : value[0]
+                        const val2 =
+                            fieldKey === "waarde"
+                                ? formatNumber(value[1])
+                                : value[1]
+                        return `${val1} en ${val2}`
                     }
-                    return value.join(", ")
+                    const formattedValues =
+                        fieldKey === "waarde"
+                            ? value.map((v: any) => formatNumber(v))
+                            : value
+                    return formattedValues.join(", ")
                 }
                 // Handle single values (string or number)
-                return String(value)
+                return fieldKey === "waarde"
+                    ? formatNumber(value)
+                    : String(value)
             }
         }
 
@@ -3332,13 +3654,36 @@ function AutoAcceptRulesDisplay({
             >
                 <div
                     style={{
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        color: colors.gray800,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
                         marginBottom: "6px",
                     }}
                 >
-                    {rule.name}
+                    <div
+                        style={{
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: colors.gray800,
+                        }}
+                    >
+                        {rule.name}
+                    </div>
+                    {rule.objectType && (
+                        <div
+                            style={{
+                                fontSize: "10px",
+                                padding: "2px 8px",
+                                borderRadius: "10px",
+                                backgroundColor: "#dbeafe",
+                                color: "#1e40af",
+                                fontWeight: "500",
+                                textTransform: "capitalize",
+                            }}
+                        >
+                            {rule.objectType}
+                        </div>
+                    )}
                 </div>
                 <div
                     style={{
@@ -3368,7 +3713,9 @@ function AutoAcceptRulesDisplay({
                         >
                             <strong>{fieldKey}</strong>{" "}
                             {getOperatorLabel(condition.operator)}{" "}
-                            <strong>{formatConditionValue(condition)}</strong>
+                            <strong>
+                                {formatConditionValue(condition, fieldKey)}
+                            </strong>
                         </div>
                     )
                 )}
@@ -3456,7 +3803,7 @@ function AutoAcceptRulesDisplay({
                         border: "1px solid #e2e8f0",
                         borderRadius: "8px",
                         boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-                        zIndex: 1000,
+                        zIndex: 9999,
                         marginTop: "4px",
                         padding: "16px",
                     }}
@@ -3543,12 +3890,9 @@ function AutoAcceptRulesDisplay({
                                     borderRadius: "4px",
                                 }}
                             >
-                                Boten worden automatisch goedgekeurd als
-                                ze voldoen aan{" "}
-                                <strong>
-                                    één van de onderstaande regels
-                                </strong>
-                                :
+                                Boten worden automatisch goedgekeurd als ze
+                                voldoen aan{" "}
+                                <strong>één van de onderstaande regels</strong>:
                             </div>
                             {config.rules.map((rule, index, array) =>
                                 renderRule(
@@ -3603,10 +3947,14 @@ function InsuredObjectList() {
 
     // Sorting state - default to newest first (createdAt DESC)
     const [sortColumn, setSortColumn] = useState<string | null>("createdAt")
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>("desc")
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(
+        "desc"
+    )
 
     // Column-specific filters state
-    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>(
+        {}
+    )
 
     // Uitgangsdatum management state
     const [editingUitgangsdatum, setEditingUitgangsdatum] = useState<
@@ -3619,81 +3967,89 @@ function InsuredObjectList() {
     )
 
     // Uitgangsdatum validation function
-    const validateUitgangsdatum = (
-        date: string,
-        objectId?: string
-    ): { isValid: boolean; error?: string } => {
-        const selectedDate = new Date(date)
-        const today = new Date()
-        const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-        const endOfYear = new Date(today.getFullYear(), 11, 31) // December 31st of current year
+    const validateUitgangsdatum = useCallback(
+        (
+            date: string,
+            objectId?: string
+        ): { isValid: boolean; error?: string } => {
+            const selectedDate = new Date(date)
+            const today = new Date()
+            const oneWeekAgo = new Date(
+                today.getTime() - 7 * 24 * 60 * 60 * 1000
+            )
+            const endOfYear = new Date(today.getFullYear(), 11, 31) // December 31st of current year
 
-        // Check if uitgangsdatum is before ingangsdatum
-        if (objectId) {
-            const object = objects.find(obj => obj.id === objectId)
-            if (object && object.ingangsdatum) {
-                const ingangsdatum = new Date(object.ingangsdatum)
-                if (selectedDate < ingangsdatum) {
-                    return {
-                        isValid: false,
-                        error: "Uitgangsdatum mag niet vóór de ingangsdatum liggen.",
+            // Check if uitgangsdatum is before ingangsdatum
+            if (objectId) {
+                const object = objects.find((obj) => obj.id === objectId)
+                if (object && object.ingangsdatum) {
+                    const ingangsdatum = new Date(object.ingangsdatum)
+                    if (selectedDate < ingangsdatum) {
+                        return {
+                            isValid: false,
+                            error: "Uitgangsdatum mag niet vóór de ingangsdatum liggen.",
+                        }
                     }
                 }
             }
-        }
 
-        // Admins can set any date (except uitgangsdatum before ingangsdatum which is checked above)
-        if (userInfo?.role === 'admin') {
+            // Admins can set any date (except uitgangsdatum before ingangsdatum which is checked above)
+            if (userInfo?.role === "admin") {
+                return { isValid: true }
+            }
+
+            // Non-admin restrictions
+            // Check if date is more than 1 week in the past
+            if (selectedDate < oneWeekAgo) {
+                return {
+                    isValid: false,
+                    error: "Uitgangsdatum kan niet meer dan 1 week in het verleden liggen. Neem contact op met de beheerders.",
+                }
+            }
+
+            // Check if date is in the next year
+            if (selectedDate.getFullYear() > today.getFullYear()) {
+                return {
+                    isValid: false,
+                    error: "Uitgangsdatum kan niet in het volgende jaar liggen. Neem contact op met de beheerders.",
+                }
+            }
+
             return { isValid: true }
-        }
-
-        // Non-admin restrictions
-        // Check if date is more than 1 week in the past
-        if (selectedDate < oneWeekAgo) {
-            return {
-                isValid: false,
-                error: "Uitgangsdatum kan niet meer dan 1 week in het verleden liggen. Neem contact op met de beheerders.",
-            }
-        }
-
-        // Check if date is in the next year
-        if (selectedDate.getFullYear() > today.getFullYear()) {
-            return {
-                isValid: false,
-                error: "Uitgangsdatum kan niet in het volgende jaar liggen. Neem contact op met de beheerders.",
-            }
-        }
-
-        return { isValid: true }
-    }
+        },
+        [objects, userInfo]
+    )
 
     // Sorting handler - implements 3-state cycle: none → asc → desc → none
-    const handleSort = useCallback((columnKey: string) => {
-        setSortColumn(prevColumn => {
-            // If clicking a different column, start with ascending
-            if (prevColumn !== columnKey) {
-                setSortDirection('asc')
-                return columnKey
-            }
-
-            // Same column - cycle through states
-            setSortDirection(prevDirection => {
-                if (prevDirection === null || prevDirection === 'desc') {
-                    // none → asc OR desc → none
-                    return prevDirection === 'desc' ? null : 'asc'
-                } else {
-                    // asc → desc
-                    return 'desc'
+    const handleSort = useCallback(
+        (columnKey: string) => {
+            setSortColumn((prevColumn) => {
+                // If clicking a different column, start with ascending
+                if (prevColumn !== columnKey) {
+                    setSortDirection("asc")
+                    return columnKey
                 }
-            })
 
-            // If we're going back to null, clear the column too
-            if (sortDirection === 'desc') {
-                return null
-            }
-            return columnKey
-        })
-    }, [sortDirection])
+                // Same column - cycle through states
+                setSortDirection((prevDirection) => {
+                    if (prevDirection === null || prevDirection === "desc") {
+                        // none → asc OR desc → none
+                        return prevDirection === "desc" ? null : "asc"
+                    } else {
+                        // asc → desc
+                        return "desc"
+                    }
+                })
+
+                // If we're going back to null, clear the column too
+                if (sortDirection === "desc") {
+                    return null
+                }
+                return columnKey
+            })
+        },
+        [sortDirection]
+    )
 
     // Dynamic schema hook
     const {
@@ -3725,7 +4081,7 @@ function InsuredObjectList() {
 
     // Load column order from localStorage or use default
     useEffect(() => {
-        const savedOrder = localStorage.getItem('insuredObjects_columnOrder')
+        const savedOrder = localStorage.getItem("insuredObjects_columnOrder")
         if (savedOrder) {
             try {
                 const parsedOrder = JSON.parse(savedOrder)
@@ -3735,7 +4091,10 @@ function InsuredObjectList() {
                     setColumnOrder(defaultColumnOrder)
                 }
             } catch (error) {
-                console.warn('Failed to parse saved column order, using default:', error)
+                console.warn(
+                    "Failed to parse saved column order, using default:",
+                    error
+                )
                 setColumnOrder(defaultColumnOrder)
             }
         } else {
@@ -3746,19 +4105,24 @@ function InsuredObjectList() {
     // Save column order to localStorage whenever it changes
     useEffect(() => {
         if (columnOrder.length > 0) {
-            localStorage.setItem('insuredObjects_columnOrder', JSON.stringify(columnOrder))
+            localStorage.setItem(
+                "insuredObjects_columnOrder",
+                JSON.stringify(columnOrder)
+            )
         }
     }, [columnOrder])
 
     // Update column order when new columns are available (but preserve user customizations)
     useEffect(() => {
         if (COLUMNS.length > 0 && columnOrder.length > 0) {
-            const availableColumnKeys = COLUMNS.map(col => col.key)
-            const newColumns = availableColumnKeys.filter(key => !columnOrder.includes(key))
+            const availableColumnKeys = COLUMNS.map((col) => col.key)
+            const newColumns = availableColumnKeys.filter(
+                (key) => !columnOrder.includes(key)
+            )
 
             if (newColumns.length > 0) {
                 // Add new columns at the end of the user's custom order
-                setColumnOrder(prev => [...prev, ...newColumns])
+                setColumnOrder((prev) => [...prev, ...newColumns])
             }
         }
     }, [COLUMNS, columnOrder.length])
@@ -3808,7 +4172,9 @@ function InsuredObjectList() {
     const handleExportToExcel = async () => {
         // Check if XLSX library is loaded
         if (!XLSX) {
-            alert("Excel bibliotheek wordt nog geladen. Probeer het over een paar seconden opnieuw.")
+            alert(
+                "Excel bibliotheek wordt nog geladen. Probeer het over een paar seconden opnieuw."
+            )
             return
         }
 
@@ -3822,9 +4188,9 @@ function InsuredObjectList() {
             const columnsToExport = visibleColumnsList
 
             // Create data array with formatted values
-            const data = filteredObjects.map(obj => {
+            const data = filteredObjects.map((obj) => {
                 const row: any = {}
-                columnsToExport.forEach(col => {
+                columnsToExport.forEach((col) => {
                     let value = obj[col.key as keyof InsuredObject]
 
                     // Handle null/undefined
@@ -3835,13 +4201,20 @@ function InsuredObjectList() {
 
                     // Format dates
                     if (col.key.includes("datum") || col.key.includes("date")) {
-                        row[col.label] = value ? new Date(value).toLocaleDateString("nl-NL") : ""
+                        row[col.label] = value
+                            ? new Date(value).toLocaleDateString("nl-NL")
+                            : ""
                         return
                     }
 
                     // Format currency as numbers (Excel will handle formatting)
-                    if (col.key.includes("waarde") || col.key.includes("premie") || col.key === "eigenRisico") {
-                        row[col.label] = typeof value === "number" ? value : value
+                    if (
+                        col.key.includes("waarde") ||
+                        col.key.includes("premie") ||
+                        col.key === "eigenRisico"
+                    ) {
+                        row[col.label] =
+                            typeof value === "number" ? value : value
                         return
                     }
 
@@ -3849,7 +4222,10 @@ function InsuredObjectList() {
                     if (col.key === "objectType" && typeof value === "string") {
                         const lowerValue = value.toLowerCase()
                         if (lowerValue in OBJECT_TYPE_CONFIG) {
-                            row[col.label] = OBJECT_TYPE_CONFIG[lowerValue as ObjectType].label
+                            row[col.label] =
+                                OBJECT_TYPE_CONFIG[
+                                    lowerValue as ObjectType
+                                ].label
                         } else {
                             row[col.label] = value
                         }
@@ -3858,13 +4234,22 @@ function InsuredObjectList() {
 
                     // Translate status to Dutch
                     if (col.key === "status" && typeof value === "string") {
-                        row[col.label] = STATUS_TRANSLATIONS[value as keyof typeof STATUS_TRANSLATIONS] || value
+                        row[col.label] =
+                            STATUS_TRANSLATIONS[
+                                value as keyof typeof STATUS_TRANSLATIONS
+                            ] || value
                         return
                     }
 
                     // Translate premiumMethod to Dutch
-                    if (col.key === "premiumMethod" && typeof value === "string") {
-                        row[col.label] = PREMIUM_METHOD_TRANSLATIONS[value as keyof typeof PREMIUM_METHOD_TRANSLATIONS] || value
+                    if (
+                        col.key === "premiumMethod" &&
+                        typeof value === "string"
+                    ) {
+                        row[col.label] =
+                            PREMIUM_METHOD_TRANSLATIONS[
+                                value as keyof typeof PREMIUM_METHOD_TRANSLATIONS
+                            ] || value
                         return
                     }
 
@@ -3877,19 +4262,19 @@ function InsuredObjectList() {
             const worksheet = XLSX.utils.json_to_sheet(data)
 
             // Set column widths (auto-size based on content)
-            const columnWidths = columnsToExport.map(col => ({
-                wch: Math.max(col.label.length + 2, 15) // Min width of 15 characters, add padding
+            const columnWidths = columnsToExport.map((col) => ({
+                wch: Math.max(col.label.length + 2, 15), // Min width of 15 characters, add padding
             }))
-            worksheet['!cols'] = columnWidths
+            worksheet["!cols"] = columnWidths
 
             // Add autofilter to enable Excel's filter dropdowns
-            const ref = worksheet['!ref']
+            const ref = worksheet["!ref"]
             if (ref) {
-                worksheet['!autofilter'] = { ref: ref }
+                worksheet["!autofilter"] = { ref: ref }
             }
 
             // Style the header row (row 1)
-            const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+            const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1")
             for (let col = range.s.c; col <= range.e.c; col++) {
                 const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col })
                 if (!worksheet[cellAddress]) continue
@@ -3899,22 +4284,22 @@ function InsuredObjectList() {
                     font: {
                         bold: true,
                         color: { rgb: "FFFFFF" },
-                        sz: 12
+                        sz: 12,
                     },
                     fill: {
-                        fgColor: { rgb: "4472C4" } // Blue background
+                        fgColor: { rgb: "4472C4" }, // Blue background
                     },
                     alignment: {
                         horizontal: "center",
                         vertical: "center",
-                        wrapText: true
+                        wrapText: true,
                     },
                     border: {
                         top: { style: "thin", color: { rgb: "000000" } },
                         bottom: { style: "thin", color: { rgb: "000000" } },
                         left: { style: "thin", color: { rgb: "000000" } },
-                        right: { style: "thin", color: { rgb: "000000" } }
-                    }
+                        right: { style: "thin", color: { rgb: "000000" } },
+                    },
                 }
             }
 
@@ -3922,42 +4307,48 @@ function InsuredObjectList() {
             for (let row = range.s.r + 1; row <= range.e.r; row++) {
                 const isEvenRow = row % 2 === 0
                 for (let col = range.s.c; col <= range.e.c; col++) {
-                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
+                    const cellAddress = XLSX.utils.encode_cell({
+                        r: row,
+                        c: col,
+                    })
                     if (!worksheet[cellAddress]) continue
 
                     // Determine if this is a currency column
                     const colHeader = columnsToExport[col]
-                    const isCurrency = colHeader && (
-                        colHeader.key.includes("waarde") ||
-                        colHeader.key.includes("premie") ||
-                        colHeader.key === "eigenRisico"
-                    )
+                    const isCurrency =
+                        colHeader &&
+                        (colHeader.key.includes("waarde") ||
+                            colHeader.key.includes("premie") ||
+                            colHeader.key === "eigenRisico")
 
                     worksheet[cellAddress].s = {
                         fill: {
-                            fgColor: { rgb: isEvenRow ? "F2F2F2" : "FFFFFF" } // Alternating row colors
+                            fgColor: { rgb: isEvenRow ? "F2F2F2" : "FFFFFF" }, // Alternating row colors
                         },
                         alignment: {
                             horizontal: isCurrency ? "right" : "left",
-                            vertical: "center"
+                            vertical: "center",
                         },
                         border: {
                             top: { style: "thin", color: { rgb: "D3D3D3" } },
                             bottom: { style: "thin", color: { rgb: "D3D3D3" } },
                             left: { style: "thin", color: { rgb: "D3D3D3" } },
-                            right: { style: "thin", color: { rgb: "D3D3D3" } }
-                        }
+                            right: { style: "thin", color: { rgb: "D3D3D3" } },
+                        },
                     }
 
                     // Apply number formatting for currency
-                    if (isCurrency && typeof worksheet[cellAddress].v === 'number') {
-                        worksheet[cellAddress].z = '€#,##0.00' // Euro currency format
+                    if (
+                        isCurrency &&
+                        typeof worksheet[cellAddress].v === "number"
+                    ) {
+                        worksheet[cellAddress].z = "€#,##0.00" // Euro currency format
                     }
                 }
             }
 
             // Freeze the header row
-            worksheet['!freeze'] = { xSplit: 0, ySplit: 1 }
+            worksheet["!freeze"] = { xSplit: 0, ySplit: 1 }
 
             // Create workbook and add worksheet
             const workbook = XLSX.utils.book_new()
@@ -4042,7 +4433,9 @@ function InsuredObjectList() {
     const generatePDF = async () => {
         // Check if libraries are loaded
         if (!html2canvas || !jsPDF) {
-            alert("PDF bibliotheken worden nog geladen. Probeer het over een paar seconden opnieuw.")
+            alert(
+                "PDF bibliotheken worden nog geladen. Probeer het over een paar seconden opnieuw."
+            )
             return
         }
 
@@ -4086,11 +4479,18 @@ function InsuredObjectList() {
         let organizationInfo: OrganizationInfo | null = null
         if (currentOrganization) {
             try {
-                console.log("Fetching organization info for:", currentOrganization)
-                organizationInfo = await fetchOrganizationInfo(currentOrganization)
+                console.log(
+                    "Fetching organization info for:",
+                    currentOrganization
+                )
+                organizationInfo =
+                    await fetchOrganizationInfo(currentOrganization)
                 console.log("Organization info received:", organizationInfo)
             } catch (error) {
-                console.error("Failed to fetch organization info for PDF:", error)
+                console.error(
+                    "Failed to fetch organization info for PDF:",
+                    error
+                )
             }
         } else {
             console.log("No current organization set for PDF generation")
@@ -4100,7 +4500,10 @@ function InsuredObjectList() {
         let logoSrc: string | null = null
         if (organizationInfo?.id) {
             try {
-                console.log("Fetching logo for organization ID:", organizationInfo.id)
+                console.log(
+                    "Fetching logo for organization ID:",
+                    organizationInfo.id
+                )
                 const logoData = await getOrganizationLogo(organizationInfo.id)
                 if (logoData?.logoData) {
                     logoSrc = `data:image/png;base64,${logoData.logoData}`
@@ -4109,7 +4512,10 @@ function InsuredObjectList() {
                     console.log("No logo found for organization")
                 }
             } catch (error) {
-                console.error("Failed to fetch organization logo for print:", error)
+                console.error(
+                    "Failed to fetch organization logo for print:",
+                    error
+                )
             }
         }
 
@@ -4286,25 +4692,42 @@ function InsuredObjectList() {
 </head>
 <body>
     <div class="header">
-        ${logoSrc ? `
+        ${
+            logoSrc
+                ? `
         <img src="${logoSrc}" class="header-logo" alt="${organizationName} logo" />
-        ` : ``}
+        `
+                : ``
+        }
         <div class="header-left">
             <h1>Vloot Overzicht</h1>
             <div class="organization-name">${organizationName}</div>
-            ${organizationInfo && (organizationInfo.polisnummer || organizationInfo.street || organizationInfo.postal_code || organizationInfo.city || organizationInfo.country) ? `
+            ${
+                organizationInfo &&
+                (organizationInfo.polisnummer ||
+                    organizationInfo.street ||
+                    organizationInfo.postal_code ||
+                    organizationInfo.city ||
+                    organizationInfo.country)
+                    ? `
             <div class="organization-address">
-                ${organizationInfo.polisnummer ? `<strong>Polisnummer:</strong> ${organizationInfo.polisnummer}<br>` : ''}
-                ${organizationInfo.street ? `${organizationInfo.street}<br>` : ''}
-                ${organizationInfo.postal_code || organizationInfo.city ?
-                    `${organizationInfo.postal_code || ''} ${organizationInfo.city || ''}`.trim() + '<br>' : ''}
-                ${organizationInfo.country || ''}
+                ${organizationInfo.polisnummer ? `<strong>Polisnummer:</strong> ${organizationInfo.polisnummer}<br>` : ""}
+                ${organizationInfo.street ? `${organizationInfo.street}<br>` : ""}
+                ${
+                    organizationInfo.postal_code || organizationInfo.city
+                        ? `${organizationInfo.postal_code || ""} ${organizationInfo.city || ""}`.trim() +
+                          "<br>"
+                        : ""
+                }
+                ${organizationInfo.country || ""}
             </div>
-            ` : `
+            `
+                    : `
             <div class="organization-address" style="color: #ef4444; font-size: 12px;">
                 Adresgegevens niet beschikbaar
             </div>
-            `}
+            `
+            }
         </div>
         <div class="header-right">
             <div><strong>Datum:</strong> ${currentDate}</div>
@@ -4329,7 +4752,10 @@ function InsuredObjectList() {
                             let value = obj[field.key as keyof typeof obj]
 
                             // Format specific fields
-                            if (field.key === "waarde" || field.key === "eigenRisico") {
+                            if (
+                                field.key === "waarde" ||
+                                field.key === "eigenRisico"
+                            ) {
                                 const numValue = Number(value) || 0
                                 value = numValue.toLocaleString("nl-NL", {
                                     style: "currency",
@@ -4339,7 +4765,8 @@ function InsuredObjectList() {
                                 })
                             } else if (
                                 field.key === "totalePremieOverHetJaar" ||
-                                field.key === "totalePremieOverDeVerzekerdePeriode"
+                                field.key ===
+                                    "totalePremieOverDeVerzekerdePeriode"
                             ) {
                                 const numValue = Number(value) || 0
                                 value = numValue.toLocaleString("nl-NL", {
@@ -4351,18 +4778,36 @@ function InsuredObjectList() {
                             } else if (field.key === "premiepercentage") {
                                 const numValue = Number(value) || 0
                                 value = numValue.toFixed(2) + "%"
-                            } else if (field.key === "objectType" && typeof value === "string") {
+                            } else if (
+                                field.key === "objectType" &&
+                                typeof value === "string"
+                            ) {
                                 // Format objectType to use Dutch labels (case-insensitive)
                                 const lowerValue = value.toLowerCase()
                                 if (lowerValue in OBJECT_TYPE_CONFIG) {
-                                    value = OBJECT_TYPE_CONFIG[lowerValue as ObjectType].label
+                                    value =
+                                        OBJECT_TYPE_CONFIG[
+                                            lowerValue as ObjectType
+                                        ].label
                                 }
-                            } else if (field.key === "status" && typeof value === "string") {
+                            } else if (
+                                field.key === "status" &&
+                                typeof value === "string"
+                            ) {
                                 // Translate status to Dutch
-                                value = STATUS_TRANSLATIONS[value as keyof typeof STATUS_TRANSLATIONS] || value
-                            } else if (field.key === "premiumMethod" && typeof value === "string") {
+                                value =
+                                    STATUS_TRANSLATIONS[
+                                        value as keyof typeof STATUS_TRANSLATIONS
+                                    ] || value
+                            } else if (
+                                field.key === "premiumMethod" &&
+                                typeof value === "string"
+                            ) {
                                 // Translate premiumMethod to Dutch
-                                value = PREMIUM_METHOD_TRANSLATIONS[value as keyof typeof PREMIUM_METHOD_TRANSLATIONS] || value
+                                value =
+                                    PREMIUM_METHOD_TRANSLATIONS[
+                                        value as keyof typeof PREMIUM_METHOD_TRANSLATIONS
+                                    ] || value
                             }
 
                             return `<td>${value || "-"}</td>`
@@ -4409,7 +4854,11 @@ function InsuredObjectList() {
         tempContainer.id = "pdf-temp-container"
 
         // Set the full HTML including styles
-        tempContainer.innerHTML = htmlContent.replace('<!DOCTYPE html>', '').replace(/<\/?html[^>]*>/g, '').replace(/<\/?head[^>]*>/g, '').replace(/<\/?body[^>]*>/g, '')
+        tempContainer.innerHTML = htmlContent
+            .replace("<!DOCTYPE html>", "")
+            .replace(/<\/?html[^>]*>/g, "")
+            .replace(/<\/?head[^>]*>/g, "")
+            .replace(/<\/?body[^>]*>/g, "")
 
         // Style the container - position it in viewport
         tempContainer.style.position = "fixed"
@@ -4428,29 +4877,39 @@ function InsuredObjectList() {
         document.body.appendChild(tempContainer)
 
         // Wait for browser to calculate dimensions and load images
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise((resolve) => setTimeout(resolve, 300))
 
-        console.log("Container dimensions:", tempContainer.offsetWidth, "x", tempContainer.offsetHeight)
+        console.log(
+            "Container dimensions:",
+            tempContainer.offsetWidth,
+            "x",
+            tempContainer.offsetHeight
+        )
         console.log("Container child count:", tempContainer.children.length)
 
         // Check if we have content
         if (tempContainer.offsetHeight === 0) {
-            console.error("Container has no height! Content may not be rendering.")
-            console.log("Container HTML:", tempContainer.innerHTML.substring(0, 500))
+            console.error(
+                "Container has no height! Content may not be rendering."
+            )
+            console.log(
+                "Container HTML:",
+                tempContainer.innerHTML.substring(0, 500)
+            )
         }
 
         // Configure PDF options
         const opt = {
             margin: [15, 15, 15, 15],
-            filename: `Vloot_Overzicht_${organizationName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
+            filename: `Vloot_Overzicht_${organizationName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`,
+            image: { type: "jpeg", quality: 0.98 },
             html2canvas: {
                 scale: 2,
                 useCORS: true,
                 logging: true,
-                backgroundColor: '#ffffff'
+                backgroundColor: "#ffffff",
             },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
         }
 
         // Generate PDF using direct html2canvas call for better debugging
@@ -4463,11 +4922,11 @@ function InsuredObjectList() {
                 scale: 2,
                 useCORS: true,
                 logging: true,
-                backgroundColor: '#ffffff',
+                backgroundColor: "#ffffff",
                 width: tempContainer.offsetWidth,
                 height: tempContainer.offsetHeight,
                 windowWidth: tempContainer.scrollWidth,
-                windowHeight: tempContainer.scrollHeight
+                windowHeight: tempContainer.scrollHeight,
             })
 
             console.log("Canvas created:", canvas.width, "x", canvas.height)
@@ -4480,20 +4939,27 @@ function InsuredObjectList() {
             }
 
             // Check if canvas has content
-            const ctx = canvas.getContext('2d')
-            const imageData = ctx?.getImageData(0, 0, Math.min(100, canvas.width), Math.min(100, canvas.height))
-            const hasContent = imageData?.data.some((pixel, i) => i % 4 === 3 && pixel > 0) || false
+            const ctx = canvas.getContext("2d")
+            const imageData = ctx?.getImageData(
+                0,
+                0,
+                Math.min(100, canvas.width),
+                Math.min(100, canvas.height)
+            )
+            const hasContent =
+                imageData?.data.some((pixel, i) => i % 4 === 3 && pixel > 0) ||
+                false
             console.log("Canvas has content:", hasContent)
 
             // Convert canvas to image data URL
-            const imgData = canvas.toDataURL('image/jpeg', 0.98)
+            const imgData = canvas.toDataURL("image/jpeg", 0.98)
             console.log("Image data URL created, length:", imgData.length)
 
             // Create jsPDF instance
             const pdf = new jsPDF({
-                orientation: 'landscape',
-                unit: 'mm',
-                format: 'a4'
+                orientation: "landscape",
+                unit: "mm",
+                format: "a4",
             })
 
             // Calculate dimensions to fit on page
@@ -4501,12 +4967,15 @@ function InsuredObjectList() {
             const pageHeight = pdf.internal.pageSize.getHeight()
             const margin = 15
 
-            const availableWidth = pageWidth - (2 * margin)
-            const availableHeight = pageHeight - (2 * margin)
+            const availableWidth = pageWidth - 2 * margin
+            const availableHeight = pageHeight - 2 * margin
 
             const imgWidth = canvas.width
             const imgHeight = canvas.height
-            const ratio = Math.min(availableWidth / (imgWidth * 0.264583), availableHeight / (imgHeight * 0.264583))
+            const ratio = Math.min(
+                availableWidth / (imgWidth * 0.264583),
+                availableHeight / (imgHeight * 0.264583)
+            )
 
             const finalWidth = imgWidth * 0.264583 * ratio
             const finalHeight = imgHeight * 0.264583 * ratio
@@ -4514,10 +4983,17 @@ function InsuredObjectList() {
             console.log("Adding image to PDF:", finalWidth, "x", finalHeight)
 
             // Add image to PDF
-            pdf.addImage(imgData, 'JPEG', margin, margin, finalWidth, finalHeight)
+            pdf.addImage(
+                imgData,
+                "JPEG",
+                margin,
+                margin,
+                finalWidth,
+                finalHeight
+            )
 
             // Save the PDF
-            const filename = `Vloot_Overzicht_${organizationName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+            const filename = `Vloot_Overzicht_${organizationName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`
             pdf.save(filename)
 
             console.log("PDF saved successfully")
@@ -4527,7 +5003,6 @@ function InsuredObjectList() {
                 document.body.removeChild(tempContainer)
             }
             setShowPrintModal(false)
-
         } catch (error) {
             console.error("Failed to generate PDF:", error)
             if (document.body.contains(tempContainer)) {
@@ -4563,18 +5038,18 @@ function InsuredObjectList() {
 
     const resetColumnOrder = () => {
         setColumnOrder([...defaultColumnOrder])
-        localStorage.removeItem('insuredObjects_columnOrder')
+        localStorage.removeItem("insuredObjects_columnOrder")
     }
 
     // Drag and drop event handlers
     const handleDragStart = (e: React.DragEvent, columnKey: string) => {
         setDraggedColumn(columnKey)
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/plain', columnKey)
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", columnKey)
 
         // Add some visual feedback
         if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '0.5'
+            e.currentTarget.style.opacity = "0.5"
         }
     }
 
@@ -4584,13 +5059,13 @@ function InsuredObjectList() {
 
         // Reset visual feedback
         if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '1'
+            e.currentTarget.style.opacity = "1"
         }
     }
 
     const handleDragOver = (e: React.DragEvent, columnKey: string) => {
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
+        e.dataTransfer.dropEffect = "move"
         setDragOverColumn(columnKey)
     }
 
@@ -4601,7 +5076,7 @@ function InsuredObjectList() {
     const handleDrop = (e: React.DragEvent, targetColumnKey: string) => {
         e.preventDefault()
 
-        const draggedColumnKey = e.dataTransfer.getData('text/plain')
+        const draggedColumnKey = e.dataTransfer.getData("text/plain")
         if (draggedColumnKey && draggedColumnKey !== targetColumnKey) {
             const dragIndex = columnOrder.indexOf(draggedColumnKey)
             const hoverIndex = columnOrder.indexOf(targetColumnKey)
@@ -4723,7 +5198,7 @@ function InsuredObjectList() {
         loadBrokerInfo()
     }, [currentOrganization])
 
-    async function fetchObjects() {
+    const fetchObjects = useCallback(async () => {
         try {
             const token = getIdToken()
             const headers: Record<string, string> = {
@@ -4771,18 +5246,46 @@ function InsuredObjectList() {
             }
 
             console.log(`Setting objects: ${objectsList.length} items`)
+            console.log("[FETCH] Sample object data:", objectsList[0])
+
             // Update all objects with calculated premium values for consistency
-            const objectsWithCalculatedPremiums = objectsList.map((obj) =>
-                updateObjectWithCalculatedPremiums(obj)
+            console.log("[FETCH] Calculating premiums for objects...")
+            const objectsWithCalculatedPremiums = objectsList.map(
+                (obj, index) => {
+                    console.log(
+                        `[FETCH] Processing object ${index + 1}/${objectsList.length}`,
+                        {
+                            id: obj.id,
+                            uitgangsdatum: obj.uitgangsdatum,
+                            uitgangsdatumType: typeof obj.uitgangsdatum,
+                        }
+                    )
+                    try {
+                        const result = updateObjectWithCalculatedPremiums(obj)
+                        console.log(
+                            `[FETCH] Object ${index + 1} processed successfully`
+                        )
+                        return result
+                    } catch (err) {
+                        console.error(
+                            `[FETCH] Error processing object ${index + 1}:`,
+                            err,
+                            obj
+                        )
+                        throw err
+                    }
+                }
             )
+            console.log("[FETCH] All objects processed, setting state")
             setObjects(objectsWithCalculatedPremiums)
+            console.log("[FETCH] State updated successfully")
         } catch (err: any) {
             console.error("Error in fetchObjects:", err)
             // Ensure objects remains an empty array on error, not null
             setObjects([])
             throw new Error(err.message || "Failed to fetch insured objects")
         }
-    }
+    }, [currentOrganization])
 
     // Role-aware filtering with organization-specific context
     // Debug logging to understand objects state
@@ -4881,10 +5384,11 @@ function InsuredObjectList() {
             }
 
             // Show success message
-            const objectLabel = OBJECT_TYPE_CONFIG[deletingObject.objectType?.toLowerCase() as ObjectType]?.label || "Object"
-            setSuccessMessage(
-                `${objectLabel} deleted successfully!`
-            )
+            const objectLabel =
+                OBJECT_TYPE_CONFIG[
+                    deletingObject.objectType?.toLowerCase() as ObjectType
+                ]?.label || "Object"
+            setSuccessMessage(`${objectLabel} deleted successfully!`)
 
             // Refresh the list
             await fetchObjects()
@@ -4989,16 +5493,28 @@ function InsuredObjectList() {
     }, [])
 
     const handleUitgangsdatumConfirm = useCallback(async () => {
+        console.log("[UITGANGSDATUM] Confirm clicked", {
+            editingUitgangsdatum,
+            selectedUitgangsdatum,
+        })
+
         if (!editingUitgangsdatum || !selectedUitgangsdatum) return
 
         // Validate the date with object ID for ingangsdatum comparison
-        const validation = validateUitgangsdatum(selectedUitgangsdatum, editingUitgangsdatum)
+        console.log("[UITGANGSDATUM] Validating date...")
+        const validation = validateUitgangsdatum(
+            selectedUitgangsdatum,
+            editingUitgangsdatum
+        )
+        console.log("[UITGANGSDATUM] Validation result:", validation)
+
         if (!validation.isValid) {
             setUitgangsdatumError(validation.error || "Invalid date")
             return
         }
 
         try {
+            console.log("[UITGANGSDATUM] Sending PUT request...")
             const token = getIdToken()
             const res = await fetch(
                 `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${editingUitgangsdatum}`,
@@ -5015,6 +5531,8 @@ function InsuredObjectList() {
                 }
             )
 
+            console.log("[UITGANGSDATUM] PUT response status:", res.status)
+
             if (!res.ok) {
                 throw new Error(
                     `Failed to update: ${res.status} ${res.statusText}`
@@ -5022,16 +5540,21 @@ function InsuredObjectList() {
             }
 
             // Show success message
+            console.log("[UITGANGSDATUM] Update successful, showing message")
             setSuccessMessage(
                 "Uitgangsdatum successfully set - object is now out of policy"
             )
 
             // Refresh the list
+            console.log("[UITGANGSDATUM] Fetching updated objects...")
             await fetchObjects()
+            console.log("[UITGANGSDATUM] Fetch completed successfully")
 
             // Close modal
+            console.log("[UITGANGSDATUM] Closing modal")
             handleUitgangsdatumCancel()
         } catch (err: any) {
+            console.error("[UITGANGSDATUM] Error in confirm:", err)
             setUitgangsdatumError(
                 err.message || "Failed to update uitgangsdatum"
             )
@@ -5041,6 +5564,7 @@ function InsuredObjectList() {
         selectedUitgangsdatum,
         validateUitgangsdatum,
         handleUitgangsdatumCancel,
+        fetchObjects,
     ])
 
     if (isLoading || schemaLoading) {
@@ -5081,10 +5605,10 @@ function InsuredObjectList() {
     const userRole = userInfo?.role || "user"
 
     // Check if current user can perform any actions (for showing Actions column)
-    const canPerformActions = userInfo ? (
-        hasPermission(userInfo, "INSURED_OBJECT_UPDATE") ||
-        hasPermission(userInfo, "INSURED_OBJECT_DELETE")
-    ) : false
+    const canPerformActions = userInfo
+        ? hasPermission(userInfo, "INSURED_OBJECT_UPDATE") ||
+          hasPermission(userInfo, "INSURED_OBJECT_DELETE")
+        : false
 
     return (
         <div
@@ -5151,7 +5675,7 @@ function InsuredObjectList() {
                     backgroundColor: "#fff",
                     borderRadius: "12px",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                    overflow: "hidden",
+                    overflow: "visible",
                 }}
             >
                 {/* Logo moved to main title area */}
@@ -5276,7 +5800,9 @@ function InsuredObjectList() {
                                 {filteredObjects.length} objecten
                             </div>
                             {/* Clear filters button - show when filters are active */}
-                            {Object.keys(columnFilters).some(key => columnFilters[key]?.trim()) && (
+                            {Object.keys(columnFilters).some((key) =>
+                                columnFilters[key]?.trim()
+                            ) && (
                                 <button
                                     onClick={() => setColumnFilters({})}
                                     style={{
@@ -5294,10 +5820,12 @@ function InsuredObjectList() {
                                         transition: "background-color 0.2s",
                                     }}
                                     onMouseOver={(e) => {
-                                        e.currentTarget.style.backgroundColor = colors.primaryHover
+                                        e.currentTarget.style.backgroundColor =
+                                            colors.primaryHover
                                     }}
                                     onMouseOut={(e) => {
-                                        e.currentTarget.style.backgroundColor = colors.primary
+                                        e.currentTarget.style.backgroundColor =
+                                            colors.primary
                                     }}
                                 >
                                     <FaTimes size={12} />
@@ -5332,6 +5860,8 @@ function InsuredObjectList() {
                                 marginBottom: "8px",
                                 display: "flex",
                                 justifyContent: "flex-start",
+                                overflow: "visible",
+                                position: "relative",
                             }}
                         >
                             <AutoAcceptRulesDisplay
@@ -5377,7 +5907,7 @@ function InsuredObjectList() {
                             style={{
                                 position: "sticky",
                                 top: 0,
-                                backgroundColor: "#f8fafc",
+                                backgroundColor: "#7CC2FE",
                                 zIndex: 10,
                             }}
                         >
@@ -5404,9 +5934,13 @@ function InsuredObjectList() {
                                     <th
                                         key={col.key}
                                         draggable
-                                        onDragStart={(e) => handleDragStart(e, col.key)}
+                                        onDragStart={(e) =>
+                                            handleDragStart(e, col.key)
+                                        }
                                         onDragEnd={handleDragEnd}
-                                        onDragOver={(e) => handleDragOver(e, col.key)}
+                                        onDragOver={(e) =>
+                                            handleDragOver(e, col.key)
+                                        }
                                         onDragLeave={handleDragLeave}
                                         onDrop={(e) => handleDrop(e, col.key)}
                                         style={{
@@ -5416,16 +5950,19 @@ function InsuredObjectList() {
                                             fontWeight: "600",
                                             color: "#475569",
                                             fontSize: "13px",
-                                            cursor: col.sortable ? "pointer" : "move", // Show pointer for sortable columns
+                                            cursor: col.sortable
+                                                ? "pointer"
+                                                : "move", // Show pointer for sortable columns
                                             minWidth: col.width, // Use minWidth instead of width for dynamic sizing
                                             whiteSpace: "nowrap", // Prevent text wrapping for better readability
                                             backgroundColor:
                                                 dragOverColumn === col.key
                                                     ? "#e2e8f0"
                                                     : draggedColumn === col.key
-                                                    ? "#f1f5f9"
-                                                    : "transparent",
-                                            transition: "background-color 0.2s ease",
+                                                      ? "#f1f5f9"
+                                                      : "transparent",
+                                            transition:
+                                                "background-color 0.2s ease",
                                             userSelect: "none",
                                             position: "relative",
                                         }}
@@ -5434,21 +5971,31 @@ function InsuredObjectList() {
                                         }
                                     >
                                         {col.label}
-                                        {col.sortable && sortColumn === col.key && (
-                                            <span style={{ marginLeft: "4px", fontSize: "12px" }}>
-                                                {sortDirection === 'asc' ? '↑' : '↓'}
-                                            </span>
-                                        )}
+                                        {col.sortable &&
+                                            sortColumn === col.key && (
+                                                <span
+                                                    style={{
+                                                        marginLeft: "4px",
+                                                        fontSize: "12px",
+                                                    }}
+                                                >
+                                                    {sortDirection === "asc"
+                                                        ? "↑"
+                                                        : "↓"}
+                                                </span>
+                                            )}
                                         {dragOverColumn === col.key && (
-                                            <div style={{
-                                                position: "absolute",
-                                                left: "0",
-                                                top: "0",
-                                                bottom: "0",
-                                                width: "3px",
-                                                backgroundColor: "#3b82f6",
-                                                borderRadius: "1px"
-                                            }} />
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    left: "0",
+                                                    top: "0",
+                                                    bottom: "0",
+                                                    width: "3px",
+                                                    backgroundColor: "#3b82f6",
+                                                    borderRadius: "1px",
+                                                }}
+                                            />
                                         )}
                                     </th>
                                 ))}
@@ -5480,14 +6027,21 @@ function InsuredObjectList() {
                                             <input
                                                 type="text"
                                                 placeholder={`Filter ${col.label}...`}
-                                                value={columnFilters[col.key] || ""}
+                                                value={
+                                                    columnFilters[col.key] || ""
+                                                }
                                                 onChange={(e) => {
-                                                    setColumnFilters(prev => ({
-                                                        ...prev,
-                                                        [col.key]: e.target.value
-                                                    }))
+                                                    setColumnFilters(
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            [col.key]:
+                                                                e.target.value,
+                                                        })
+                                                    )
                                                 }}
-                                                onClick={(e) => e.stopPropagation()}
+                                                onClick={(e) =>
+                                                    e.stopPropagation()
+                                                }
                                                 style={{
                                                     width: "100%",
                                                     padding: "6px 8px",
@@ -5499,12 +6053,15 @@ function InsuredObjectList() {
                                                     outline: "none",
                                                 }}
                                                 onFocus={(e) => {
-                                                    e.target.style.borderColor = colors.primary
+                                                    e.target.style.borderColor =
+                                                        colors.primary
                                                     e.target.style.boxShadow = `0 0 0 1px ${colors.primary}`
                                                 }}
                                                 onBlur={(e) => {
-                                                    e.target.style.borderColor = "#cbd5e1"
-                                                    e.target.style.boxShadow = "none"
+                                                    e.target.style.borderColor =
+                                                        "#cbd5e1"
+                                                    e.target.style.boxShadow =
+                                                        "none"
                                                 }}
                                             />
                                         )}
@@ -5552,7 +6109,8 @@ function InsuredObjectList() {
                                         <td
                                             style={{
                                                 padding: "12px 8px",
-                                                borderBottom: "1px solid #f1f5f9",
+                                                borderBottom:
+                                                    "1px solid #f1f5f9",
                                                 whiteSpace: "nowrap",
                                                 textAlign: "right",
                                             }}
@@ -5588,7 +6146,10 @@ function InsuredObjectList() {
                                                             lineHeight: "1.3",
                                                         }}
                                                     >
-                                                        <span>{object.objectType || "Onbekend"}</span>
+                                                        <span>
+                                                            {object.objectType ||
+                                                                "Onbekend"}
+                                                        </span>
                                                     </td>
                                                 )
                                             }
@@ -5649,14 +6210,45 @@ function InsuredObjectList() {
 
                                         // Special handling for uitgangsdatum column to make it clickable (Admin/Editor only)
                                         if (col.key === "uitgangsdatum") {
+                                            console.log(
+                                                "[RENDER] Rendering uitgangsdatum cell",
+                                                {
+                                                    objectId: object.id,
+                                                    uitgangsdatum:
+                                                        object.uitgangsdatum,
+                                                    type: typeof object.uitgangsdatum,
+                                                }
+                                            )
+
                                             const cellValue =
-                                                object.uitgangsdatum
+                                                typeof object.uitgangsdatum ===
+                                                "string"
+                                                    ? object.uitgangsdatum
+                                                    : String(
+                                                          object.uitgangsdatum ||
+                                                              ""
+                                                      )
+
+                                            console.log(
+                                                "[RENDER] cellValue:",
+                                                cellValue
+                                            )
+
                                             const hasValue =
                                                 cellValue &&
+                                                typeof cellValue === "string" &&
                                                 cellValue.trim() !== ""
 
+                                            console.log(
+                                                "[RENDER] hasValue:",
+                                                hasValue
+                                            )
+
                                             // Check if user has permission to edit uitgangsdatum
-                                            const canEditUitgangsdatum = userInfo && (isAdmin(userInfo) || isEditor(userInfo))
+                                            const canEditUitgangsdatum =
+                                                userInfo &&
+                                                (isAdmin(userInfo) ||
+                                                    isEditor(userInfo))
 
                                             return (
                                                 <td
@@ -5669,8 +6261,9 @@ function InsuredObjectList() {
                                                         fontSize: "13px",
                                                         lineHeight: "1.3",
                                                         cursor:
-                                                            canEditUitgangsdatum && object.status !==
-                                                            "Removed"
+                                                            canEditUitgangsdatum &&
+                                                            object.status !==
+                                                                "Removed"
                                                                 ? "pointer"
                                                                 : "default",
                                                     }}
@@ -5678,7 +6271,7 @@ function InsuredObjectList() {
                                                         if (
                                                             canEditUitgangsdatum &&
                                                             object.status !==
-                                                            "Removed"
+                                                                "Removed"
                                                         ) {
                                                             handleUitgangsdatumClick(
                                                                 object.id,
@@ -5732,9 +6325,9 @@ function InsuredObjectList() {
                                                         !canEditUitgangsdatum
                                                             ? "Alleen Admin en Editors kunnen uitgangsdatum instellen"
                                                             : object.status !==
-                                                              "Removed"
-                                                            ? "Klik om uitgangsdatum in te stellen"
-                                                            : "Uitgangsdatum is al ingesteld"
+                                                                "Removed"
+                                                              ? "Klik om uitgangsdatum in te stellen"
+                                                              : "Uitgangsdatum is al ingesteld"
                                                     }
                                                 >
                                                     <div
@@ -5744,14 +6337,16 @@ function InsuredObjectList() {
                                                                 : "8px 16px",
                                                             borderRadius: "8px",
                                                             backgroundColor:
-                                                                canEditUitgangsdatum && object.status !==
-                                                                "Removed"
+                                                                canEditUitgangsdatum &&
+                                                                object.status !==
+                                                                    "Removed"
                                                                     ? hasValue
                                                                         ? "#f8fafc"
                                                                         : "#dbeafe"
                                                                     : "transparent",
                                                             border:
-                                                                canEditUitgangsdatum && object.status !==
+                                                                canEditUitgangsdatum &&
+                                                                object.status !==
                                                                     "Removed" &&
                                                                 !hasValue
                                                                     ? "1px solid #3b82f6"
@@ -5759,15 +6354,18 @@ function InsuredObjectList() {
                                                                       ? "1px solid #e5e7eb"
                                                                       : "none",
                                                             color:
-                                                                canEditUitgangsdatum && object.status !==
-                                                                "Removed"
+                                                                canEditUitgangsdatum &&
+                                                                object.status !==
+                                                                    "Removed"
                                                                     ? hasValue
                                                                         ? "#374151"
                                                                         : "#1d4ed8"
                                                                     : "#d1d5db",
                                                             fontWeight: hasValue
                                                                 ? "normal"
-                                                                : canEditUitgangsdatum ? "500" : "normal",
+                                                                : canEditUitgangsdatum
+                                                                  ? "500"
+                                                                  : "normal",
                                                             fontSize: hasValue
                                                                 ? "13px"
                                                                 : "12px",
@@ -5776,22 +6374,48 @@ function InsuredObjectList() {
                                                             textAlign: "center",
                                                             minWidth: hasValue
                                                                 ? "auto"
-                                                                : canEditUitgangsdatum ? "160px" : "auto",
+                                                                : canEditUitgangsdatum
+                                                                  ? "160px"
+                                                                  : "auto",
                                                             transition:
                                                                 "all 0.2s ease",
                                                             opacity:
                                                                 object.status ===
-                                                                "Removed" || !canEditUitgangsdatum
+                                                                    "Removed" ||
+                                                                !canEditUitgangsdatum
                                                                     ? 0.8
                                                                     : 1,
                                                         }}
                                                     >
                                                         {hasValue
-                                                            ? new Date(
-                                                                  cellValue
-                                                              ).toLocaleDateString("nl-NL")
-                                                            : canEditUitgangsdatum && object.status !== "Removed"
-                                                              ? "Klik hier om een uitgangsdatum aan te geven"
+                                                            ? (() => {
+                                                                  try {
+                                                                      const dateStr =
+                                                                          String(
+                                                                              cellValue
+                                                                          )
+                                                                      const date =
+                                                                          new Date(
+                                                                              dateStr
+                                                                          )
+                                                                      return isNaN(
+                                                                          date.getTime()
+                                                                      )
+                                                                          ? dateStr
+                                                                          : date.toLocaleDateString(
+                                                                                "nl-NL"
+                                                                            )
+                                                                  } catch (e) {
+                                                                      return String(
+                                                                          cellValue ||
+                                                                              "-"
+                                                                      )
+                                                                  }
+                                                              })()
+                                                            : canEditUitgangsdatum &&
+                                                                object.status !==
+                                                                    "Removed"
+                                                              ? "Geef uitgangsdatum op"
                                                               : "-"}
                                                     </div>
                                                 </td>
@@ -5926,7 +6550,10 @@ function InsuredObjectList() {
                             onClose={() => setEditingObject(null)}
                             onSuccess={async () => {
                                 await fetchObjects()
-                                const objectLabel = OBJECT_TYPE_CONFIG[editingObject.objectType?.toLowerCase() as ObjectType]?.label || "Object"
+                                const objectLabel =
+                                    OBJECT_TYPE_CONFIG[
+                                        editingObject.objectType?.toLowerCase() as ObjectType
+                                    ]?.label || "Object"
                                 setSuccessMessage(
                                     `${objectLabel} updated successfully!`
                                 )
@@ -6322,10 +6949,16 @@ function InsuredObjectList() {
                                                         }
 
                                                         // Get proper Dutch label from OBJECT_TYPE_CONFIG (case-insensitive)
-                                                        const lowerObjectType = objectType?.toLowerCase()
-                                                        const typeLabel = lowerObjectType && lowerObjectType in OBJECT_TYPE_CONFIG
-                                                            ? OBJECT_TYPE_CONFIG[lowerObjectType as ObjectType].label
-                                                            : objectType
+                                                        const lowerObjectType =
+                                                            objectType?.toLowerCase()
+                                                        const typeLabel =
+                                                            lowerObjectType &&
+                                                            lowerObjectType in
+                                                                OBJECT_TYPE_CONFIG
+                                                                ? OBJECT_TYPE_CONFIG[
+                                                                      lowerObjectType as ObjectType
+                                                                  ].label
+                                                                : objectType
 
                                                         // Include naam in the display if it exists
                                                         const nameDisplay = naam
@@ -6546,9 +7179,14 @@ function InsuredObjectList() {
                                                 )
                                                 return
                                             }
-                                            generatePDF().catch(error => {
-                                                console.error("Failed to generate PDF:", error)
-                                                alert("Er is een fout opgetreden bij het genereren van de PDF.")
+                                            generatePDF().catch((error) => {
+                                                console.error(
+                                                    "Failed to generate PDF:",
+                                                    error
+                                                )
+                                                alert(
+                                                    "Er is een fout opgetreden bij het genereren van de PDF."
+                                                )
                                             })
                                         }}
                                         style={{
@@ -6585,8 +7223,15 @@ const calculateInsurancePeriod_LEGACY = (obj: InsuredObject): number => {
     const startDate = obj.ingangsdatum ? new Date(obj.ingangsdatum) : new Date()
     let endDate: Date
 
-    if (obj.uitgangsdatum && obj.uitgangsdatum.trim() !== "") {
-        endDate = new Date(obj.uitgangsdatum)
+    const uitgangsdatumStr =
+        typeof obj.uitgangsdatum === "string"
+            ? obj.uitgangsdatum
+            : obj.uitgangsdatum
+              ? String(obj.uitgangsdatum)
+              : ""
+
+    if (uitgangsdatumStr && uitgangsdatumStr.trim() !== "") {
+        endDate = new Date(uitgangsdatumStr)
     } else {
         // If no end date, calculate until end of current year
         const currentYear = new Date().getFullYear()
@@ -6682,15 +7327,16 @@ function TotalsDisplay({
             totalWaarde: totalWaarde.toLocaleString("nl-NL"),
             totalPremieJaar: totalPremieJaar.toLocaleString("nl-NL", {
                 minimumFractionDigits: 2,
-                maximumFractionDigits: 2
+                maximumFractionDigits: 2,
             }),
-            totalPremieVerzekerdePeriode: totalPremieVerzekerdePeriode.toLocaleString("nl-NL", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }),
+            totalPremieVerzekerdePeriode:
+                totalPremieVerzekerdePeriode.toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }),
             difference: Math.abs(difference).toLocaleString("nl-NL", {
                 minimumFractionDigits: 2,
-                maximumFractionDigits: 2
+                maximumFractionDigits: 2,
             }),
             percentageDifference: percentageDifference.toFixed(1) + "%",
         })
@@ -6810,7 +7456,7 @@ function TotalsDisplay({
                         €
                         {totalPremieVerzekerdePeriode.toLocaleString("nl-NL", {
                             minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
+                            maximumFractionDigits: 2,
                         })}
                     </div>
                 </div>
@@ -6840,9 +7486,10 @@ function TotalsDisplay({
                             color: colors.primary,
                         }}
                     >
-                        €{totalPremieJaar.toLocaleString("nl-NL", {
+                        €
+                        {totalPremieJaar.toLocaleString("nl-NL", {
                             minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
+                            maximumFractionDigits: 2,
                         })}
                     </div>
                 </div>
@@ -6872,9 +7519,10 @@ function TotalsDisplay({
                             color: difference > 0 ? "#dc2626" : "#16a34a",
                         }}
                     >
-                        €{Math.abs(difference).toLocaleString("nl-NL", {
+                        €
+                        {Math.abs(difference).toLocaleString("nl-NL", {
                             minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
+                            maximumFractionDigits: 2,
                         })}
                     </div>
                     <div

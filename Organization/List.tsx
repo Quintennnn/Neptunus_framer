@@ -1838,6 +1838,22 @@ function DraggableRuleEditor({
     )
 }
 
+// Helper functions for thousand separator formatting
+function formatNumberWithThousandSeparators(value: number | null | undefined): string {
+    if (value === null || value === undefined || value === "") return ""
+    const numValue = typeof value === "string" ? parseFloat(value) : value
+    if (isNaN(numValue)) return ""
+    return numValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+}
+
+function parseFormattedNumber(value: string): number | null {
+    if (!value || value.trim() === "") return null
+    // Remove all dots (thousand separators)
+    const cleaned = value.replace(/\./g, "")
+    const parsed = parseFloat(cleaned)
+    return isNaN(parsed) ? null : parsed
+}
+
 // BetweenInput component for range inputs (min/max)
 function BetweenInput({
     fieldType,
@@ -1848,27 +1864,61 @@ function BetweenInput({
     range: { min: any; max: any }
     onChange: (range: { min: any; max: any }) => void
 }) {
+    const isNumericField = fieldType === "number" || fieldType === "currency"
+
+    // Local state for formatted display values
+    const [minDisplay, setMinDisplay] = React.useState("")
+    const [maxDisplay, setMaxDisplay] = React.useState("")
+
+    // Update display values when range changes from outside
+    React.useEffect(() => {
+        if (isNumericField) {
+            setMinDisplay(formatNumberWithThousandSeparators(range.min))
+            setMaxDisplay(formatNumberWithThousandSeparators(range.max))
+        } else {
+            setMinDisplay(range.min || "")
+            setMaxDisplay(range.max || "")
+        }
+    }, [range.min, range.max, isNumericField])
+
     const handleMinChange = (value: string) => {
+        setMinDisplay(value)
         let processedValue = value
-        if (fieldType === "number" || fieldType === "currency") {
-            processedValue = value ? parseFloat(value) : null
+        if (isNumericField) {
+            const parsed = parseFormattedNumber(value)
+            processedValue = parsed
         }
         onChange({ ...range, min: processedValue })
     }
 
     const handleMaxChange = (value: string) => {
+        setMaxDisplay(value)
         let processedValue = value
-        if (fieldType === "number" || fieldType === "currency") {
-            processedValue = value ? parseFloat(value) : null
+        if (isNumericField) {
+            const parsed = parseFormattedNumber(value)
+            processedValue = parsed
         }
         onChange({ ...range, max: processedValue })
+    }
+
+    // Format on blur for cleaner display
+    const handleMinBlur = () => {
+        if (isNumericField && range.min !== null && range.min !== undefined) {
+            setMinDisplay(formatNumberWithThousandSeparators(range.min))
+        }
+    }
+
+    const handleMaxBlur = () => {
+        if (isNumericField && range.max !== null && range.max !== undefined) {
+            setMaxDisplay(formatNumberWithThousandSeparators(range.max))
+        }
     }
 
     const getInputType = () => {
         switch (fieldType) {
             case "number":
             case "currency":
-                return "number"
+                return "text" // Changed to text to support formatted numbers
             case "date":
                 return "date"
             default:
@@ -1901,16 +1951,18 @@ function BetweenInput({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input
                 type={getInputType()}
-                value={range.min || ""}
+                value={minDisplay}
                 onChange={(e) => handleMinChange(e.target.value)}
+                onBlur={handleMinBlur}
                 placeholder={getPlaceholder("min")}
                 style={inputStyle}
             />
             <span style={{ fontSize: 11, color: "#6b7280" }}>tot</span>
             <input
                 type={getInputType()}
-                value={range.max || ""}
+                value={maxDisplay}
                 onChange={(e) => handleMaxChange(e.target.value)}
+                onBlur={handleMaxBlur}
                 placeholder={getPlaceholder("max")}
                 style={inputStyle}
             />
@@ -2059,13 +2111,36 @@ function ConditionEditor({
     const operators =
         OPERATORS[fieldType as keyof typeof OPERATORS] || OPERATORS.text
 
+    const isNumericField = fieldType === "number" || fieldType === "currency"
+
+    // Local state for formatted display value
+    const [valueDisplay, setValueDisplay] = React.useState("")
+
+    // Update display value when condition.value changes from outside
+    React.useEffect(() => {
+        if (isNumericField) {
+            setValueDisplay(formatNumberWithThousandSeparators(condition.value))
+        } else {
+            setValueDisplay(condition.value || "")
+        }
+    }, [condition.value, isNumericField])
+
     // Handle single value changes (for eq, ne, lt, gt, etc.)
     const handleValueChange = (value: string) => {
+        setValueDisplay(value)
         let processedValue = value
-        if (fieldType === "number" || fieldType === "currency") {
-            processedValue = value ? parseFloat(value) : 0
+        if (isNumericField) {
+            const parsed = parseFormattedNumber(value)
+            processedValue = parsed !== null ? parsed : 0
         }
         onUpdate({ ...condition, value: processedValue })
+    }
+
+    // Format on blur for cleaner display
+    const handleValueBlur = () => {
+        if (isNumericField && condition.value !== null && condition.value !== undefined) {
+            setValueDisplay(formatNumberWithThousandSeparators(condition.value))
+        }
     }
 
     // Handle range changes (for between operator)
@@ -2088,7 +2163,7 @@ function ConditionEditor({
         switch (fieldType) {
             case "number":
             case "currency":
-                return "number"
+                return "text" // Changed to text to support formatted numbers
             case "date":
                 return "date"
             default:
@@ -2211,10 +2286,11 @@ function ConditionEditor({
                         ) : (
                             <input
                                 type={getSingleInputType()}
-                                value={condition.value || ""}
+                                value={valueDisplay}
                                 onChange={(e) =>
                                     handleValueChange(e.target.value)
                                 }
+                                onBlur={handleValueBlur}
                                 placeholder={getSingleInputPlaceholder()}
                                 style={{
                                     padding: "6px 8px",
@@ -2829,24 +2905,28 @@ function EditOrgForm({
     const updateFieldConfig = (
         fieldKey: string,
         property: "required" | "visible",
-        value: boolean
+        value: boolean,
+        objectTypes: string[]
     ) => {
         setInsuredObjectFieldsConfig((prev) => {
-            const updatedConfig = {
-                ...prev,
-                boat: {
-                    ...prev.boat,
+            const updatedConfig = { ...prev }
+
+            // Update the field config for ALL object types that use this field
+            objectTypes.forEach((objType) => {
+                const typedObjType = objType as "boot" | "trailer" | "motor" | "other"
+                updatedConfig[typedObjType] = {
+                    ...updatedConfig[typedObjType],
                     [fieldKey]: {
-                        ...prev.boat[fieldKey],
+                        ...updatedConfig[typedObjType]?.[fieldKey],
                         [property]: value,
                     },
-                },
-            }
+                }
 
-            // If visibility is turned off, also turn off required
-            if (property === "visible" && !value) {
-                updatedConfig.boat[fieldKey].required = false
-            }
+                // If visibility is turned off, also turn off required
+                if (property === "visible" && !value) {
+                    updatedConfig[typedObjType][fieldKey].required = false
+                }
+            })
 
             return updatedConfig
         })
@@ -3062,7 +3142,7 @@ function EditOrgForm({
                         fontFamily: FONT_STACK,
                     }}
                 >
-                    Boot Velden Configuratie
+                    Velden Configuratie
                 </button>
                 <button
                     onClick={() => setActiveTab("approval")}
@@ -3425,7 +3505,7 @@ function EditOrgForm({
                                     marginBottom: 8,
                                 }}
                             >
-                                Boot Velden Configureren
+                                Velden Configureren
                             </h3>
                             <p
                                 style={{
@@ -3442,7 +3522,7 @@ function EditOrgForm({
                             </p>
                         </div>
 
-                        <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                        <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                             {schemaLoading ? (
                                 <div
                                     style={{ padding: 20, textAlign: "center" }}
@@ -3452,165 +3532,185 @@ function EditOrgForm({
                                     </p>
                                 </div>
                             ) : dynamicSchema ? (
-                                <div>
-                                    <h4
-                                        style={{
-                                            fontSize: 14,
-                                            fontWeight: 600,
-                                            marginBottom: 12,
-                                            color: colors.gray700,
-                                        }}
-                                    >
-                                        Boot Velden (Alle velden zijn
-                                        configureerbaar)
-                                    </h4>
-                                    <table
-                                        style={{ width: "100%", fontSize: 14 }}
-                                    >
-                                        <thead
-                                            style={{
-                                                position: "sticky",
-                                                top: 0,
-                                                backgroundColor: "#f9fafb",
-                                            }}
-                                        >
-                                            <tr>
-                                                <th
+                                (() => {
+                                    // Create a Map to deduplicate fields by key
+                                    const uniqueFieldsMap = new Map()
+
+                                    // Collect all unique fields from all object types
+                                    const allObjectTypes = ["boot", "trailer", "motor"]
+                                    allObjectTypes.forEach(objType => {
+                                        getUserInputFieldsForObjectType(dynamicSchema, objType).forEach(field => {
+                                            if (!uniqueFieldsMap.has(field.key)) {
+                                                uniqueFieldsMap.set(field.key, {
+                                                    ...field,
+                                                    objectTypes: field.objectTypes || [objType]
+                                                })
+                                            }
+                                        })
+                                    })
+
+                                    // Convert to array and sort by displayOrder then label
+                                    const uniqueFields = Array.from(uniqueFieldsMap.values()).sort((a, b) => {
+                                        const orderA = a.displayOrder || 999
+                                        const orderB = b.displayOrder || 999
+                                        if (orderA !== orderB) return orderA - orderB
+                                        return a.label.localeCompare(b.label)
+                                    })
+
+                                    return (
+                                        <div>
+                                            <h4
+                                                style={{
+                                                    fontSize: 14,
+                                                    fontWeight: 600,
+                                                    marginBottom: 12,
+                                                    color: colors.gray700,
+                                                }}
+                                            >
+                                                Alle Velden (Boot, Trailer & Motor)
+                                            </h4>
+                                            <table
+                                                style={{ width: "100%", fontSize: 14 }}
+                                            >
+                                                <thead
                                                     style={{
-                                                        textAlign: "left",
-                                                        padding: 12,
-                                                        fontWeight: 600,
+                                                        position: "sticky",
+                                                        top: 0,
+                                                        backgroundColor: "#7CC2FE",
                                                     }}
                                                 >
-                                                    Veld
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        textAlign: "center",
-                                                        padding: 12,
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    Zichtbaar
-                                                </th>
-                                                <th
-                                                    style={{
-                                                        textAlign: "center",
-                                                        padding: 12,
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    Verplicht
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {getUserInputFieldsForObjectType(
-                                                dynamicSchema,
-                                                "boot"
-                                            ).map((field) => {
-                                                const config =
-                                                    insuredObjectFieldsConfig
-                                                        .boot[field.key] || {
-                                                        visible: false,
-                                                        required: false,
-                                                    }
-                                                return (
-                                                    <tr
-                                                        key={field.key}
-                                                        style={{
-                                                            borderBottom:
-                                                                "1px solid #f3f4f6",
-                                                        }}
-                                                    >
-                                                        <td
+                                                    <tr>
+                                                        <th
                                                             style={{
+                                                                textAlign: "left",
                                                                 padding: 12,
+                                                                fontWeight: 600,
                                                             }}
                                                         >
-                                                            {field.label}
-                                                        </td>
-                                                        <td
+                                                            Veld
+                                                        </th>
+                                                        <th
                                                             style={{
-                                                                textAlign:
-                                                                    "center",
+                                                                textAlign: "center",
                                                                 padding: 12,
+                                                                fontWeight: 600,
                                                             }}
                                                         >
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    updateFieldConfig(
-                                                                        field.key,
-                                                                        "visible",
-                                                                        !config.visible
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    border: "none",
-                                                                    background:
-                                                                        "none",
-                                                                    cursor: "pointer",
-                                                                    color: config.visible
-                                                                        ? "#10b981"
-                                                                        : "#d1d5db",
-                                                                    fontSize: 18,
-                                                                }}
-                                                            >
-                                                                {config.visible ? (
-                                                                    <FaToggleOn />
-                                                                ) : (
-                                                                    <FaToggleOff />
-                                                                )}
-                                                            </button>
-                                                        </td>
-                                                        <td
+                                                            Zichtbaar
+                                                        </th>
+                                                        <th
                                                             style={{
-                                                                textAlign:
-                                                                    "center",
+                                                                textAlign: "center",
                                                                 padding: 12,
+                                                                fontWeight: 600,
                                                             }}
                                                         >
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    updateFieldConfig(
-                                                                        field.key,
-                                                                        "required",
-                                                                        !config.required
-                                                                    )
-                                                                }
-                                                                disabled={
-                                                                    !config.visible
-                                                                }
-                                                                style={{
-                                                                    border: "none",
-                                                                    background:
-                                                                        "none",
-                                                                    cursor: config.visible
-                                                                        ? "pointer"
-                                                                        : "not-allowed",
-                                                                    color:
-                                                                        config.visible &&
-                                                                        config.required
-                                                                            ? colors.primary
-                                                                            : colors.gray300,
-                                                                    fontSize: 18,
-                                                                }}
-                                                            >
-                                                                {config.required ? (
-                                                                    <FaToggleOn />
-                                                                ) : (
-                                                                    <FaToggleOff />
-                                                                )}
-                                                            </button>
-                                                        </td>
+                                                            Verplicht
+                                                        </th>
                                                     </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                </thead>
+                                                <tbody>
+                                                    {uniqueFields.map((field) => {
+                                                        // Get config from the first object type that has this field
+                                                        const firstObjectType = field.objectTypes?.[0] || "boot"
+                                                        const config =
+                                                            insuredObjectFieldsConfig[firstObjectType]?.[field.key] || {
+                                                                visible: false,
+                                                                required: false,
+                                                            }
+
+                                                        return (
+                                                            <tr
+                                                                key={field.key}
+                                                                style={{
+                                                                    borderBottom: "1px solid #f3f4f6",
+                                                                }}
+                                                            >
+                                                                <td
+                                                                    style={{
+                                                                        padding: 12,
+                                                                    }}
+                                                                >
+                                                                    {field.label}
+                                                                </td>
+                                                                <td
+                                                                    style={{
+                                                                        textAlign: "center",
+                                                                        padding: 12,
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            updateFieldConfig(
+                                                                                field.key,
+                                                                                "visible",
+                                                                                !config.visible,
+                                                                                field.objectTypes || [firstObjectType]
+                                                                            )
+                                                                        }
+                                                                        style={{
+                                                                            border: "none",
+                                                                            background: "none",
+                                                                            cursor: "pointer",
+                                                                            color: config.visible
+                                                                                ? "#10b981"
+                                                                                : "#d1d5db",
+                                                                            fontSize: 18,
+                                                                        }}
+                                                                    >
+                                                                        {config.visible ? (
+                                                                            <FaToggleOn />
+                                                                        ) : (
+                                                                            <FaToggleOff />
+                                                                        )}
+                                                                    </button>
+                                                                </td>
+                                                                <td
+                                                                    style={{
+                                                                        textAlign: "center",
+                                                                        padding: 12,
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            updateFieldConfig(
+                                                                                field.key,
+                                                                                "required",
+                                                                                !config.required,
+                                                                                field.objectTypes || [firstObjectType]
+                                                                            )
+                                                                        }
+                                                                        disabled={!config.visible}
+                                                                        style={{
+                                                                            border: "none",
+                                                                            background: "none",
+                                                                            cursor: config.visible
+                                                                                ? "pointer"
+                                                                                : "not-allowed",
+                                                                            color:
+                                                                                config.visible && config.required
+                                                                                    ? colors.primary
+                                                                                    : colors.gray300,
+                                                                            fontSize: 18,
+                                                                        }}
+                                                                    >
+                                                                        {config.required ? (
+                                                                            <FaToggleOn />
+                                                                        ) : (
+                                                                            <FaToggleOff />
+                                                                        )}
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )
+                                })()
                             ) : (
                                 <div
                                     style={{ padding: 20, textAlign: "center" }}
@@ -4515,7 +4615,7 @@ export function OrganizationPageOverride(): Override {
                                     <thead>
                                         <tr
                                             style={{
-                                                backgroundColor: "#f9fafb",
+                                                backgroundColor: "#7CC2FE",
                                             }}
                                         >
                                             <th

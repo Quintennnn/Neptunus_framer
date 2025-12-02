@@ -116,7 +116,7 @@ const handleLogout = () => {
     sessionStorage.removeItem("userId")
     
     // Redirect to login page
-    window.location.href = "https://neptunus.framer.website/login_old"
+    window.location.href = "https://production-neptunus-auth.auth.eu-central-1.amazoncognito.com/login/continue?client_id=77ebf6re0i6rs978o1hn10dl4c&redirect_uri=https%3A%2F%2Fneptunus.framer.website%2Fcallback&response_type=code&scope=email+openid+profile"
 }
 
 // Fetch broker info from policies for the organization

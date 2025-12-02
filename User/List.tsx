@@ -1084,7 +1084,6 @@ function CreateUserForm({
         if (!form.initials.trim()) errors.push("Initials are required")
         if (!form.lastName.trim()) errors.push("Last name is required")
         if (!form.role) errors.push("Role is required")
-        if (form.organizations.length === 0) errors.push("At least one organization must be selected")
         return errors
     }
 
@@ -1327,7 +1326,6 @@ function CreateUserForm({
                 <div>
                     <label style={styles.label}>
                         Organisaties
-                        <span style={{ color: colors.error }}>*</span>
                     </label>
 
                     {/* Search bar for organizations */}

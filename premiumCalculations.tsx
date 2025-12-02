@@ -107,15 +107,30 @@ export function shouldIncludeInValueCalculation(object: InsuredObject): boolean 
  * Calculate insurance period in days with enhanced date handling
  */
 export function calculateInsurancePeriod(object: InsuredObject): number {
+    console.log('[PREMIUM CALC] calculateInsurancePeriod called', {
+        id: object.id,
+        uitgangsdatum: object.uitgangsdatum,
+        uitgangsdatumType: typeof object.uitgangsdatum,
+        uitgangsdatumValue: JSON.stringify(object.uitgangsdatum)
+    })
+
     const startDate = object.ingangsdatum ? new Date(object.ingangsdatum) : new Date()
     let endDate: Date
 
-    if (object.uitgangsdatum && object.uitgangsdatum.trim() !== "") {
-        endDate = new Date(object.uitgangsdatum)
+    const uitgangsdatumStr = typeof object.uitgangsdatum === 'string'
+        ? object.uitgangsdatum
+        : (object.uitgangsdatum ? String(object.uitgangsdatum) : '')
+
+    console.log('[PREMIUM CALC] uitgangsdatumStr:', uitgangsdatumStr)
+
+    if (uitgangsdatumStr && uitgangsdatumStr.trim() !== "") {
+        endDate = new Date(uitgangsdatumStr)
+        console.log('[PREMIUM CALC] Using uitgangsdatum as end date:', endDate)
     } else {
         // If no end date, calculate until end of current year
         const currentYear = new Date().getFullYear()
         endDate = new Date(currentYear, 11, 31) // December 31st
+        console.log('[PREMIUM CALC] Using end of year as end date:', endDate)
     }
 
     // Calculate days difference (inclusive of both start and end dates)
@@ -247,7 +262,9 @@ export function updateObjectWithCalculatedPremiums(object: InsuredObject): Insur
  * Format calculation results for display
  */
 export function formatCalculationResults(totals: TotalsCalculation) {
-    return {
+    console.log('[FORMAT] Formatting calculation results', totals)
+
+    const result = {
         totalValue: formatCurrency(totals.totalValue),
         totalYearlyPremium: formatCurrency(totals.totalYearlyPremium, "EUR", 2),
         totalPeriodPremium: formatCurrency(totals.totalPeriodPremium, "EUR", 2),
@@ -278,6 +295,12 @@ export function formatCalculationResults(totals: TotalsCalculation) {
             }
         }
     }
+
+    console.log('[FORMAT] Formatted result:', result)
+    console.log('[FORMAT] Checking types - difference:', typeof result.difference, result.difference)
+    console.log('[FORMAT] Checking types - percentageDifference:', typeof result.percentageDifference, result.percentageDifference)
+
+    return result
 }
 
 /**

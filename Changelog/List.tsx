@@ -26,9 +26,9 @@ import {
     FaTimes,
 } from "react-icons/fa"
 
-import { colors, styles, hover, FONT_STACK, animations } from "../theme"
-import { API_BASE_URL, API_PATHS, getIdToken, getUserId } from "../utils"
-import { isAdmin } from "../Rbac"
+import { colors, styles, hover, FONT_STACK, animations } from "../Theme.tsx"
+import { API_BASE_URL, API_PATHS, getIdToken, getUserId } from "../Utils.tsx"
+import { isAdmin } from "../Rbac.tsx"
 
 // Add CSS animation for loading spinner
 if (typeof document !== "undefined") {
@@ -45,17 +45,20 @@ if (typeof document !== "undefined") {
     }
 }
 
-async function fetchChangelog(page: number = 0, pageSize: number = 50): Promise<{items: any[], pagination: any}> {
+async function fetchChangelog(
+    pageSize: number = 50,
+    cursor?: string | null
+): Promise<{ items: any[]; pagination: any }> {
     const token = getIdToken()
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     }
     if (token) headers.Authorization = `Bearer ${token}`
-    
+
     const url = new URL(`${API_BASE_URL}${API_PATHS.CHANGELOG}`)
-    url.searchParams.append('page', page.toString())
-    url.searchParams.append('pageSize', pageSize.toString())
-    
+    url.searchParams.append("pageSize", pageSize.toString())
+    if (cursor) url.searchParams.append("cursor", cursor)
+
     const res = await fetch(url.toString(), {
         method: "GET",
         headers,
@@ -63,10 +66,14 @@ async function fetchChangelog(page: number = 0, pageSize: number = 50): Promise<
     })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const json = await res.json()
-    
+
     return {
         items: json.items || json.data || json,
-        pagination: json.pagination || { page: 0, pageSize: 50, totalItems: 0, hasMore: false, totalPages: 0 }
+        pagination: json.pagination || {
+            pageSize: 50,
+            hasMore: false,
+            nextCursor: null,
+        },
     }
 }
 
@@ -98,7 +105,7 @@ async function fetchPendingCount(): Promise<number> {
     }
 }
 
-async function fetchOrganizations(): Promise<{id: string, name: string}[]> {
+async function fetchOrganizations(): Promise<{ id: string; name: string }[]> {
     try {
         const token = getIdToken()
         const headers: Record<string, string> = {
@@ -117,10 +124,12 @@ async function fetchOrganizations(): Promise<{id: string, name: string}[]> {
         const organizations = data.items || data.organizations || data || []
 
         return Array.isArray(organizations)
-            ? organizations.map((org: any) => ({
-                  id: org.id,
-                  name: org.name
-              })).sort((a, b) => a.name.localeCompare(b.name))
+            ? organizations
+                  .map((org: any) => ({
+                      id: org.id,
+                      name: org.name,
+                  }))
+                  .sort((a, b) => a.name.localeCompare(b.name))
             : []
     } catch (error) {
         console.error("Error fetching organizations:", error)
@@ -156,7 +165,9 @@ function getInsuredObjectIconAndName(
         formattedChanges?.rompnummer
     ) {
         const boatNumber = formattedChanges.rompnummer || ""
-        const displayName = boatNumber ? `Boot: ${boatNumber}` : "Boot: Onbekend"
+        const displayName = boatNumber
+            ? `Boot: ${boatNumber}`
+            : "Boot: Onbekend"
         return {
             icon: <FaShip style={{ color: colors.primary }} />,
             displayName,
@@ -786,7 +797,10 @@ function formatOldNewValue(oldValue: any, newValue: any): React.ReactNode {
                     Verwijderd:
                 </span>
                 <span
-                    style={{ color: colors.error, textDecoration: "line-through" }}
+                    style={{
+                        color: colors.error,
+                        textDecoration: "line-through",
+                    }}
                 >
                     {oldFormatted}
                 </span>
@@ -1114,7 +1128,7 @@ function ChangelogSearchAndFilterBar({
     onClearDateFilter: () => void
     selectedOrganization: string
     onOrganizationChange: (org: string) => void
-    organizations: {id: string, name: string}[]
+    organizations: { id: string; name: string }[]
 }) {
     const [showColumnFilter, setShowColumnFilter] = useState(false)
     const [showTableFilter, setShowTableFilter] = useState(false)
@@ -1123,8 +1137,9 @@ function ChangelogSearchAndFilterBar({
     const [buttonRef, setButtonRef] = useState<HTMLButtonElement | null>(null)
     const [tableButtonRef, setTableButtonRef] =
         useState<HTMLButtonElement | null>(null)
-    const [orgButtonRef, setOrgButtonRef] =
-        useState<HTMLButtonElement | null>(null)
+    const [orgButtonRef, setOrgButtonRef] = useState<HTMLButtonElement | null>(
+        null
+    )
     const [dropdownPosition, setDropdownPosition] = useState({
         top: 0,
         right: 0,
@@ -1218,7 +1233,9 @@ function ChangelogSearchAndFilterBar({
                         onFocus={(e) =>
                             (e.target.style.borderColor = colors.primary)
                         }
-                        onBlur={(e) => (e.target.style.borderColor = colors.gray300)}
+                        onBlur={(e) =>
+                            (e.target.style.borderColor = colors.gray300)
+                        }
                     />
                 </div>
 
@@ -1317,14 +1334,17 @@ function ChangelogSearchAndFilterBar({
                                         : colors.gray300,
                                     fontSize: "14px",
                                     flexShrink: 0,
-                                    cursor: startDate ? "pointer" : "not-allowed",
+                                    cursor: startDate
+                                        ? "pointer"
+                                        : "not-allowed",
                                     transition: "transform 0.2s",
                                     opacity: startDate ? 1 : 0.5,
                                 }}
                                 onMouseEnter={(e) => {
                                     if (startDate) {
-                                        ;(e.target as HTMLElement).style.transform =
-                                            "scale(1.15)"
+                                        ;(
+                                            e.target as HTMLElement
+                                        ).style.transform = "scale(1.15)"
                                     }
                                 }}
                                 onMouseLeave={(e) => {
@@ -1396,7 +1416,9 @@ function ChangelogSearchAndFilterBar({
                                 id="changelog-end-date"
                                 type="date"
                                 value={endDate}
-                                onChange={(e) => onEndDateChange(e.target.value)}
+                                onChange={(e) =>
+                                    onEndDateChange(e.target.value)
+                                }
                                 style={{
                                     border: "none",
                                     outline: "none",
@@ -1421,7 +1443,9 @@ function ChangelogSearchAndFilterBar({
                                     }
                                 }}
                                 style={{
-                                    color: endDate ? colors.primary : colors.gray300,
+                                    color: endDate
+                                        ? colors.primary
+                                        : colors.gray300,
                                     fontSize: "14px",
                                     flexShrink: 0,
                                     cursor: endDate ? "pointer" : "not-allowed",
@@ -1430,8 +1454,9 @@ function ChangelogSearchAndFilterBar({
                                 }}
                                 onMouseEnter={(e) => {
                                     if (endDate) {
-                                        ;(e.target as HTMLElement).style.transform =
-                                            "scale(1.15)"
+                                        ;(
+                                            e.target as HTMLElement
+                                        ).style.transform = "scale(1.15)"
                                     }
                                 }}
                                 onMouseLeave={(e) => {
@@ -1448,7 +1473,9 @@ function ChangelogSearchAndFilterBar({
                                 id="changelog-end-time"
                                 type="time"
                                 value={endTime}
-                                onChange={(e) => onEndTimeChange(e.target.value)}
+                                onChange={(e) =>
+                                    onEndTimeChange(e.target.value)
+                                }
                                 disabled={!endDate}
                                 style={{
                                     border: "none",
@@ -1562,18 +1589,15 @@ function ChangelogSearchAndFilterBar({
                         onClick={() => setShowOrgFilter(!showOrgFilter)}
                         style={{
                             padding: "12px 16px",
-                            backgroundColor:
-                                selectedOrganization
-                                    ? colors.primary
-                                    : colors.white,
-                            color:
-                                selectedOrganization
-                                    ? "white"
-                                    : colors.gray700,
-                            border:
-                                selectedOrganization
-                                    ? "none"
-                                    : "1px solid #d1d5db",
+                            backgroundColor: selectedOrganization
+                                ? colors.primary
+                                : colors.white,
+                            color: selectedOrganization
+                                ? "white"
+                                : colors.gray700,
+                            border: selectedOrganization
+                                ? "none"
+                                : "1px solid #d1d5db",
                             borderRadius: "8px",
                             fontSize: "14px",
                             fontWeight: "500",
@@ -1603,7 +1627,9 @@ function ChangelogSearchAndFilterBar({
                         <FaBuilding />
                         {!selectedOrganization
                             ? "Selecteer organisatie"
-                            : organizations.find(o => o.name === selectedOrganization)?.name || selectedOrganization}
+                            : organizations.find(
+                                  (o) => o.name === selectedOrganization
+                              )?.name || selectedOrganization}
                     </button>
                 </div>
 
@@ -1719,12 +1745,14 @@ function ChangelogSearchAndFilterBar({
                                         onMouseOver={(e) =>
                                             ((
                                                 e.target as HTMLElement
-                                            ).style.backgroundColor = colors.primaryHover)
+                                            ).style.backgroundColor =
+                                                colors.primaryHover)
                                         }
                                         onMouseOut={(e) =>
                                             ((
                                                 e.target as HTMLElement
-                                            ).style.backgroundColor = colors.primary)
+                                            ).style.backgroundColor =
+                                                colors.primary)
                                         }
                                     >
                                         Alles selecteren
@@ -1749,12 +1777,14 @@ function ChangelogSearchAndFilterBar({
                                         onMouseOver={(e) =>
                                             ((
                                                 e.target as HTMLElement
-                                            ).style.backgroundColor = colors.gray200)
+                                            ).style.backgroundColor =
+                                                colors.gray200)
                                         }
                                         onMouseOut={(e) =>
                                             ((
                                                 e.target as HTMLElement
-                                            ).style.backgroundColor = colors.gray100)
+                                            ).style.backgroundColor =
+                                                colors.gray100)
                                         }
                                     >
                                         Alles wissen
@@ -1898,7 +1928,12 @@ function ChangelogSearchAndFilterBar({
                                 </h3>
 
                                 {/* Search Bar */}
-                                <div style={{ position: "relative", marginBottom: "12px" }}>
+                                <div
+                                    style={{
+                                        position: "relative",
+                                        marginBottom: "12px",
+                                    }}
+                                >
                                     <FaSearch
                                         style={{
                                             position: "absolute",
@@ -1913,7 +1948,9 @@ function ChangelogSearchAndFilterBar({
                                         type="text"
                                         placeholder="Zoek organisatie..."
                                         value={orgSearchTerm}
-                                        onChange={(e) => setOrgSearchTerm(e.target.value)}
+                                        onChange={(e) =>
+                                            setOrgSearchTerm(e.target.value)
+                                        }
                                         onClick={(e) => e.stopPropagation()}
                                         style={{
                                             width: "100%",
@@ -1926,9 +1963,13 @@ function ChangelogSearchAndFilterBar({
                                             boxSizing: "border-box",
                                         }}
                                         onFocus={(e) =>
-                                            (e.target.style.borderColor = colors.primary)
+                                            (e.target.style.borderColor =
+                                                colors.primary)
                                         }
-                                        onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                                        onBlur={(e) =>
+                                            (e.target.style.borderColor =
+                                                "#d1d5db")
+                                        }
                                     />
                                 </div>
 
@@ -1952,11 +1993,15 @@ function ChangelogSearchAndFilterBar({
                                             width: "100%",
                                         }}
                                         onMouseOver={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor =
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor =
                                                 colors.gray200)
                                         }
                                         onMouseOut={(e) =>
-                                            ((e.target as HTMLElement).style.backgroundColor =
+                                            ((
+                                                e.target as HTMLElement
+                                            ).style.backgroundColor =
                                                 colors.gray100)
                                         }
                                     >
@@ -1984,13 +2029,16 @@ function ChangelogSearchAndFilterBar({
                                     </div>
                                 ) : (
                                     filteredOrganizations.map((org) => {
-                                        const isSelected = selectedOrganization === org.name
+                                        const isSelected =
+                                            selectedOrganization === org.name
                                         return (
                                             <div
                                                 key={org.id}
                                                 onClick={() => {
                                                     onOrganizationChange(
-                                                        isSelected ? "" : org.name
+                                                        isSelected
+                                                            ? ""
+                                                            : org.name
                                                     )
                                                     if (!isSelected) {
                                                         setShowOrgFilter(false)
@@ -2039,7 +2087,9 @@ function ChangelogSearchAndFilterBar({
                                                         color: isSelected
                                                             ? colors.primary
                                                             : colors.gray700,
-                                                        fontWeight: isSelected ? "600" : "400",
+                                                        fontWeight: isSelected
+                                                            ? "600"
+                                                            : "400",
                                                         fontFamily: FONT_STACK,
                                                     }}
                                                 >
@@ -2163,7 +2213,8 @@ function ChangelogSearchAndFilterBar({
                                             <div
                                                 style={{
                                                     padding: "8px 12px",
-                                                    backgroundColor: colors.gray50,
+                                                    backgroundColor:
+                                                        colors.gray50,
                                                     fontSize: "12px",
                                                     fontWeight: "600",
                                                     color: colors.gray700,
@@ -2273,11 +2324,14 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
@@ -2316,9 +2370,9 @@ export function ChangelogPageOverride(): Override {
     const [pendingCount, setPendingCount] = useState<number>(0)
 
     // Pagination states
-    const [currentPage, setCurrentPage] = useState<number>(0)
     const [pagination, setPagination] = useState<any | null>(null)
     const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false)
+    const [nextCursor, setNextCursor] = useState<string | null>(null)
 
     // Date filter states
     const [startDate, setStartDate] = useState<string>("")
@@ -2328,14 +2382,16 @@ export function ChangelogPageOverride(): Override {
 
     // Organization filter states
     const [selectedOrganization, setSelectedOrganization] = useState<string>("")
-    const [organizations, setOrganizations] = useState<{id: string, name: string}[]>([])
+    const [organizations, setOrganizations] = useState<
+        { id: string; name: string }[]
+    >([])
 
     const refresh = useCallback(() => {
-        fetchChangelog(0, 50)
+        fetchChangelog(50)
             .then((response) => {
                 setChangelog(response.items)
                 setPagination(response.pagination)
-                setCurrentPage(0)
+                setNextCursor(response.pagination?.nextCursor || null)
             })
             .catch((err) => {
                 console.error(err)
@@ -2344,24 +2400,23 @@ export function ChangelogPageOverride(): Override {
     }, [])
 
     const loadMore = useCallback(async () => {
-        if (!pagination?.hasMore || isLoadingMore) return
-        
+        if (!pagination?.hasMore || isLoadingMore || !nextCursor) return
+
         setIsLoadingMore(true)
         try {
-            const nextPage = currentPage + 1
-            const response = await fetchChangelog(nextPage, 50)
-            
+            const response = await fetchChangelog(50, nextCursor)
+
             // Append new items to existing changelog
-            setChangelog(prev => [...(prev || []), ...response.items])
+            setChangelog((prev) => [...(prev || []), ...response.items])
             setPagination(response.pagination)
-            setCurrentPage(nextPage)
+            setNextCursor(response.pagination?.nextCursor || null)
         } catch (err) {
             console.error(err)
             setError(err.message)
         } finally {
             setIsLoadingMore(false)
         }
-    }, [currentPage, pagination?.hasMore, isLoadingMore])
+    }, [pagination?.hasMore, isLoadingMore, nextCursor])
 
     // Initialize user info
     useEffect(() => {
@@ -2453,7 +2508,12 @@ export function ChangelogPageOverride(): Override {
                     // If time is specified, use it; otherwise end of day
                     if (endTime) {
                         const [hours, minutes] = endTime.split(":")
-                        end.setHours(parseInt(hours), parseInt(minutes), 59, 999)
+                        end.setHours(
+                            parseInt(hours),
+                            parseInt(minutes),
+                            59,
+                            999
+                        )
                     } else {
                         end.setHours(23, 59, 59, 999)
                     }
@@ -2473,20 +2533,39 @@ export function ChangelogPageOverride(): Override {
                     } else if (item.changes) {
                         // Try to get from changes
                         try {
-                            const formattedChanges = formatDynamoDBValue(item.changes)
-                            if (formattedChanges && typeof formattedChanges === 'object') {
-                                if (item.sourceTableTag?.toLowerCase() === "organization") {
-                                    itemOrganization = formattedChanges.name || ""
-                                } else if (item.sourceTableTag?.toLowerCase() === "user") {
-                                    itemOrganization = Array.isArray(formattedChanges.organizations)
-                                        ? (formattedChanges.organizations[0] || "")
-                                        : (formattedChanges.organizations || "")
+                            const formattedChanges = formatDynamoDBValue(
+                                item.changes
+                            )
+                            if (
+                                formattedChanges &&
+                                typeof formattedChanges === "object"
+                            ) {
+                                if (
+                                    item.sourceTableTag?.toLowerCase() ===
+                                    "organization"
+                                ) {
+                                    itemOrganization =
+                                        formattedChanges.name || ""
+                                } else if (
+                                    item.sourceTableTag?.toLowerCase() ===
+                                    "user"
+                                ) {
+                                    itemOrganization = Array.isArray(
+                                        formattedChanges.organizations
+                                    )
+                                        ? formattedChanges.organizations[0] ||
+                                          ""
+                                        : formattedChanges.organizations || ""
                                 } else {
-                                    itemOrganization = formattedChanges.organization || ""
+                                    itemOrganization =
+                                        formattedChanges.organization || ""
                                 }
                             }
                         } catch (err) {
-                            console.warn("Error formatting changes for organization filter:", err)
+                            console.warn(
+                                "Error formatting changes for organization filter:",
+                                err
+                            )
                         }
                     }
 
@@ -2723,10 +2802,13 @@ export function ChangelogPageOverride(): Override {
                                 lineHeight: "1.5",
                             }}
                         >
-                            Alleen administrators hebben toegang tot het wijzigingslogboek.
+                            Alleen administrators hebben toegang tot het
+                            wijzigingslogboek.
                         </p>
                         <button
-                            onClick={() => (window.location.href = "/organizations")}
+                            onClick={() =>
+                                (window.location.href = "/organizations")
+                            }
                             style={{
                                 padding: "12px 24px",
                                 backgroundColor: colors.primary,
@@ -2740,12 +2822,14 @@ export function ChangelogPageOverride(): Override {
                                 transition: "all 0.2s",
                             }}
                             onMouseOver={(e) =>
-                                ((e.target as HTMLElement).style.backgroundColor =
-                                    colors.primaryHover)
+                                ((
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.primaryHover)
                             }
                             onMouseOut={(e) =>
-                                ((e.target as HTMLElement).style.backgroundColor =
-                                    colors.primary)
+                                ((
+                                    e.target as HTMLElement
+                                ).style.backgroundColor = colors.primary)
                             }
                         >
                             Terug naar Organisaties
@@ -2884,7 +2968,8 @@ export function ChangelogPageOverride(): Override {
                                                     "#f8fafc"
                                                 target.style.borderColor =
                                                     colors.primary
-                                                target.style.color = colors.primary
+                                                target.style.color =
+                                                    colors.primary
                                                 target.style.transform =
                                                     "translateY(-1px)"
                                                 target.style.boxShadow =
@@ -2899,7 +2984,8 @@ export function ChangelogPageOverride(): Override {
                                                     colors.white
                                                 target.style.borderColor =
                                                     colors.gray200
-                                                target.style.color = colors.gray500
+                                                target.style.color =
+                                                    colors.gray500
                                                 target.style.transform = "none"
                                                 target.style.boxShadow =
                                                     "0 2px 4px rgba(0,0,0,0.05)"
@@ -3140,8 +3226,7 @@ export function ChangelogPageOverride(): Override {
                                                                                 width: "16px",
                                                                                 height: "16px",
                                                                                 border: "2px solid #e5e7eb",
-                                                                                borderTop:
-                                                                                    `2px solid ${colors.primary}`,
+                                                                                borderTop: `2px solid ${colors.primary}`,
                                                                                 borderRadius:
                                                                                     "50%",
                                                                                 animation:
@@ -3513,7 +3598,7 @@ export function ChangelogPageOverride(): Override {
                             </tbody>
                         </table>
                     </div>
-                    
+
                     {/* Pagination Controls */}
                     {pagination && (
                         <div
@@ -3535,25 +3620,36 @@ export function ChangelogPageOverride(): Override {
                                     fontFamily: FONT_STACK,
                                 }}
                             >
-                                Toont {Math.min(pagination.pageSize * (pagination.page + 1), pagination.totalItems)} van {pagination.totalItems} wijzigingen
-                                {pagination.page > 0 && ` (Pagina ${pagination.page + 1} van ${pagination.totalPages})`}
+                                Toont {changelog?.length || 0} wijzigingen
                             </div>
-                            
-                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: "8px",
+                                    alignItems: "center",
+                                }}
+                            >
                                 {pagination.hasMore && (
                                     <button
                                         onClick={loadMore}
                                         disabled={isLoadingMore}
                                         style={{
                                             padding: "8px 16px",
-                                            backgroundColor: isLoadingMore ? colors.gray100 : colors.primary,
-                                            color: isLoadingMore ? "#9ca3af" : colors.white,
+                                            backgroundColor: isLoadingMore
+                                                ? colors.gray100
+                                                : colors.primary,
+                                            color: isLoadingMore
+                                                ? "#9ca3af"
+                                                : colors.white,
                                             border: "none",
                                             borderRadius: "6px",
                                             fontSize: "14px",
                                             fontWeight: "500",
                                             fontFamily: FONT_STACK,
-                                            cursor: isLoadingMore ? "not-allowed" : "pointer",
+                                            cursor: isLoadingMore
+                                                ? "not-allowed"
+                                                : "pointer",
                                             display: "flex",
                                             alignItems: "center",
                                             gap: "6px",
@@ -3561,12 +3657,14 @@ export function ChangelogPageOverride(): Override {
                                         }}
                                         onMouseEnter={(e) => {
                                             if (!isLoadingMore) {
-                                                e.currentTarget.style.backgroundColor = colors.primaryHover
+                                                e.currentTarget.style.backgroundColor =
+                                                    colors.primaryHover
                                             }
                                         }}
                                         onMouseLeave={(e) => {
                                             if (!isLoadingMore) {
-                                                e.currentTarget.style.backgroundColor = colors.primary
+                                                e.currentTarget.style.backgroundColor =
+                                                    colors.primary
                                             }
                                         }}
                                     >
@@ -3577,22 +3675,24 @@ export function ChangelogPageOverride(): Override {
                                                         width: "16px",
                                                         height: "16px",
                                                         border: "2px solid #d1d5db",
-                                                        borderTop: "2px solid #9ca3af",
+                                                        borderTop:
+                                                            "2px solid #9ca3af",
                                                         borderRadius: "50%",
-                                                        animation: "spin 1s linear infinite",
+                                                        animation:
+                                                            "spin 1s linear infinite",
                                                     }}
                                                 />
                                                 Laden...
                                             </>
                                         ) : (
                                             <>
-                                                Meer laden ({Math.min(50, pagination.totalItems - (pagination.page + 1) * pagination.pageSize)} meer)
+                                                Meer laden
                                             </>
                                         )}
                                     </button>
                                 )}
-                                
-                                {currentPage > 0 && (
+
+                                {(changelog?.length || 0) > 50 && (
                                     <button
                                         onClick={refresh}
                                         style={{
@@ -3608,12 +3708,16 @@ export function ChangelogPageOverride(): Override {
                                             transition: "all 0.2s ease",
                                         }}
                                         onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = colors.gray50
-                                            e.currentTarget.style.borderColor = "#9ca3af"
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.gray50
+                                            e.currentTarget.style.borderColor =
+                                                "#9ca3af"
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = colors.white
-                                            e.currentTarget.style.borderColor = colors.gray300
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.white
+                                            e.currentTarget.style.borderColor =
+                                                colors.gray300
                                         }}
                                     >
                                         Terug naar start

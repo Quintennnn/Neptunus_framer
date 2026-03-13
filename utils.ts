@@ -349,8 +349,9 @@ export function validateOwnRiskConfig(config: OwnRiskConfig): string | null {
       ? parseFloat(config.fixedAmount)
       : config.fixedAmount
 
-    if (!fixedAmount || isNaN(fixedAmount) || fixedAmount <= 0) {
-      return "Voer een geldig vast bedrag in voor eigen risico"
+    // Allow 0 as a valid value for eigen risico (no deductible)
+    if (fixedAmount === undefined || fixedAmount === null || isNaN(fixedAmount) || fixedAmount < 0) {
+      return "Voer een geldig vast bedrag in voor eigen risico (0 of hoger)"
     }
     const currencyError = validateCurrencyValue(fixedAmount, "Vast bedrag eigen risico")
     if (currencyError) return currencyError

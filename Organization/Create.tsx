@@ -22,7 +22,6 @@ type OrganizationFormState = {
     street?: string
     huisnummer?: string
     city?: string
-    state?: string
     postal_code?: string
     country?: string
     extra_info?: string
@@ -58,7 +57,6 @@ function OrganizationForm({
         street: "",
         huisnummer: "",
         city: "",
-        state: "",
         postal_code: "",
         country: "",
         extra_info: "",
@@ -98,7 +96,6 @@ function OrganizationForm({
                 street: form.street || undefined,
                 huisnummer: form.huisnummer || undefined,
                 city: form.city || undefined,
-                state: form.state || undefined,
                 postal_code: form.postal_code || undefined,
                 country: form.country || undefined,
                 extra_info: form.extra_info || undefined,
@@ -514,75 +511,39 @@ function OrganizationForm({
                         </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: "12px" }}>
-                        <div style={{ flex: "1" }}>
-                            <label htmlFor="state" style={{
-                                display: "block",
-                                marginBottom: "8px",
+                    <div style={{ marginBottom: "16px" }}>
+                        <label htmlFor="country" style={{
+                            display: "block",
+                            marginBottom: "8px",
+                            fontSize: "14px",
+                            fontWeight: "500",
+                            color: "#374151"
+                        }}>
+                            Land
+                        </label>
+                        <input
+                            id="country"
+                            name="country"
+                            type="text"
+                            value={form.country || ""}
+                            onChange={handleChange}
+                            disabled={isSubmitting}
+                            placeholder="Nederland"
+                            style={{
+                                width: "100%",
+                                padding: "12px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "8px",
                                 fontSize: "14px",
-                                fontWeight: "500",
-                                color: "#374151"
-                            }}>
-                                Provincie/Staat
-                            </label>
-                            <input
-                                id="state"
-                                name="state"
-                                type="text"
-                                value={form.state || ""}
-                                onChange={handleChange}
-                                disabled={isSubmitting}
-                                placeholder="Voer provincie/staat in"
-                                style={{
-                                    width: "100%",
-                                    padding: "12px",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "8px",
-                                    fontSize: "14px",
-                                    fontFamily: FONT_STACK,
-                                    transition: "border-color 0.2s",
-                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
-                                    cursor: isSubmitting ? "not-allowed" : "text",
-                                    boxSizing: "border-box",
-                                }}
-                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
-                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                            />
-                        </div>
-                        <div style={{ flex: "1" }}>
-                            <label htmlFor="country" style={{
-                                display: "block",
-                                marginBottom: "8px",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                color: "#374151"
-                            }}>
-                                Land
-                            </label>
-                            <input
-                                id="country"
-                                name="country"
-                                type="text"
-                                value={form.country || ""}
-                                onChange={handleChange}
-                                disabled={isSubmitting}
-                                placeholder="Nederland"
-                                style={{
-                                    width: "100%",
-                                    padding: "12px",
-                                    border: "1px solid #d1d5db",
-                                    borderRadius: "8px",
-                                    fontSize: "14px",
-                                    fontFamily: FONT_STACK,
-                                    transition: "border-color 0.2s",
-                                    backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
-                                    cursor: isSubmitting ? "not-allowed" : "text",
-                                    boxSizing: "border-box",
-                                }}
-                                onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
-                                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
-                            />
-                        </div>
+                                fontFamily: FONT_STACK,
+                                transition: "border-color 0.2s",
+                                backgroundColor: isSubmitting ? "#f9fafb" : "#fff",
+                                cursor: isSubmitting ? "not-allowed" : "text",
+                                boxSizing: "border-box",
+                            }}
+                            onFocus={(e) => !isSubmitting && (e.target.style.borderColor = "#10b981")}
+                            onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+                        />
                     </div>
                 </div>
 

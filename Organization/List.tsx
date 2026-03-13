@@ -13,7 +13,7 @@ import {
     getFieldsForObjectType,
     getUserInputFieldsForObjectType,
     useOrganizationSchema,
-} from "https://framer.com/m/UseDynamicSchema-3ADY.js@Sy35oQBfgBpXZJLUAYHg"
+} from "../UseDynamicSchema2.tsx"
 import {
     FaEdit,
     FaTrashAlt,
@@ -39,7 +39,7 @@ import {
     FaDownload,
     FaCopy,
 } from "react-icons/fa"
-import { colors, styles, hover, animations, FONT_STACK } from "../theme.tsx"
+import { colors, styles, hover, animations, FONT_STACK } from "../Theme.tsx"
 import {
     API_BASE_URL,
     API_PATHS,
@@ -63,16 +63,13 @@ import {
     formatPremiumDisplay,
 } from "../Utils.tsx"
 import {
-    hasPermission,
-    isAdmin,
-} from "../Rbac.tsx"
-import {
     canEditOrganizationAddress,
     canEditOrganizationFieldConfig,
     canEditOrganizationAcceptanceRules,
     isAdmin,
     isEditor,
     isUser,
+    hasPermission,
 } from "../Rbac.tsx"
 import { OrganizationForm } from "./Create.tsx"
 import {
@@ -1012,12 +1009,9 @@ function AutoApprovalTab({
                             {/* Save As Template (All Users) */}
                             <button
                                 type="button"
-                                onClick={() =>
-                                    setShowSaveAsGlobal(true)
-                                }
+                                onClick={() => setShowSaveAsGlobal(true)}
                                 disabled={
-                                    !config.rules ||
-                                    config.rules.length === 0
+                                    !config.rules || config.rules.length === 0
                                 }
                                 style={{
                                     ...styles.secondaryButton,
@@ -1110,14 +1104,22 @@ function AutoApprovalTab({
                                             ruleIndex={ruleIndex}
                                             availableFields={availableFields}
                                             onUpdate={(updatedRule) =>
-                                                updateRule(ruleIndex, updatedRule)
+                                                updateRule(
+                                                    ruleIndex,
+                                                    updatedRule
+                                                )
                                             }
-                                            onDelete={() => deleteRule(ruleIndex)}
+                                            onDelete={() =>
+                                                deleteRule(ruleIndex)
+                                            }
                                             onDuplicate={() =>
                                                 handleDuplicateRule(ruleIndex)
                                             }
                                             onAddCondition={(fieldKey) =>
-                                                addCondition(ruleIndex, fieldKey)
+                                                addCondition(
+                                                    ruleIndex,
+                                                    fieldKey
+                                                )
                                             }
                                             onUpdateCondition={(
                                                 fieldKey,
@@ -1130,9 +1132,14 @@ function AutoApprovalTab({
                                                 )
                                             }
                                             onRemoveCondition={(fieldKey) =>
-                                                removeCondition(ruleIndex, fieldKey)
+                                                removeCondition(
+                                                    ruleIndex,
+                                                    fieldKey
+                                                )
                                             }
-                                            getFieldsForType={getFieldsForObjectType}
+                                            getFieldsForType={
+                                                getFieldsForObjectType
+                                            }
                                             onMoveUp={
                                                 ruleIndex > 0
                                                     ? () =>
@@ -1143,7 +1150,8 @@ function AutoApprovalTab({
                                                     : undefined
                                             }
                                             onMoveDown={
-                                                ruleIndex < config.rules.length - 1
+                                                ruleIndex <
+                                                config.rules.length - 1
                                                     ? () =>
                                                           reorderRules(
                                                               ruleIndex,
@@ -1248,7 +1256,14 @@ function RuleEditor({
                     gap: "12px",
                 }}
             >
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        flex: 1,
+                    }}
+                >
                     <input
                         type="text"
                         value={rule.name}
@@ -1267,8 +1282,20 @@ function RuleEditor({
                     />
 
                     {/* Object Type Selector */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: 12, color: colors.gray600, fontWeight: 500 }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontSize: 12,
+                                color: colors.gray600,
+                                fontWeight: 500,
+                            }}
+                        >
                             Type object:
                         </span>
                         <select
@@ -1278,7 +1305,7 @@ function RuleEditor({
                                 onUpdate({
                                     ...rule,
                                     objectType: e.target.value,
-                                    conditions: {} // Reset conditions since fields may be different
+                                    conditions: {}, // Reset conditions since fields may be different
                                 })
                             }}
                             style={{
@@ -1374,7 +1401,8 @@ function RuleEditor({
                             fontSize: 12,
                         }}
                     >
-                        Geen voorwaarden toegevoegd. Voeg een voorwaarde toe onder.
+                        Geen voorwaarden toegevoegd. Voeg een voorwaarde toe
+                        onder.
                     </div>
                 ) : (
                     Object.entries(rule.conditions).map(
@@ -1441,7 +1469,13 @@ function RuleEditor({
                 >
                     Premie & Eigen Risico (Verplicht)
                 </h4>
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        gap: 12,
+                        alignItems: "flex-start",
+                    }}
+                >
                     <div style={{ flex: 1 }}>
                         <label
                             style={{
@@ -1460,7 +1494,8 @@ function RuleEditor({
                                 method:
                                     rule.pricing?.premium_method ||
                                     "percentage",
-                                fixedAmount: rule.pricing?.premium_fixed_amount || 0,
+                                fixedAmount:
+                                    rule.pricing?.premium_fixed_amount || 0,
                                 percentage:
                                     rule.pricing?.premium_percentage || 0,
                             }}
@@ -1839,7 +1874,9 @@ function DraggableRuleEditor({
 }
 
 // Helper functions for thousand separator formatting
-function formatNumberWithThousandSeparators(value: number | null | undefined): string {
+function formatNumberWithThousandSeparators(
+    value: number | null | undefined
+): string {
     if (value === null || value === undefined || value === "") return ""
     const numValue = typeof value === "string" ? parseFloat(value) : value
     if (isNaN(numValue)) return ""
@@ -2138,7 +2175,11 @@ function ConditionEditor({
 
     // Format on blur for cleaner display
     const handleValueBlur = () => {
-        if (isNumericField && condition.value !== null && condition.value !== undefined) {
+        if (
+            isNumericField &&
+            condition.value !== null &&
+            condition.value !== undefined
+        ) {
             setValueDisplay(formatNumberWithThousandSeparators(condition.value))
         }
     }
@@ -2399,21 +2440,34 @@ function EnhancedPremiumInput({
                 const roundedValue = Math.round(numValue * 100) / 100
                 onChange({ ...config, fixedAmount: roundedValue })
             } else {
-                // Round to 2 decimals for percentage on blur
-                const roundedValue = Math.round(numValue * 100) / 100
+                // Round to 3 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 1000) / 1000
                 onChange({ ...config, percentage: roundedValue })
             }
         }
     }
 
     // Split value into integer and decimal parts
+    // Preserve string representation to keep leading zeros in decimals (e.g., "1.02")
     const getCurrentValue = () => {
-        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        const value =
+            config.method === "fixed" ? config.fixedAmount : config.percentage
         if (value === "" || value == null) return { integer: "", decimal: "" }
-        const numValue = typeof value === "string" ? parseFloat(value) : value
-        if (isNaN(numValue)) return { integer: "", decimal: "" }
-        const [intPart, decPart] = numValue.toString().split(".")
-        return { integer: intPart || "", decimal: decPart || "" }
+
+        // If value is a string, preserve it directly to keep decimals like "02"
+        // Only convert to number for validation, not for display
+        const strValue = typeof value === "string" ? value : String(value)
+
+        // Validate it's a valid number format
+        if (
+            !/^-?\d*\.?\d*$/.test(strValue) ||
+            isNaN(parseFloat(strValue || "0"))
+        ) {
+            return { integer: "", decimal: "" }
+        }
+
+        const [intPart, decPart] = strValue.split(".")
+        return { integer: intPart || "", decimal: decPart ?? "" }
     }
 
     const currentValue = getCurrentValue()
@@ -2422,13 +2476,19 @@ function EnhancedPremiumInput({
         // Only allow digits
         if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
         const decimal = currentValue.decimal
-        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        const combinedValue = decimal
+            ? `${newInteger || "0"}.${decimal}`
+            : newInteger || "0"
         handleValueChange(combinedValue)
     }
 
     const handleDecimalChange = (newDecimal: string) => {
         // Only allow digits, max 3 digits
-        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        if (
+            newDecimal !== "" &&
+            (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)
+        )
+            return
         const integer = currentValue.integer || "0"
         const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
         handleValueChange(combinedValue)
@@ -2442,7 +2502,9 @@ function EnhancedPremiumInput({
             handleBlur(combinedValue)
         } else {
             const decimal = currentValue.decimal
-            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            const combinedValue = decimal
+                ? `${currentValue.integer}.${decimal}`
+                : currentValue.integer
             handleBlur(combinedValue)
         }
     }
@@ -2461,11 +2523,19 @@ function EnhancedPremiumInput({
                 {config.method === "percentage" ? (
                     // Split Integer and Decimal for percentage
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="text"
                                 value={currentValue.integer}
-                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleIntegerChange(e.target.value)
+                                }
                                 onBlur={handleIntegerBlur}
                                 placeholder="0"
                                 style={{
@@ -2478,11 +2548,21 @@ function EnhancedPremiumInput({
                                     textAlign: "right",
                                 }}
                             />
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <span
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                .
+                            </span>
                             <input
                                 type="text"
                                 value={currentValue.decimal}
-                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleDecimalChange(e.target.value)
+                                }
                                 onBlur={handleDecimalBlur}
                                 placeholder="000"
                                 maxLength={3}
@@ -2495,7 +2575,15 @@ function EnhancedPremiumInput({
                                     fontFamily: FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                %
+                            </span>
                         </div>
                         <span
                             style={{
@@ -2511,12 +2599,20 @@ function EnhancedPremiumInput({
                 ) : (
                     // Regular input for fixed amount
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="number"
                                 step="0.01"
                                 value={config.fixedAmount || ""}
-                                onChange={(e) => handleValueChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
                                 onBlur={(e) => handleBlur(e.target.value)}
                                 placeholder="0.00"
                                 style={{
@@ -2528,7 +2624,15 @@ function EnhancedPremiumInput({
                                     fontFamily: FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                €
+                            </span>
                         </div>
                         <span
                             style={{
@@ -2650,13 +2754,26 @@ function EnhancedOwnRiskInput({
     }
 
     // Split value into integer and decimal parts
+    // Preserve string representation to keep leading zeros in decimals (e.g., "1.02")
     const getCurrentValue = () => {
-        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        const value =
+            config.method === "fixed" ? config.fixedAmount : config.percentage
         if (value === "" || value == null) return { integer: "", decimal: "" }
-        const numValue = typeof value === "string" ? parseFloat(value) : value
-        if (isNaN(numValue)) return { integer: "", decimal: "" }
-        const [intPart, decPart] = numValue.toString().split(".")
-        return { integer: intPart || "", decimal: decPart || "" }
+
+        // If value is a string, preserve it directly to keep decimals like "02"
+        // Only convert to number for validation, not for display
+        const strValue = typeof value === "string" ? value : String(value)
+
+        // Validate it's a valid number format
+        if (
+            !/^-?\d*\.?\d*$/.test(strValue) ||
+            isNaN(parseFloat(strValue || "0"))
+        ) {
+            return { integer: "", decimal: "" }
+        }
+
+        const [intPart, decPart] = strValue.split(".")
+        return { integer: intPart || "", decimal: decPart ?? "" }
     }
 
     const currentValue = getCurrentValue()
@@ -2665,13 +2782,19 @@ function EnhancedOwnRiskInput({
         // Only allow digits
         if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
         const decimal = currentValue.decimal
-        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        const combinedValue = decimal
+            ? `${newInteger || "0"}.${decimal}`
+            : newInteger || "0"
         handleValueChange(combinedValue)
     }
 
     const handleDecimalChange = (newDecimal: string) => {
         // Only allow digits, max 3 digits
-        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        if (
+            newDecimal !== "" &&
+            (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)
+        )
+            return
         const integer = currentValue.integer || "0"
         const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
         handleValueChange(combinedValue)
@@ -2685,7 +2808,9 @@ function EnhancedOwnRiskInput({
             handleBlur(combinedValue)
         } else {
             const decimal = currentValue.decimal
-            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            const combinedValue = decimal
+                ? `${currentValue.integer}.${decimal}`
+                : currentValue.integer
             handleBlur(combinedValue)
         }
     }
@@ -2704,11 +2829,19 @@ function EnhancedOwnRiskInput({
                 {config.method === "percentage" ? (
                     // Split Integer and Decimal for percentage
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="text"
                                 value={currentValue.integer}
-                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleIntegerChange(e.target.value)
+                                }
                                 onBlur={handleIntegerBlur}
                                 placeholder="0"
                                 style={{
@@ -2721,11 +2854,21 @@ function EnhancedOwnRiskInput({
                                     textAlign: "right",
                                 }}
                             />
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <span
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                .
+                            </span>
                             <input
                                 type="text"
                                 value={currentValue.decimal}
-                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleDecimalChange(e.target.value)
+                                }
                                 onBlur={handleDecimalBlur}
                                 placeholder="000"
                                 maxLength={3}
@@ -2738,7 +2881,15 @@ function EnhancedOwnRiskInput({
                                     fontFamily: FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                %
+                            </span>
                         </div>
                         <span
                             style={{
@@ -2754,12 +2905,20 @@ function EnhancedOwnRiskInput({
                 ) : (
                     // Regular input for fixed amount
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="number"
                                 step="50"
                                 value={config.fixedAmount || ""}
-                                onChange={(e) => handleValueChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
                                 onBlur={(e) => handleBlur(e.target.value)}
                                 placeholder="0"
                                 style={{
@@ -2771,7 +2930,15 @@ function EnhancedOwnRiskInput({
                                     fontFamily: FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                €
+                            </span>
                         </div>
                         <span
                             style={{
@@ -2855,7 +3022,6 @@ function EditOrgForm({
     const [street, setStreet] = useState(org.street || "")
     const [huisnummer, setHuisnummer] = useState(org.huisnummer || "")
     const [city, setCity] = useState(org.city || "")
-    const [state, setState] = useState(org.state || "")
     const [postalCode, setPostalCode] = useState(org.postal_code || "")
     const [country, setCountry] = useState(org.country || "")
     const [extraInfo, setExtraInfo] = useState(org.extra_info || "")
@@ -2913,7 +3079,11 @@ function EditOrgForm({
 
             // Update the field config for ALL object types that use this field
             objectTypes.forEach((objType) => {
-                const typedObjType = objType as "boot" | "trailer" | "motor" | "other"
+                const typedObjType = objType as
+                    | "boot"
+                    | "trailer"
+                    | "motor"
+                    | "other"
                 updatedConfig[typedObjType] = {
                     ...updatedConfig[typedObjType],
                     [fieldKey]: {
@@ -2987,13 +3157,6 @@ function EditOrgForm({
                     return ownRiskError !== null
                 }
             )
-
-            if (missingPricing.length > 0) {
-                setError(
-                    `Alle regels moeten verplichte prijzen hebben. Controleer de regels: ${missingPricing.map((rule: any, index: number) => rule.name || `Regel ${index + 1}`).join(", ")}`
-                )
-                return
-            }
         }
 
         try {
@@ -3028,8 +3191,8 @@ function EditOrgForm({
                               eigen_risico_method:
                                   rule.pricing.eigen_risico_method || "fixed", // Ensure method is always present
                               eigen_risico_percentage:
-                                  typeof rule.pricing.eigen_risico_percentage ===
-                                  "string"
+                                  typeof rule.pricing
+                                      .eigen_risico_percentage === "string"
                                       ? parseFloat(
                                             rule.pricing.eigen_risico_percentage
                                         ) || 0
@@ -3046,7 +3209,6 @@ function EditOrgForm({
                 street: street || undefined,
                 huisnummer: huisnummer || undefined,
                 city: city || undefined,
-                state: state || undefined,
                 postal_code: postalCode || undefined,
                 country: country || undefined,
                 extra_info: extraInfo || undefined,
@@ -3402,65 +3564,31 @@ function EditOrgForm({
                                 </div>
                             </div>
 
-                            <div
-                                style={{
-                                    display: "flex",
-                                    gap: 12,
-                                    marginBottom: 16,
-                                }}
-                            >
-                                <div style={{ flex: 1 }}>
-                                    <label
-                                        style={{
-                                            display: "block",
-                                            marginBottom: 8,
-                                            fontWeight: 500,
-                                        }}
-                                    >
-                                        Provincie/Staat
-                                    </label>
-                                    <input
-                                        value={state}
-                                        onChange={(e) =>
-                                            setState(e.target.value)
-                                        }
-                                        placeholder="Voer provincie/staat in"
-                                        style={{
-                                            width: "100%",
-                                            padding: 12,
-                                            fontSize: 14,
-                                            border: "1px solid #d1d5db",
-                                            borderRadius: 8,
-                                            fontFamily: FONT_STACK,
-                                        }}
-                                    />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <label
-                                        style={{
-                                            display: "block",
-                                            marginBottom: 8,
-                                            fontWeight: 500,
-                                        }}
-                                    >
-                                        Land
-                                    </label>
-                                    <input
-                                        value={country}
-                                        onChange={(e) =>
-                                            setCountry(e.target.value)
-                                        }
-                                        placeholder="Nederland"
-                                        style={{
-                                            width: "100%",
-                                            padding: 12,
-                                            fontSize: 14,
-                                            border: "1px solid #d1d5db",
-                                            borderRadius: 8,
-                                            fontFamily: FONT_STACK,
-                                        }}
-                                    />
-                                </div>
+                            <div style={{ marginBottom: 16 }}>
+                                <label
+                                    style={{
+                                        display: "block",
+                                        marginBottom: 8,
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    Land
+                                </label>
+                                <input
+                                    value={country}
+                                    onChange={(e) =>
+                                        setCountry(e.target.value)
+                                    }
+                                    placeholder="Nederland"
+                                    style={{
+                                        width: "100%",
+                                        padding: 12,
+                                        fontSize: 14,
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 8,
+                                        fontFamily: FONT_STACK,
+                                    }}
+                                />
                             </div>
 
                             <div style={{ marginBottom: 16 }}>
@@ -3537,23 +3665,38 @@ function EditOrgForm({
                                     const uniqueFieldsMap = new Map()
 
                                     // Collect all unique fields from all object types
-                                    const allObjectTypes = ["boot", "trailer", "motor"]
-                                    allObjectTypes.forEach(objType => {
-                                        getUserInputFieldsForObjectType(dynamicSchema, objType).forEach(field => {
-                                            if (!uniqueFieldsMap.has(field.key)) {
+                                    const allObjectTypes = [
+                                        "boot",
+                                        "trailer",
+                                        "motor",
+                                    ]
+                                    allObjectTypes.forEach((objType) => {
+                                        getUserInputFieldsForObjectType(
+                                            dynamicSchema,
+                                            objType
+                                        ).forEach((field) => {
+                                            if (
+                                                !uniqueFieldsMap.has(field.key)
+                                            ) {
                                                 uniqueFieldsMap.set(field.key, {
                                                     ...field,
-                                                    objectTypes: field.objectTypes || [objType]
+                                                    objectTypes:
+                                                        field.objectTypes || [
+                                                            objType,
+                                                        ],
                                                 })
                                             }
                                         })
                                     })
 
                                     // Convert to array and sort by displayOrder then label
-                                    const uniqueFields = Array.from(uniqueFieldsMap.values()).sort((a, b) => {
+                                    const uniqueFields = Array.from(
+                                        uniqueFieldsMap.values()
+                                    ).sort((a, b) => {
                                         const orderA = a.displayOrder || 999
                                         const orderB = b.displayOrder || 999
-                                        if (orderA !== orderB) return orderA - orderB
+                                        if (orderA !== orderB)
+                                            return orderA - orderB
                                         return a.label.localeCompare(b.label)
                                     })
 
@@ -3567,22 +3710,28 @@ function EditOrgForm({
                                                     color: colors.gray700,
                                                 }}
                                             >
-                                                Alle Velden (Boot, Trailer & Motor)
+                                                Alle Velden (Boot, Trailer &
+                                                Motor)
                                             </h4>
                                             <table
-                                                style={{ width: "100%", fontSize: 14 }}
+                                                style={{
+                                                    width: "100%",
+                                                    fontSize: 14,
+                                                }}
                                             >
                                                 <thead
                                                     style={{
                                                         position: "sticky",
                                                         top: 0,
-                                                        backgroundColor: "#7CC2FE",
+                                                        backgroundColor:
+                                                            "#7CC2FE",
                                                     }}
                                                 >
                                                     <tr>
                                                         <th
                                                             style={{
-                                                                textAlign: "left",
+                                                                textAlign:
+                                                                    "left",
                                                                 padding: 12,
                                                                 fontWeight: 600,
                                                             }}
@@ -3591,7 +3740,8 @@ function EditOrgForm({
                                                         </th>
                                                         <th
                                                             style={{
-                                                                textAlign: "center",
+                                                                textAlign:
+                                                                    "center",
                                                                 padding: 12,
                                                                 fontWeight: 600,
                                                             }}
@@ -3600,7 +3750,8 @@ function EditOrgForm({
                                                         </th>
                                                         <th
                                                             style={{
-                                                                textAlign: "center",
+                                                                textAlign:
+                                                                    "center",
                                                                 padding: 12,
                                                                 fontWeight: 600,
                                                             }}
@@ -3610,102 +3761,129 @@ function EditOrgForm({
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {uniqueFields.map((field) => {
-                                                        // Get config from the first object type that has this field
-                                                        const firstObjectType = field.objectTypes?.[0] || "boot"
-                                                        const config =
-                                                            insuredObjectFieldsConfig[firstObjectType]?.[field.key] || {
-                                                                visible: false,
-                                                                required: false,
-                                                            }
+                                                    {uniqueFields.map(
+                                                        (field) => {
+                                                            // Get config from the first object type that has this field
+                                                            const firstObjectType =
+                                                                field
+                                                                    .objectTypes?.[0] ||
+                                                                "boot"
+                                                            const config =
+                                                                insuredObjectFieldsConfig[
+                                                                    firstObjectType
+                                                                ]?.[
+                                                                    field.key
+                                                                ] || {
+                                                                    visible:
+                                                                        false,
+                                                                    required:
+                                                                        false,
+                                                                }
 
-                                                        return (
-                                                            <tr
-                                                                key={field.key}
-                                                                style={{
-                                                                    borderBottom: "1px solid #f3f4f6",
-                                                                }}
-                                                            >
-                                                                <td
+                                                            return (
+                                                                <tr
+                                                                    key={
+                                                                        field.key
+                                                                    }
                                                                     style={{
-                                                                        padding: 12,
+                                                                        borderBottom:
+                                                                            "1px solid #f3f4f6",
                                                                     }}
                                                                 >
-                                                                    {field.label}
-                                                                </td>
-                                                                <td
-                                                                    style={{
-                                                                        textAlign: "center",
-                                                                        padding: 12,
-                                                                    }}
-                                                                >
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            updateFieldConfig(
-                                                                                field.key,
-                                                                                "visible",
-                                                                                !config.visible,
-                                                                                field.objectTypes || [firstObjectType]
-                                                                            )
-                                                                        }
+                                                                    <td
                                                                         style={{
-                                                                            border: "none",
-                                                                            background: "none",
-                                                                            cursor: "pointer",
-                                                                            color: config.visible
-                                                                                ? "#10b981"
-                                                                                : "#d1d5db",
-                                                                            fontSize: 18,
+                                                                            padding: 12,
                                                                         }}
                                                                     >
-                                                                        {config.visible ? (
-                                                                            <FaToggleOn />
-                                                                        ) : (
-                                                                            <FaToggleOff />
-                                                                        )}
-                                                                    </button>
-                                                                </td>
-                                                                <td
-                                                                    style={{
-                                                                        textAlign: "center",
-                                                                        padding: 12,
-                                                                    }}
-                                                                >
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() =>
-                                                                            updateFieldConfig(
-                                                                                field.key,
-                                                                                "required",
-                                                                                !config.required,
-                                                                                field.objectTypes || [firstObjectType]
-                                                                            )
+                                                                        {
+                                                                            field.label
                                                                         }
-                                                                        disabled={!config.visible}
+                                                                    </td>
+                                                                    <td
                                                                         style={{
-                                                                            border: "none",
-                                                                            background: "none",
-                                                                            cursor: config.visible
-                                                                                ? "pointer"
-                                                                                : "not-allowed",
-                                                                            color:
-                                                                                config.visible && config.required
-                                                                                    ? colors.primary
-                                                                                    : colors.gray300,
-                                                                            fontSize: 18,
+                                                                            textAlign:
+                                                                                "center",
+                                                                            padding: 12,
                                                                         }}
                                                                     >
-                                                                        {config.required ? (
-                                                                            <FaToggleOn />
-                                                                        ) : (
-                                                                            <FaToggleOff />
-                                                                        )}
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    })}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                updateFieldConfig(
+                                                                                    field.key,
+                                                                                    "visible",
+                                                                                    !config.visible,
+                                                                                    field.objectTypes || [
+                                                                                        firstObjectType,
+                                                                                    ]
+                                                                                )
+                                                                            }
+                                                                            style={{
+                                                                                border: "none",
+                                                                                background:
+                                                                                    "none",
+                                                                                cursor: "pointer",
+                                                                                color: config.visible
+                                                                                    ? "#10b981"
+                                                                                    : "#d1d5db",
+                                                                                fontSize: 18,
+                                                                            }}
+                                                                        >
+                                                                            {config.visible ? (
+                                                                                <FaToggleOn />
+                                                                            ) : (
+                                                                                <FaToggleOff />
+                                                                            )}
+                                                                        </button>
+                                                                    </td>
+                                                                    <td
+                                                                        style={{
+                                                                            textAlign:
+                                                                                "center",
+                                                                            padding: 12,
+                                                                        }}
+                                                                    >
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                updateFieldConfig(
+                                                                                    field.key,
+                                                                                    "required",
+                                                                                    !config.required,
+                                                                                    field.objectTypes || [
+                                                                                        firstObjectType,
+                                                                                    ]
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                !config.visible
+                                                                            }
+                                                                            style={{
+                                                                                border: "none",
+                                                                                background:
+                                                                                    "none",
+                                                                                cursor: config.visible
+                                                                                    ? "pointer"
+                                                                                    : "not-allowed",
+                                                                                color:
+                                                                                    config.visible &&
+                                                                                    config.required
+                                                                                        ? colors.primary
+                                                                                        : colors.gray300,
+                                                                                fontSize: 18,
+                                                                            }}
+                                                                        >
+                                                                            {config.required ? (
+                                                                                <FaToggleOn />
+                                                                            ) : (
+                                                                                <FaToggleOff />
+                                                                            )}
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        }
+                                                    )}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -3981,7 +4159,7 @@ export function OrganizationPageOverride(): Override {
 
     // Load column order from localStorage or use default
     useEffect(() => {
-        const savedOrder = localStorage.getItem('organizations_columnOrder')
+        const savedOrder = localStorage.getItem("organizations_columnOrder")
         if (savedOrder) {
             try {
                 const parsedOrder = JSON.parse(savedOrder)
@@ -3991,7 +4169,10 @@ export function OrganizationPageOverride(): Override {
                     setColumnOrder(defaultColumnOrder)
                 }
             } catch (error) {
-                console.warn('Failed to parse saved column order, using default:', error)
+                console.warn(
+                    "Failed to parse saved column order, using default:",
+                    error
+                )
                 setColumnOrder(defaultColumnOrder)
             }
         } else {
@@ -4002,19 +4183,26 @@ export function OrganizationPageOverride(): Override {
     // Save column order to localStorage whenever it changes
     useEffect(() => {
         if (columnOrder.length > 0) {
-            localStorage.setItem('organizations_columnOrder', JSON.stringify(columnOrder))
+            localStorage.setItem(
+                "organizations_columnOrder",
+                JSON.stringify(columnOrder)
+            )
         }
     }, [columnOrder])
 
     // Update column order when new columns are available (but preserve user customizations)
     useEffect(() => {
         if (organizationColumns.length > 0 && columnOrder.length > 0) {
-            const availableColumnKeys = organizationColumns.map(col => col.key)
-            const newColumns = availableColumnKeys.filter(key => !columnOrder.includes(key))
+            const availableColumnKeys = organizationColumns.map(
+                (col) => col.key
+            )
+            const newColumns = availableColumnKeys.filter(
+                (key) => !columnOrder.includes(key)
+            )
 
             if (newColumns.length > 0) {
                 // Add new columns at the end of the user's custom order
-                setColumnOrder(prev => [...prev, ...newColumns])
+                setColumnOrder((prev) => [...prev, ...newColumns])
             }
         }
     }, [organizationColumns, columnOrder.length])
@@ -4091,18 +4279,18 @@ export function OrganizationPageOverride(): Override {
 
     const resetColumnOrder = () => {
         setColumnOrder([...defaultColumnOrder])
-        localStorage.removeItem('organizations_columnOrder')
+        localStorage.removeItem("organizations_columnOrder")
     }
 
     // Drag and drop event handlers
     const handleDragStart = (e: React.DragEvent, columnKey: string) => {
         setDraggedColumn(columnKey)
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/plain', columnKey)
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", columnKey)
 
         // Add some visual feedback
         if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '0.5'
+            e.currentTarget.style.opacity = "0.5"
         }
     }
 
@@ -4112,13 +4300,13 @@ export function OrganizationPageOverride(): Override {
 
         // Reset visual feedback
         if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.style.opacity = '1'
+            e.currentTarget.style.opacity = "1"
         }
     }
 
     const handleDragOver = (e: React.DragEvent, columnKey: string) => {
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
+        e.dataTransfer.dropEffect = "move"
         setDragOverColumn(columnKey)
     }
 
@@ -4129,7 +4317,7 @@ export function OrganizationPageOverride(): Override {
     const handleDrop = (e: React.DragEvent, targetColumnKey: string) => {
         e.preventDefault()
 
-        const draggedColumnKey = e.dataTransfer.getData('text/plain')
+        const draggedColumnKey = e.dataTransfer.getData("text/plain")
         if (draggedColumnKey && draggedColumnKey !== targetColumnKey) {
             const dragIndex = columnOrder.indexOf(draggedColumnKey)
             const hoverIndex = columnOrder.indexOf(targetColumnKey)
@@ -4581,7 +4769,9 @@ export function OrganizationPageOverride(): Override {
                                                 onClose={() =>
                                                     setShowColumnFilter(false)
                                                 }
-                                                onResetColumnOrder={resetColumnOrder}
+                                                onResetColumnOrder={
+                                                    resetColumnOrder
+                                                }
                                             />
                                         )}
                                 </div>
@@ -4632,11 +4822,25 @@ export function OrganizationPageOverride(): Override {
                                                 <th
                                                     key={col.key}
                                                     draggable
-                                                    onDragStart={(e) => handleDragStart(e, col.key)}
+                                                    onDragStart={(e) =>
+                                                        handleDragStart(
+                                                            e,
+                                                            col.key
+                                                        )
+                                                    }
                                                     onDragEnd={handleDragEnd}
-                                                    onDragOver={(e) => handleDragOver(e, col.key)}
-                                                    onDragLeave={handleDragLeave}
-                                                    onDrop={(e) => handleDrop(e, col.key)}
+                                                    onDragOver={(e) =>
+                                                        handleDragOver(
+                                                            e,
+                                                            col.key
+                                                        )
+                                                    }
+                                                    onDragLeave={
+                                                        handleDragLeave
+                                                    }
+                                                    onDrop={(e) =>
+                                                        handleDrop(e, col.key)
+                                                    }
                                                     style={{
                                                         textAlign: "left",
                                                         padding: 12,
@@ -4647,26 +4851,38 @@ export function OrganizationPageOverride(): Override {
                                                         userSelect: "none",
                                                         position: "relative",
                                                         backgroundColor:
-                                                            dragOverColumn === col.key
+                                                            dragOverColumn ===
+                                                            col.key
                                                                 ? "#e2e8f0"
-                                                                : draggedColumn === col.key
-                                                                ? "#f1f5f9"
-                                                                : "transparent",
-                                                        transition: "background-color 0.2s ease",
+                                                                : draggedColumn ===
+                                                                    col.key
+                                                                  ? "#f1f5f9"
+                                                                  : "transparent",
+                                                        transition:
+                                                            "background-color 0.2s ease",
                                                     }}
                                                     onClick={() =>
                                                         handleSort(col.key)
                                                     }
                                                     onMouseOver={(e) => {
-                                                        if (draggedColumn !== col.key) {
+                                                        if (
+                                                            draggedColumn !==
+                                                            col.key
+                                                        ) {
                                                             e.currentTarget.style.backgroundColor =
-                                                                dragOverColumn === col.key
+                                                                dragOverColumn ===
+                                                                col.key
                                                                     ? "#e2e8f0"
                                                                     : "#f3f4f6"
                                                         }
                                                     }}
                                                     onMouseOut={(e) => {
-                                                        if (draggedColumn !== col.key && dragOverColumn !== col.key) {
+                                                        if (
+                                                            draggedColumn !==
+                                                                col.key &&
+                                                            dragOverColumn !==
+                                                                col.key
+                                                        ) {
                                                             e.currentTarget.style.backgroundColor =
                                                                 "transparent"
                                                         }
@@ -4726,16 +4942,22 @@ export function OrganizationPageOverride(): Override {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    {dragOverColumn === col.key && (
-                                                        <div style={{
-                                                            position: "absolute",
-                                                            left: "0",
-                                                            top: "0",
-                                                            bottom: "0",
-                                                            width: "3px",
-                                                            backgroundColor: "#3b82f6",
-                                                            borderRadius: "1px"
-                                                        }} />
+                                                    {dragOverColumn ===
+                                                        col.key && (
+                                                        <div
+                                                            style={{
+                                                                position:
+                                                                    "absolute",
+                                                                left: "0",
+                                                                top: "0",
+                                                                bottom: "0",
+                                                                width: "3px",
+                                                                backgroundColor:
+                                                                    "#3b82f6",
+                                                                borderRadius:
+                                                                    "1px",
+                                                            }}
+                                                        />
                                                     )}
                                                 </th>
                                             ))}
@@ -5018,14 +5240,28 @@ export function OrganizationPageOverride(): Override {
                                                                   "extra_info" ? (
                                                                     <div
                                                                         style={{
-                                                                            maxWidth: "200px",
-                                                                            overflow: "hidden",
-                                                                            textOverflow: "ellipsis",
-                                                                            whiteSpace: "nowrap",
+                                                                            maxWidth:
+                                                                                "200px",
+                                                                            overflow:
+                                                                                "hidden",
+                                                                            textOverflow:
+                                                                                "ellipsis",
+                                                                            whiteSpace:
+                                                                                "nowrap",
                                                                         }}
-                                                                        title={org[col.key] || "-"}
+                                                                        title={
+                                                                            org[
+                                                                                col
+                                                                                    .key
+                                                                            ] ||
+                                                                            "-"
+                                                                        }
                                                                     >
-                                                                        {org[col.key] || "-"}
+                                                                        {org[
+                                                                            col
+                                                                                .key
+                                                                        ] ||
+                                                                            "-"}
                                                                     </div>
                                                                 ) : (
                                                                     (org[
@@ -5274,7 +5510,6 @@ function SaveAsGlobalTemplate({
                             marginBottom: "12px",
                         }}
                     />
-
                 </div>
 
                 {/* Info Box */}
@@ -5367,7 +5602,9 @@ function LoadFromGlobalTemplate({
     const [error, setError] = useState<string | null>(null)
     const [selectedTemplate, setSelectedTemplate] =
         useState<GlobalRuleTemplate | null>(null)
-    const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
+    const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(
+        null
+    )
 
     // Load templates on mount
     React.useEffect(() => {
@@ -5438,7 +5675,7 @@ function LoadFromGlobalTemplate({
             }
 
             // Remove the deleted template from the local state
-            setTemplates(templates.filter(t => t.id !== templateId))
+            setTemplates(templates.filter((t) => t.id !== templateId))
 
             // Clear selection if the deleted template was selected
             if (selectedTemplate?.id === templateId) {
@@ -5578,43 +5815,59 @@ function LoadFromGlobalTemplate({
                                 >
                                     {/* Delete button */}
                                     <button
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                if (window.confirm(`Weet je zeker dat je de template "${template.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`)) {
-                                                    setDeletingTemplateId(template.id)
-                                                    handleDeleteTemplate(template.id)
-                                                }
-                                            }}
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (
+                                                window.confirm(
+                                                    `Weet je zeker dat je de template "${template.name}" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`
+                                                )
+                                            ) {
+                                                setDeletingTemplateId(
+                                                    template.id
+                                                )
+                                                handleDeleteTemplate(
+                                                    template.id
+                                                )
+                                            }
+                                        }}
+                                        style={{
+                                            position: "absolute",
+                                            top: "8px",
+                                            right: "8px",
+                                            background: "none",
+                                            border: "none",
+                                            cursor: "pointer",
+                                            color: colors.error,
+                                            padding: "4px",
+                                            borderRadius: "4px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                colors.errorBg
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor =
+                                                "transparent"
+                                        }}
+                                        title="Template verwijderen"
+                                        disabled={
+                                            deletingTemplateId === template.id
+                                        }
+                                    >
+                                        <FaTimes
+                                            size={14}
                                             style={{
-                                                position: "absolute",
-                                                top: "8px",
-                                                right: "8px",
-                                                background: "none",
-                                                border: "none",
-                                                cursor: "pointer",
-                                                color: colors.error,
-                                                padding: "4px",
-                                                borderRadius: "4px",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
+                                                opacity:
+                                                    deletingTemplateId ===
+                                                    template.id
+                                                        ? 0.5
+                                                        : 1,
                                             }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = colors.errorBg
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = "transparent"
-                                            }}
-                                            title="Template verwijderen"
-                                            disabled={deletingTemplateId === template.id}
-                                        >
-                                            <FaTimes
-                                                size={14}
-                                                style={{
-                                                    opacity: deletingTemplateId === template.id ? 0.5 : 1
-                                                }}
-                                            />
-                                        </button>
+                                        />
+                                    </button>
 
                                     <div
                                         style={{

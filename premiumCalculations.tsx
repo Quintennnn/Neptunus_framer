@@ -129,8 +129,10 @@ export function calculateInsurancePeriod(object: InsuredObject): number {
     } else {
         // If no end date, calculate until end of current year
         const currentYear = new Date().getFullYear()
-        endDate = new Date(currentYear, 11, 31) // December 31st
-        console.log('[PREMIUM CALC] Using end of year as end date:', endDate)
+        // IMPORTANT: Use Date.UTC to match the timezone of ingangsdatum (which is parsed as UTC)
+        // This prevents timezone-related off-by-one errors
+        endDate = new Date(Date.UTC(currentYear, 11, 31, 0, 0, 0, 0)) // December 31st UTC
+        console.log('[PREMIUM CALC] Using end of year as end date (UTC):', endDate)
     }
 
     // Calculate days difference (inclusive of both start and end dates)

@@ -3,7 +3,7 @@ import * as React from "react"
 import * as ReactDOM from "react-dom"
 import { Override } from "framer"
 import { useState, useEffect, useCallback } from "react"
-import { UserInfoBanner } from "https://framer.com/m/UserInfoBanner-R7Q1.js@U72OHgHMkersQv4QWNRo"
+import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
 import {
     UserInfo as RBACUserInfo,
     hasPermission,
@@ -35,10 +35,13 @@ import {
     FaPlus,
     FaEllipsisV,
     FaInfoCircle,
+    FaPrint,
+    FaFileContract,
     FaFilePdf,
     FaExclamationTriangle,
 } from "react-icons/fa"
 import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
+
 import {
     API_BASE_URL,
     API_PATHS,
@@ -46,6 +49,7 @@ import {
     formatErrorMessage,
     formatSuccessMessage,
 } from "../Utils.tsx"
+
 import {
     ObjectType,
     OBJECT_TYPE_CONFIG,
@@ -65,7 +69,7 @@ import {
     useDynamicSchema,
     useOrganizationSchema,
     type FieldSchema,
-} from "https://framer.com/m/UseDynamicSchema2-sydl.js@gU5g5fSgmxqlpbHHdwQy"
+} from "../UseDynamicSchema2.tsx"
 import { EnhancedTotalsDisplay } from "../components/EnhancedTotalsDisplay.tsx"
 import {
     calculateEnhancedTotals,
@@ -78,6 +82,7 @@ import {
     updateObjectWithCalculatedPremiums,
     type InsuredObject as EnhancedInsuredObject,
 } from "../premiumCalculations.tsx"
+// src/InsuredObjectListOverride.tsx (Role-aware insured object management system)
 
 // Note: Unified field system removed - using direct field names from registry
 
@@ -539,6 +544,7 @@ interface OrganizationInfo {
     city?: string
     country?: string
     type_organisatie?: string
+    huisnummer?: string
 }
 
 // Fetch organization details
@@ -2468,10 +2474,7 @@ function EditInsuredObjectDialog({
         e.preventDefault()
 
         // Basic validation
-        if (!form.waarde || form.waarde <= 0) {
-            setError("Waarde moet groter dan 0 zijn")
-            return
-        }
+
         if (!form.ingangsdatum) {
             setError("Ingangsdatum is verplicht")
             return
@@ -4706,13 +4709,14 @@ function InsuredObjectList() {
                 organizationInfo &&
                 (organizationInfo.polisnummer ||
                     organizationInfo.street ||
+                    organizationInfo.huisnummer ||
                     organizationInfo.postal_code ||
                     organizationInfo.city ||
                     organizationInfo.country)
                     ? `
             <div class="organization-address">
                 ${organizationInfo.polisnummer ? `<strong>Polisnummer:</strong> ${organizationInfo.polisnummer}<br>` : ""}
-                ${organizationInfo.street ? `${organizationInfo.street}<br>` : ""}
+                ${organizationInfo.street || organizationInfo.huisnummer ? `${organizationInfo.street || ""}${organizationInfo.huisnummer ? " " + organizationInfo.huisnummer : ""}<br>` : ""}
                 ${
                     organizationInfo.postal_code || organizationInfo.city
                         ? `${organizationInfo.postal_code || ""} ${organizationInfo.city || ""}`.trim() +

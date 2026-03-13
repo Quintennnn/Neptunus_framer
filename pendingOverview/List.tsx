@@ -30,17 +30,17 @@ import {
     FaSortAmountDown,
     FaSortAmountUp,
     FaExclamationTriangle,
-    FaCheckCircle
+    FaCheckCircle,
 } from "react-icons/fa"
 import { UserInfoBanner } from "../components/UserInfoBanner.tsx"
 import { colors, styles, hover, FONT_STACK } from "../Theme.tsx"
-import { 
-    API_BASE_URL, 
-    API_PATHS, 
-    getIdToken, 
-    formatErrorMessage, 
-    formatSuccessMessage, 
-    validatePromillage, 
+import {
+    API_BASE_URL,
+    API_PATHS,
+    getIdToken,
+    formatErrorMessage,
+    formatSuccessMessage,
+    validatePromillage,
     normalizePromillageValue,
     PremiumCalculationMethod,
     PremiumConfig,
@@ -51,8 +51,8 @@ import {
     OwnRiskConfig,
     calculateOwnRisk,
     validateOwnRiskConfig,
-    formatOwnRiskDisplay
-} from "../utils.tsx"
+    formatOwnRiskDisplay,
+} from "../Utils.tsx"
 
 // ——— Enhanced font stack for better typography ———
 const ENHANCED_FONT_STACK =
@@ -71,7 +71,7 @@ type ObjectType = "boot" | "trailer" | "motor"
 interface PendingInsuredObject {
     id: string
     objectType: ObjectType
-    status: "Pending" | "Rejected"  // Include rejected items for admin review/reconsideration
+    status: "Pending" | "Rejected" // Include rejected items for admin review/reconsideration
     waarde: number // value
     organization: string
     ingangsdatum: string // insuranceStartDate
@@ -156,11 +156,14 @@ async function fetchUserInfo(cognitoSub: string): Promise<UserInfo | null> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.USER}/${cognitoSub}`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const responseData = await res.json()
@@ -202,26 +205,42 @@ async function fetchAllPendingObjects(): Promise<PendingInsuredObject[]> {
 
         // Fetch both Pending and Rejected items for review
         // Rejected items are kept visible as rejection history for potential reconsideration
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending,Rejected`, {
-            method: "GET",
-            headers,
-            mode: "cors",
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending,Rejected`,
+            {
+                method: "GET",
+                headers,
+                mode: "cors",
+            }
+        )
 
         if (!res.ok) {
-            throw new Error(`Failed to fetch pending/rejected objects: ${res.status} ${res.statusText}`)
+            throw new Error(
+                `Failed to fetch pending/rejected objects: ${res.status} ${res.statusText}`
+            )
         }
 
         const data = await res.json()
         console.log("Fetched pending and rejected objects:", data)
-        
+
         // Check for different possible response structures
-        const result = data.items || data.objects || data.insuredObjects || data || []
-        console.log("Extracted result from API:", result, "isArray:", Array.isArray(result))
-        
+        const result =
+            data.items || data.objects || data.insuredObjects || data || []
+        console.log(
+            "Extracted result from API:",
+            result,
+            "isArray:",
+            Array.isArray(result)
+        )
+
         // Ensure we return an array
         const finalResult = Array.isArray(result) ? result : []
-        console.log("Final result to return from fetchAllPendingObjects:", finalResult, "length:", finalResult.length)
+        console.log(
+            "Final result to return from fetchAllPendingObjects:",
+            finalResult,
+            "length:",
+            finalResult.length
+        )
         return finalResult
     } catch (error) {
         console.error("Error fetching pending objects:", error)
@@ -234,17 +253,22 @@ async function approveObject(objectId: string): Promise<void> {
         const token = getIdTokenFromStorage()
         if (!token) throw new Error("No authentication token")
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`, {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({}),
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+            }
+        )
 
         if (!res.ok) {
-            throw new Error(`Failed to approve object: ${res.status} ${res.statusText}`)
+            throw new Error(
+                `Failed to approve object: ${res.status} ${res.statusText}`
+            )
         }
     } catch (error) {
         console.error("Error approving object:", error)
@@ -253,7 +277,7 @@ async function approveObject(objectId: string): Promise<void> {
 }
 
 async function approveObjectWithCustomValues(
-    objectId: string, 
+    objectId: string,
     premiumConfig: PremiumConfig,
     ownRiskConfig: OwnRiskConfig
 ): Promise<void> {
@@ -265,31 +289,38 @@ async function approveObjectWithCustomValues(
         const payload: any = {
             premium: {
                 method: premiumConfig.method,
-                value: premiumConfig.method === "fixed" 
-                    ? parseFloat(String(premiumConfig.fixedAmount || 0))
-                    : parseFloat(String(premiumConfig.percentage || 0))
+                value:
+                    premiumConfig.method === "fixed"
+                        ? parseFloat(String(premiumConfig.fixedAmount || 0))
+                        : parseFloat(String(premiumConfig.percentage || 0)),
             },
             eigenRisico: {
                 method: ownRiskConfig.method,
-                value: ownRiskConfig.method === "fixed"
-                    ? parseFloat(String(ownRiskConfig.fixedAmount || 0))
-                    : parseFloat(String(ownRiskConfig.percentage || 0))
-            }
+                value:
+                    ownRiskConfig.method === "fixed"
+                        ? parseFloat(String(ownRiskConfig.fixedAmount || 0))
+                        : parseFloat(String(ownRiskConfig.percentage || 0)),
+            },
         }
 
         console.log("Sending approval with custom values:", payload)
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`, {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/approve`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            }
+        )
 
         if (!res.ok) {
-            throw new Error(`Failed to approve object with custom values: ${res.status} ${res.statusText}`)
+            throw new Error(
+                `Failed to approve object with custom values: ${res.status} ${res.statusText}`
+            )
         }
     } catch (error) {
         console.error("Error approving object with custom values:", error)
@@ -302,17 +333,22 @@ async function declineObject(objectId: string, reason: string): Promise<void> {
         const token = getIdTokenFromStorage()
         if (!token) throw new Error("No authentication token")
 
-        const res = await fetch(`${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/decline`, {
-            method: "PUT",
-            headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ reason }),
-        })
+        const res = await fetch(
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}/${objectId}/decline`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ reason }),
+            }
+        )
 
         if (!res.ok) {
-            throw new Error(`Failed to decline object: ${res.status} ${res.statusText}`)
+            throw new Error(
+                `Failed to decline object: ${res.status} ${res.statusText}`
+            )
         }
     } catch (error) {
         console.error("Error declining object:", error)
@@ -323,7 +359,7 @@ async function declineObject(objectId: string, reason: string): Promise<void> {
 async function bulkApproveObjects(objectIds: string[]): Promise<void> {
     try {
         // Since we don't have a bulk endpoint, we'll do individual approvals in parallel
-        const approvalPromises = objectIds.map(id => approveObject(id))
+        const approvalPromises = objectIds.map((id) => approveObject(id))
         await Promise.all(approvalPromises)
     } catch (error) {
         console.error("Error in bulk approve:", error)
@@ -347,15 +383,20 @@ function roundBootWaardeToNearest50(value: number): number {
 function calculatePendingStats(objects: PendingInsuredObject[]): PendingStats {
     // Safety check to ensure objects is an array
     const safeObjects = Array.isArray(objects) ? objects : []
-    
+
     const stats = {
         total: safeObjects.length,
-        boats: safeObjects.filter(obj => obj.objectType === "boot").length,
-        trailers: safeObjects.filter(obj => obj.objectType === "trailer").length,
-        motors: safeObjects.filter(obj => obj.objectType === "motor").length,
-        organizationCount: new Set(safeObjects.map(obj => obj.organization)).size,
+        boats: safeObjects.filter((obj) => obj.objectType === "boot").length,
+        trailers: safeObjects.filter((obj) => obj.objectType === "trailer")
+            .length,
+        motors: safeObjects.filter((obj) => obj.objectType === "motor").length,
+        organizationCount: new Set(safeObjects.map((obj) => obj.organization))
+            .size,
         oldestPending: null as string | null,
-        totalValue: safeObjects.reduce((sum, obj) => sum + (obj.waarde || 0), 0)
+        totalValue: safeObjects.reduce(
+            (sum, obj) => sum + (obj.waarde || 0),
+            0
+        ),
     }
 
     // Find oldest pending item
@@ -451,7 +492,7 @@ function getObjectDisplayName(object: PendingInsuredObject): string {
     if (object.naam) {
         return object.naam
     }
-    
+
     switch (object.objectType) {
         case "boot":
             const boatName = object.merkBoot || object.typeBoot || ""
@@ -465,7 +506,7 @@ function getObjectDisplayName(object: PendingInsuredObject): string {
             }
             return "Boot"
         case "trailer":
-            return object.trailerRegistratienummer 
+            return object.trailerRegistratienummer
                 ? `Trailer (${object.trailerRegistratienummer})`
                 : "Trailer"
         case "motor":
@@ -512,15 +553,20 @@ function CalculatedFieldEditor({
 
     // Split value into integer and decimal parts for percentage inputs
     const getCurrentValue = () => {
-        if (value === null || value === undefined) return { integer: "", decimal: "" }
+        if (value === null || value === undefined)
+            return { integer: "", decimal: "" }
         const numValue = typeof value === "string" ? parseFloat(value) : value
         if (isNaN(numValue)) return { integer: "", decimal: "" }
         const [intPart, decPart] = numValue.toString().split(".")
         return { integer: intPart || "", decimal: decPart || "" }
     }
 
-    const [integerValue, setIntegerValue] = React.useState(() => getCurrentValue().integer)
-    const [decimalValue, setDecimalValue] = React.useState(() => getCurrentValue().decimal)
+    const [integerValue, setIntegerValue] = React.useState(
+        () => getCurrentValue().integer
+    )
+    const [decimalValue, setDecimalValue] = React.useState(
+        () => getCurrentValue().decimal
+    )
 
     const handleIntegerChange = (newInteger: string) => {
         // Only allow digits
@@ -530,7 +576,11 @@ function CalculatedFieldEditor({
 
     const handleDecimalChange = (newDecimal: string) => {
         // Only allow digits, max 3 digits
-        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        if (
+            newDecimal !== "" &&
+            (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)
+        )
+            return
         setDecimalValue(newDecimal)
     }
 
@@ -546,7 +596,7 @@ function CalculatedFieldEditor({
             const decimal = decimalValue
             const combinedValue = decimal ? `${integer}.${decimal}` : integer
             const promillage = parseFloat(combinedValue)
-            
+
             if (isNaN(promillage) || promillage < 0) {
                 console.warn("Invalid promillage value:", combinedValue)
                 const current = getCurrentValue()
@@ -619,28 +669,43 @@ function CalculatedFieldEditor({
         <div>
             <div style={{ color: colors.gray600, marginBottom: "4px" }}>
                 {label}
-                <span style={{
-                    fontSize: "12px",
-                    color: colors.gray500,
-                    marginLeft: "4px",
-                    fontStyle: "italic"
-                }}>
+                <span
+                    style={{
+                        fontSize: "12px",
+                        color: colors.gray500,
+                        marginLeft: "4px",
+                        fontStyle: "italic",
+                    }}
+                >
                     (klik om te bewerken
                     {type === "promillage" && " - max 3 decimalen"}
-                    {type === "currency" && " - wordt afgerond op 50-tallen"}
-                    )
+                    {type === "currency" && " - wordt afgerond op 50-tallen"})
                 </span>
             </div>
             {isEditing ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                    }}
+                >
                     {/* Input field */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                        }}
+                    >
                         {type === "promillage" ? (
                             <>
                                 <input
                                     type="text"
                                     value={integerValue}
-                                    onChange={(e) => handleIntegerChange(e.target.value)}
+                                    onChange={(e) =>
+                                        handleIntegerChange(e.target.value)
+                                    }
                                     disabled={isSaving}
                                     placeholder="0"
                                     style={{
@@ -651,7 +716,9 @@ function CalculatedFieldEditor({
                                         fontSize: "14px",
                                         fontWeight: "500",
                                         textAlign: "right",
-                                        backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                        backgroundColor: isSaving
+                                            ? colors.gray50
+                                            : colors.white,
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") handleSave()
@@ -659,11 +726,21 @@ function CalculatedFieldEditor({
                                     }}
                                     autoFocus
                                 />
-                                <span style={{ fontSize: "16px", fontWeight: "600", color: "#374151" }}>.</span>
+                                <span
+                                    style={{
+                                        fontSize: "16px",
+                                        fontWeight: "600",
+                                        color: "#374151",
+                                    }}
+                                >
+                                    .
+                                </span>
                                 <input
                                     type="text"
                                     value={decimalValue}
-                                    onChange={(e) => handleDecimalChange(e.target.value)}
+                                    onChange={(e) =>
+                                        handleDecimalChange(e.target.value)
+                                    }
                                     disabled={isSaving}
                                     placeholder="000"
                                     maxLength={3}
@@ -674,14 +751,22 @@ function CalculatedFieldEditor({
                                         borderRadius: "4px",
                                         fontSize: "14px",
                                         fontWeight: "500",
-                                        backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                        backgroundColor: isSaving
+                                            ? colors.gray50
+                                            : colors.white,
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") handleSave()
                                         if (e.key === "Escape") handleCancel()
                                     }}
                                 />
-                                <span style={{ fontSize: "14px", color: colors.gray600, fontWeight: "500" }}>
+                                <span
+                                    style={{
+                                        fontSize: "14px",
+                                        color: colors.gray600,
+                                        fontWeight: "500",
+                                    }}
+                                >
                                     ‰
                                 </span>
                             </>
@@ -700,7 +785,9 @@ function CalculatedFieldEditor({
                                     fontSize: "14px",
                                     fontWeight: "500",
                                     width: "80px",
-                                    backgroundColor: isSaving ? colors.gray50 : colors.white,
+                                    backgroundColor: isSaving
+                                        ? colors.gray50
+                                        : colors.white,
                                 }}
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") handleSave()
@@ -744,10 +831,10 @@ function CalculatedFieldEditor({
                     </div>
                 </div>
             ) : (
-                <div 
+                <div
                     onClick={() => setIsEditing(true)}
-                    style={{ 
-                        color: colors.gray800, 
+                    style={{
+                        color: colors.gray800,
                         fontWeight: "500",
                         cursor: "pointer",
                         padding: "4px 8px",
@@ -757,12 +844,16 @@ function CalculatedFieldEditor({
                         display: "inline-block",
                     }}
                     onMouseOver={(e) => {
-                        (e.target as HTMLElement).style.backgroundColor = colors.gray50
-                        ;(e.target as HTMLElement).style.borderColor = colors.gray300
+                        ;(e.target as HTMLElement).style.backgroundColor =
+                            colors.gray50
+                        ;(e.target as HTMLElement).style.borderColor =
+                            colors.gray300
                     }}
                     onMouseOut={(e) => {
-                        (e.target as HTMLElement).style.backgroundColor = "transparent"
-                        ;(e.target as HTMLElement).style.borderColor = "transparent"
+                        ;(e.target as HTMLElement).style.backgroundColor =
+                            "transparent"
+                        ;(e.target as HTMLElement).style.borderColor =
+                            "transparent"
                     }}
                 >
                     {formatDisplayValue(value)}
@@ -820,8 +911,8 @@ function EnhancedPremiumInput({
                 const roundedValue = Math.round(numValue * 100) / 100
                 onChange({ ...config, fixedAmount: roundedValue })
             } else {
-                // Round to 2 decimals for percentage on blur
-                const roundedValue = Math.round(numValue * 100) / 100
+                // Round to 3 decimals for percentage on blur
+                const roundedValue = Math.round(numValue * 1000) / 1000
                 onChange({ ...config, percentage: roundedValue })
             }
         }
@@ -829,11 +920,19 @@ function EnhancedPremiumInput({
 
     // Split value into integer and decimal parts
     const getCurrentValue = () => {
-        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        const value =
+            config.method === "fixed" ? config.fixedAmount : config.percentage
         if (value === "" || value == null) return { integer: "", decimal: "" }
-        const numValue = typeof value === "string" ? parseFloat(value) : value
-        if (isNaN(numValue)) return { integer: "", decimal: "" }
-        const [intPart, decPart] = numValue.toString().split(".")
+        
+        // Keep as string if it's already a string to preserve formatting like "1.071"
+        const stringValue = typeof value === "string" ? value : value.toString()
+        
+        // Check if it's a valid number format
+        if (!/^-?\d*\.?\d*$/.test(stringValue)) {
+            return { integer: "", decimal: "" }
+        }
+        
+        const [intPart, decPart] = stringValue.split(".")
         return { integer: intPart || "", decimal: decPart || "" }
     }
 
@@ -843,13 +942,19 @@ function EnhancedPremiumInput({
         // Only allow digits
         if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
         const decimal = currentValue.decimal
-        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        const combinedValue = decimal
+            ? `${newInteger || "0"}.${decimal}`
+            : newInteger || "0"
         handleValueChange(combinedValue)
     }
 
     const handleDecimalChange = (newDecimal: string) => {
         // Only allow digits, max 3 digits
-        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        if (
+            newDecimal !== "" &&
+            (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)
+        )
+            return
         const integer = currentValue.integer || "0"
         const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
         handleValueChange(combinedValue)
@@ -863,7 +968,9 @@ function EnhancedPremiumInput({
             handleBlur(combinedValue)
         } else {
             const decimal = currentValue.decimal
-            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            const combinedValue = decimal
+                ? `${currentValue.integer}.${decimal}`
+                : currentValue.integer
             handleBlur(combinedValue)
         }
     }
@@ -880,20 +987,35 @@ function EnhancedPremiumInput({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ color: colors.gray600, fontSize: "14px", marginBottom: "4px", fontFamily: ENHANCED_FONT_STACK }}>
+            <div
+                style={{
+                    color: colors.gray600,
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                    fontFamily: ENHANCED_FONT_STACK,
+                }}
+            >
                 Premie Berekening
             </div>
-            
+
             {/* Value Input - Conditional based on method */}
             <div>
                 {config.method === "percentage" ? (
                     // Split Integer and Decimal for percentage
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="text"
                                 value={currentValue.integer}
-                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleIntegerChange(e.target.value)
+                                }
                                 onBlur={handleIntegerBlur}
                                 placeholder="0"
                                 style={{
@@ -906,11 +1028,21 @@ function EnhancedPremiumInput({
                                     textAlign: "right",
                                 }}
                             />
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <span
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                .
+                            </span>
                             <input
                                 type="text"
                                 value={currentValue.decimal}
-                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleDecimalChange(e.target.value)
+                                }
                                 onBlur={handleDecimalBlur}
                                 placeholder="000"
                                 maxLength={3}
@@ -923,7 +1055,15 @@ function EnhancedPremiumInput({
                                     fontFamily: ENHANCED_FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                %
+                            </span>
                         </div>
                         <span
                             style={{
@@ -933,18 +1073,27 @@ function EnhancedPremiumInput({
                                 display: "block",
                             }}
                         >
-                            Percentage (max 3 decimalen) = {formatCurrency(calculatedPremium)}
+                            Percentage (max 3 decimalen) ={" "}
+                            {formatCurrency(calculatedPremium)}
                         </span>
                     </>
                 ) : (
                     // Regular input for fixed amount
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="number"
                                 step="0.01"
                                 value={config.fixedAmount || ""}
-                                onChange={(e) => handleValueChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
                                 onBlur={(e) => handleBlur(e.target.value)}
                                 placeholder="0.00"
                                 style={{
@@ -956,7 +1105,15 @@ function EnhancedPremiumInput({
                                     fontFamily: ENHANCED_FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                €
+                            </span>
                         </div>
                         <span
                             style={{
@@ -1082,11 +1239,19 @@ function EnhancedOwnRiskInput({
 
     // Split value into integer and decimal parts
     const getCurrentValue = () => {
-        const value = config.method === "fixed" ? config.fixedAmount : config.percentage
+        const value =
+            config.method === "fixed" ? config.fixedAmount : config.percentage
         if (value === "" || value == null) return { integer: "", decimal: "" }
-        const numValue = typeof value === "string" ? parseFloat(value) : value
-        if (isNaN(numValue)) return { integer: "", decimal: "" }
-        const [intPart, decPart] = numValue.toString().split(".")
+        
+        // Keep as string if it's already a string to preserve formatting like "1.071"
+        const stringValue = typeof value === "string" ? value : value.toString()
+        
+        // Check if it's a valid number format
+        if (!/^-?\d*\.?\d*$/.test(stringValue)) {
+            return { integer: "", decimal: "" }
+        }
+        
+        const [intPart, decPart] = stringValue.split(".")
         return { integer: intPart || "", decimal: decPart || "" }
     }
 
@@ -1096,13 +1261,19 @@ function EnhancedOwnRiskInput({
         // Only allow digits
         if (newInteger !== "" && !/^\d+$/.test(newInteger)) return
         const decimal = currentValue.decimal
-        const combinedValue = decimal ? `${newInteger || "0"}.${decimal}` : newInteger || "0"
+        const combinedValue = decimal
+            ? `${newInteger || "0"}.${decimal}`
+            : newInteger || "0"
         handleValueChange(combinedValue)
     }
 
     const handleDecimalChange = (newDecimal: string) => {
         // Only allow digits, max 3 digits
-        if (newDecimal !== "" && (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)) return
+        if (
+            newDecimal !== "" &&
+            (!/^\d+$/.test(newDecimal) || newDecimal.length > 3)
+        )
+            return
         const integer = currentValue.integer || "0"
         const combinedValue = newDecimal ? `${integer}.${newDecimal}` : integer
         handleValueChange(combinedValue)
@@ -1116,7 +1287,9 @@ function EnhancedOwnRiskInput({
             handleBlur(combinedValue)
         } else {
             const decimal = currentValue.decimal
-            const combinedValue = decimal ? `${currentValue.integer}.${decimal}` : currentValue.integer
+            const combinedValue = decimal
+                ? `${currentValue.integer}.${decimal}`
+                : currentValue.integer
             handleBlur(combinedValue)
         }
     }
@@ -1133,20 +1306,35 @@ function EnhancedOwnRiskInput({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ color: colors.gray600, fontSize: "14px", marginBottom: "4px", fontFamily: ENHANCED_FONT_STACK }}>
+            <div
+                style={{
+                    color: colors.gray600,
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                    fontFamily: ENHANCED_FONT_STACK,
+                }}
+            >
                 Eigen Risico Berekening
             </div>
-            
+
             {/* Value Input - Conditional based on method */}
             <div>
                 {config.method === "percentage" ? (
                     // Split Integer and Decimal for percentage
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="text"
                                 value={currentValue.integer}
-                                onChange={(e) => handleIntegerChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleIntegerChange(e.target.value)
+                                }
                                 onBlur={handleIntegerBlur}
                                 placeholder="0"
                                 style={{
@@ -1159,11 +1347,21 @@ function EnhancedOwnRiskInput({
                                     textAlign: "right",
                                 }}
                             />
-                            <span style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>.</span>
+                            <span
+                                style={{
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                .
+                            </span>
                             <input
                                 type="text"
                                 value={currentValue.decimal}
-                                onChange={(e) => handleDecimalChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleDecimalChange(e.target.value)
+                                }
                                 onBlur={handleDecimalBlur}
                                 placeholder="000"
                                 maxLength={3}
@@ -1176,7 +1374,15 @@ function EnhancedOwnRiskInput({
                                     fontFamily: ENHANCED_FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>%</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                %
+                            </span>
                         </div>
                         <span
                             style={{
@@ -1186,18 +1392,27 @@ function EnhancedOwnRiskInput({
                                 display: "block",
                             }}
                         >
-                            Percentage (max 3 decimalen) = {formatCurrency(calculatedOwnRisk)}
+                            Percentage (max 3 decimalen) ={" "}
+                            {formatCurrency(calculatedOwnRisk)}
                         </span>
                     </>
                 ) : (
                     // Regular input for fixed amount
                     <>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <input
                                 type="number"
                                 step="50"
                                 value={config.fixedAmount || ""}
-                                onChange={(e) => handleValueChange(e.target.value)}
+                                onChange={(e) =>
+                                    handleValueChange(e.target.value)
+                                }
                                 onBlur={(e) => handleBlur(e.target.value)}
                                 placeholder="0"
                                 style={{
@@ -1209,7 +1424,15 @@ function EnhancedOwnRiskInput({
                                     fontFamily: ENHANCED_FONT_STACK,
                                 }}
                             />
-                            <span style={{ fontSize: 12, color: "#6b7280", marginLeft: "4px" }}>€</span>
+                            <span
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginLeft: "4px",
+                                }}
+                            >
+                                €
+                            </span>
                         </div>
                         <span
                             style={{
@@ -1286,29 +1509,31 @@ function PendingStatisticsCards({ stats }: { stats: PendingStats }) {
             value: stats.total.toString(),
             icon: <FaClock style={{ color: "#f59e0b" }} />,
             bgColor: "#fef3c7",
-            textColor: "#92400e"
+            textColor: "#92400e",
         },
         {
             title: "Organisaties",
             value: stats.organizationCount.toString(),
             icon: <FaBuilding style={{ color: "#3b82f6" }} />,
             bgColor: "#dbeafe",
-            textColor: "#1e40af"
+            textColor: "#1e40af",
         },
         {
             title: "Totale Waarde",
             value: formatCurrency(stats.totalValue),
             icon: <FaFileContract style={{ color: "#10b981" }} />,
             bgColor: "#dcfce7",
-            textColor: "#166534"
+            textColor: "#166534",
         },
         {
             title: "Oudste Item",
-            value: stats.oldestPending ? `${getDaysAgo(stats.oldestPending)} dagen` : "N/A",
+            value: stats.oldestPending
+                ? `${getDaysAgo(stats.oldestPending)} dagen`
+                : "N/A",
             icon: <FaExclamationTriangle style={{ color: "#dc2626" }} />,
             bgColor: "#fee2e2",
-            textColor: "#991b1b"
-        }
+            textColor: "#991b1b",
+        },
     ]
 
     return (
@@ -1386,9 +1611,27 @@ function PendingStatisticsCards({ stats }: { stats: PendingStats }) {
 // Object Type Filter Component
 function ObjectTypeBreakdown({ stats }: { stats: PendingStats }) {
     const typeBreakdown = [
-        { type: "boot", count: stats.boats, label: "Boten", icon: FaShip, color: "#3b82f6" },
-        { type: "trailer", count: stats.trailers, label: "Trailers", icon: FaTruck, color: "#10b981" },
-        { type: "motor", count: stats.motors, label: "Motoren", icon: FaCog, color: "#f59e0b" }
+        {
+            type: "boot",
+            count: stats.boats,
+            label: "Boten",
+            icon: FaShip,
+            color: "#3b82f6",
+        },
+        {
+            type: "trailer",
+            count: stats.trailers,
+            label: "Trailers",
+            icon: FaTruck,
+            color: "#10b981",
+        },
+        {
+            type: "motor",
+            count: stats.motors,
+            label: "Motoren",
+            icon: FaCog,
+            color: "#f59e0b",
+        },
     ]
 
     return (
@@ -1435,7 +1678,9 @@ function ObjectTypeBreakdown({ stats }: { stats: PendingStats }) {
                                 border: `1px solid ${colors.gray200}`,
                             }}
                         >
-                            <Icon style={{ color: item.color, fontSize: "16px" }} />
+                            <Icon
+                                style={{ color: item.color, fontSize: "16px" }}
+                            />
                             <div>
                                 <div
                                     style={{
@@ -1466,13 +1711,13 @@ function ObjectTypeBreakdown({ stats }: { stats: PendingStats }) {
 }
 
 // Bulk Actions Component
-function BulkActionsBar({ 
-    selectedCount, 
-    onBulkApprove, 
-    onBulkDecline, 
+function BulkActionsBar({
+    selectedCount,
+    onBulkApprove,
+    onBulkDecline,
     onClearSelection,
-    isLoading 
-}: { 
+    isLoading,
+}: {
     selectedCount: number
     onBulkApprove: () => void
     onBulkDecline: () => void
@@ -1511,10 +1756,11 @@ function BulkActionsBar({
                         fontFamily: ENHANCED_FONT_STACK,
                     }}
                 >
-                    {selectedCount} item{selectedCount > 1 ? "s" : ""} geselecteerd
+                    {selectedCount} item{selectedCount > 1 ? "s" : ""}{" "}
+                    geselecteerd
                 </span>
             </div>
-            
+
             <div
                 style={{
                     display: "flex",
@@ -1538,19 +1784,21 @@ function BulkActionsBar({
                     }}
                     onMouseOver={(e) => {
                         if (!isLoading) {
-                            (e.target as HTMLElement).style.backgroundColor = "#059669"
+                            ;(e.target as HTMLElement).style.backgroundColor =
+                                "#059669"
                         }
                     }}
                     onMouseOut={(e) => {
                         if (!isLoading) {
-                            (e.target as HTMLElement).style.backgroundColor = "#10b981"
+                            ;(e.target as HTMLElement).style.backgroundColor =
+                                "#10b981"
                         }
                     }}
                 >
                     <FaCheck />
                     {isLoading ? "Bezig..." : "Goedkeuren"}
                 </button>
-                
+
                 <button
                     onClick={onBulkDecline}
                     disabled={isLoading}
@@ -1568,19 +1816,21 @@ function BulkActionsBar({
                     }}
                     onMouseOver={(e) => {
                         if (!isLoading) {
-                            (e.target as HTMLElement).style.backgroundColor = "#b91c1c"
+                            ;(e.target as HTMLElement).style.backgroundColor =
+                                "#b91c1c"
                         }
                     }}
                     onMouseOut={(e) => {
                         if (!isLoading) {
-                            (e.target as HTMLElement).style.backgroundColor = "#dc2626"
+                            ;(e.target as HTMLElement).style.backgroundColor =
+                                "#dc2626"
                         }
                     }}
                 >
                     <FaTimes />
                     Afwijzen
                 </button>
-                
+
                 <button
                     onClick={onClearSelection}
                     disabled={isLoading}
@@ -1600,29 +1850,35 @@ function BulkActionsBar({
 }
 
 // Individual Pending Object Row Component
-function PendingObjectRow({ 
-    object, 
+function PendingObjectRow({
+    object,
     isSelected,
     onToggleSelect,
-    onApprove, 
+    onApprove,
     onDecline,
     onViewDetails,
-    isLoading 
-}: { 
+    isLoading,
+}: {
     object: PendingInsuredObject
     isSelected: boolean
     onToggleSelect: (objectId: string) => void
-    onApprove: (object: PendingInsuredObject, customValues?: { premiumConfig: PremiumConfig, ownRiskConfig: OwnRiskConfig }) => void
+    onApprove: (
+        object: PendingInsuredObject,
+        customValues?: {
+            premiumConfig: PremiumConfig
+            ownRiskConfig: OwnRiskConfig
+        }
+    ) => void
     onDecline: (object: PendingInsuredObject, reason: string) => void
     onViewDetails: (object: PendingInsuredObject) => void
     isLoading: boolean
 }) {
     console.log("PendingObjectRow rendering with object:", object)
-    
+
     const [showDeclineModal, setShowDeclineModal] = useState(false)
     const [declineReason, setDeclineReason] = useState("")
     const [isProcessing, setIsProcessing] = useState(false)
-    
+
     // State for edited calculated field values with calculation methods
     // Initialize with existing values if available, otherwise use defaults
     const [premiumConfig, setPremiumConfig] = useState<PremiumConfig>(() => {
@@ -1630,15 +1886,23 @@ function PendingObjectRow({
         if (object.premiumMethod) {
             return {
                 method: object.premiumMethod,
-                percentage: object.premiumMethod === "percentage" ? (object.premiumPercentage || object.premiepercentage || 0) : 0,
-                fixedAmount: object.premiumMethod === "fixed" ? (object.premiumFixedAmount || 0) : 0
+                percentage:
+                    object.premiumMethod === "percentage"
+                        ? object.premiumPercentage ||
+                          object.premiepercentage ||
+                          0
+                        : 0,
+                fixedAmount:
+                    object.premiumMethod === "fixed"
+                        ? object.premiumFixedAmount || 0
+                        : 0,
             }
         }
         // Otherwise, default to percentage method with 0
         return {
             method: "percentage",
             percentage: 0,
-            fixedAmount: 0
+            fixedAmount: 0,
         }
     })
 
@@ -1648,17 +1912,18 @@ function PendingObjectRow({
         return {
             method: "fixed",
             fixedAmount: object.eigenRisico || 0,
-            percentage: 0
+            percentage: 0,
         }
     })
-    
+
     // Calculate final values based on method
     const finalPremiumValue = calculatePremium(premiumConfig, object.waarde)
     const finalOwnRiskValue = calculateOwnRisk(ownRiskConfig, object.waarde)
-    
+
     // Track if values have been edited
-    const hasEditedValues = finalPremiumValue !== object.premiepercentage || 
-                           finalOwnRiskValue !== object.eigenRisico
+    const hasEditedValues =
+        finalPremiumValue !== object.premiepercentage ||
+        finalOwnRiskValue !== object.eigenRisico
 
     // Add error handling for utility function calls
     let daysAgo = 0
@@ -1666,11 +1931,16 @@ function PendingObjectRow({
     let displayName = "Onbekend Object"
     let objectTypeName = "Onbekend"
     let objectTypeIcon = <FaBox style={{ color: "#6b7280" }} />
-    
+
     try {
         daysAgo = getDaysAgo(object.createdAt)
         isUrgent = daysAgo > 7
-        console.log("Days ago calculation successful:", daysAgo, "isUrgent:", isUrgent)
+        console.log(
+            "Days ago calculation successful:",
+            daysAgo,
+            "isUrgent:",
+            isUrgent
+        )
     } catch (error) {
         console.error("Error calculating days ago for object:", object, error)
         daysAgo = 0
@@ -1681,15 +1951,23 @@ function PendingObjectRow({
         displayName = getObjectDisplayName(object)
         console.log("Display name calculation successful:", displayName)
     } catch (error) {
-        console.error("Error calculating display name for object:", object, error)
-        displayName = `Object ${object.id?.slice(-8) || 'Onbekend'}`
+        console.error(
+            "Error calculating display name for object:",
+            object,
+            error
+        )
+        displayName = `Object ${object.id?.slice(-8) || "Onbekend"}`
     }
 
     try {
         objectTypeName = getObjectTypeName(object.objectType)
         console.log("Object type name calculation successful:", objectTypeName)
     } catch (error) {
-        console.error("Error calculating object type name for object:", object, error)
+        console.error(
+            "Error calculating object type name for object:",
+            object,
+            error
+        )
         objectTypeName = "Onbekend"
     }
 
@@ -1697,10 +1975,14 @@ function PendingObjectRow({
         objectTypeIcon = getObjectTypeIcon(object.objectType)
         console.log("Object type icon calculation successful")
     } catch (error) {
-        console.error("Error calculating object type icon for object:", object, error)
+        console.error(
+            "Error calculating object type icon for object:",
+            object,
+            error
+        )
         objectTypeIcon = <FaBox style={{ color: "#6b7280" }} />
     }
-    
+
     const handleApprove = async () => {
         setIsProcessing(true)
         try {
@@ -1708,7 +1990,7 @@ function PendingObjectRow({
             if (hasEditedValues) {
                 await onApprove(object, {
                     premiumConfig: premiumConfig,
-                    ownRiskConfig: ownRiskConfig
+                    ownRiskConfig: ownRiskConfig,
                 })
             } else {
                 await onApprove(object)
@@ -1722,7 +2004,7 @@ function PendingObjectRow({
 
     const handleDeclineSubmit = async () => {
         if (!declineReason.trim()) return
-        
+
         setIsProcessing(true)
         try {
             await onDecline(object, declineReason.trim())
@@ -1736,552 +2018,848 @@ function PendingObjectRow({
     }
 
     try {
-        console.log("PendingObjectRow about to render JSX for object:", object.id)
-        
+        console.log(
+            "PendingObjectRow about to render JSX for object:",
+            object.id
+        )
+
         return (
             <>
                 <div
                     style={{
                         backgroundColor: isSelected ? "#f0f9ff" : colors.white,
-                        border: isSelected ? "2px solid #3b82f6" : `1px solid ${colors.gray200}`,
+                        border: isSelected
+                            ? "2px solid #3b82f6"
+                            : `1px solid ${colors.gray200}`,
                         borderRadius: "12px",
                         padding: "20px",
                         marginBottom: "12px",
-                        boxShadow: isSelected 
-                            ? "0 4px 16px rgba(59, 130, 246, 0.15)" 
+                        boxShadow: isSelected
+                            ? "0 4px 16px rgba(59, 130, 246, 0.15)"
                             : "0 2px 8px rgba(0,0,0,0.05)",
                         transition: "all 0.2s",
                         position: "relative",
                     }}
                 >
-                {/* Urgent indicator */}
-                {isUrgent && (
-                    <div
-                        style={{
-                            position: "absolute",
-                            top: "-8px",
-                            right: "16px",
-                            backgroundColor: "#dc2626",
-                            color: colors.white,
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                        }}
-                    >
-                        <FaExclamationTriangle size={10} />
-                        {daysAgo}+ dagen
-                    </div>
-                )}
-
-                <div
-                    style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "16px",
-                    }}
-                >
-                    {/* Object type icon */}
-                    <div
-                        style={{
-                            padding: "8px",
-                            backgroundColor: colors.gray50,
-                            borderRadius: "8px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            marginTop: "4px",
-                        }}
-                    >
-                        {objectTypeIcon}
-                    </div>
-
-                    {/* Main content */}
-                    <div style={{ flex: 1 }}>
+                    {/* Urgent indicator */}
+                    {isUrgent && (
                         <div
                             style={{
+                                position: "absolute",
+                                top: "-8px",
+                                right: "16px",
+                                backgroundColor: "#dc2626",
+                                color: colors.white,
+                                padding: "4px 8px",
+                                borderRadius: "4px",
+                                fontSize: "12px",
+                                fontWeight: "600",
                                 display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-start",
-                                marginBottom: "12px",
+                                alignItems: "center",
+                                gap: "4px",
                             }}
                         >
-                            <div>
-                                <h4
-                                    style={{
-                                        margin: "0 0 4px 0",
-                                        fontSize: "18px",
-                                        fontWeight: "600",
-                                        color: colors.gray800,
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                    }}
-                                >
-                                    {displayName}
-                                </h4>
-                                <div
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "12px",
-                                        fontSize: "14px",
-                                        color: colors.gray600,
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                    }}
-                                >
-                                    <span>{objectTypeName}</span>
-                                    <span>•</span>
-                                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                        <FaBuilding size={12} />
-                                        {object.organization}
-                                    </span>
-                                    <span>•</span>
-                                    <span>{formatCurrency(object.waarde)}</span>
-                                </div>
-                            </div>
-
-                            {/* Action buttons */}
-                            <div
-                                style={{
-                                    display: "flex",
-                                    gap: "8px",
-                                    alignItems: "center",
-                                }}
-                            >
-                                <button
-                                    onClick={() => onViewDetails(object)}
-                                    disabled={isLoading || isProcessing}
-                                    style={{
-                                        ...styles.iconButton,
-                                        backgroundColor: colors.gray100,
-                                        color: colors.gray600,
-                                        padding: "8px",
-                                        borderRadius: "6px",
-                                        opacity: isLoading || isProcessing ? 0.6 : 1,
-                                        cursor: isLoading || isProcessing ? "not-allowed" : "pointer",
-                                    }}
-                                    title="Bekijk details"
-                                    onMouseOver={(e) => {
-                                        if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = colors.gray200
-                                        }
-                                    }}
-                                    onMouseOut={(e) => {
-                                        if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = colors.gray100
-                                        }
-                                    }}
-                                >
-                                    <FaEye size={14} />
-                                </button>
-
-                                <button
-                                    onClick={handleApprove}
-                                    disabled={isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0}
-                                    style={{
-                                        backgroundColor: hasEditedValues ? "#f59e0b" : "#10b981",
-                                        color: colors.white,
-                                        border: "none",
-                                        borderRadius: "6px",
-                                        padding: "8px 12px",
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                        cursor: (isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0) ? "not-allowed" : "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                        transition: "all 0.2s",
-                                        opacity: (isLoading || isProcessing || finalPremiumValue === 0 || finalOwnRiskValue === 0) ? 0.6 : 1,
-                                    }}
-                                    title={
-                                        finalPremiumValue === 0 || finalOwnRiskValue === 0
-                                            ? "Premie promillage en eigen risico moeten beide ingevuld zijn"
-                                            : hasEditedValues
-                                            ? "Goedkeuren met aangepaste waarden"
-                                            : "Goedkeuren met standaard waarden"
-                                    }
-                                    onMouseOver={(e) => {
-                                        if (!isLoading && !isProcessing && finalPremiumValue !== 0 && finalOwnRiskValue !== 0) {
-                                            (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#d97706" : "#059669"
-                                        }
-                                    }}
-                                    onMouseOut={(e) => {
-                                        if (!isLoading && !isProcessing && finalPremiumValue !== 0 && finalOwnRiskValue !== 0) {
-                                            (e.target as HTMLElement).style.backgroundColor = hasEditedValues ? "#f59e0b" : "#10b981"
-                                        }
-                                    }}
-                                >
-                                    <FaCheck size={12} />
-                                    {isProcessing ? "..." : hasEditedValues ? "Goedkeuren*" : "Goedkeuren"}
-                                </button>
-
-                                <button
-                                    onClick={() => setShowDeclineModal(true)}
-                                    disabled={isLoading || isProcessing}
-                                    style={{
-                                        backgroundColor: "#dc2626",
-                                        color: colors.white,
-                                        border: "none",
-                                        borderRadius: "6px",
-                                        padding: "8px 12px",
-                                        fontSize: "14px",
-                                        fontWeight: "500",
-                                        cursor: isLoading || isProcessing ? "not-allowed" : "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                        transition: "all 0.2s",
-                                        opacity: isLoading || isProcessing ? 0.6 : 1,
-                                    }}
-                                    onMouseOver={(e) => {
-                                        if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = "#b91c1c"
-                                        }
-                                    }}
-                                    onMouseOut={(e) => {
-                                        if (!isLoading && !isProcessing) {
-                                            (e.target as HTMLElement).style.backgroundColor = "#dc2626"
-                                        }
-                                    }}
-                                >
-                                    <FaTimes size={12} />
-                                    Afwijzen
-                                </button>
-                            </div>
+                            <FaExclamationTriangle size={10} />
+                            {daysAgo}+ dagen
                         </div>
+                    )}
 
-                        {/* Additional details */}
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "16px",
+                        }}
+                    >
+                        {/* Object type icon */}
                         <div
                             style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                                gap: "16px",
-                                padding: "16px",
+                                padding: "8px",
                                 backgroundColor: colors.gray50,
                                 borderRadius: "8px",
-                                fontSize: "14px",
-                                fontFamily: ENHANCED_FONT_STACK,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginTop: "4px",
                             }}
                         >
-                            <div>
-                                <div style={{ color: colors.gray600, marginBottom: "4px" }}>
-                                    Ingangsdatum
-                                </div>
-                                <div style={{ color: colors.gray800, fontWeight: "500" }}>
-                                    {formatDate(object.ingangsdatum)}
-                                </div>
-                            </div>
-                            <div>
-                                <div style={{ color: colors.gray600, marginBottom: "4px" }}>
-                                    Aangemaakt
-                                </div>
-                                <div style={{ color: colors.gray800, fontWeight: "500" }}>
-                                    {formatDateTime(object.createdAt)}
-                                    <span style={{ color: colors.gray500, marginLeft: "8px" }}>
-                                        ({daysAgo} dag{daysAgo !== 1 ? "en" : ""} geleden)
-                                    </span>
-                                </div>
-                            </div>
-                            <EnhancedPremiumInput
-                                config={premiumConfig}
-                                onChange={setPremiumConfig}
-                                boatValue={object.waarde}
-                            />
-                            <EnhancedOwnRiskInput
-                                config={ownRiskConfig}
-                                onChange={setOwnRiskConfig}
-                                boatValue={object.waarde}
-                            />
+                            {objectTypeIcon}
                         </div>
 
-                        {/* Validation warning */}
-                        {(finalPremiumValue === 0 || finalOwnRiskValue === 0) && (
+                        {/* Main content */}
+                        <div style={{ flex: 1 }}>
                             <div
                                 style={{
-                                    marginTop: "12px",
-                                    padding: "12px",
-                                    backgroundColor: "#fef3c7",
-                                    borderRadius: "8px",
-                                    border: "1px solid #fde68a",
                                     display: "flex",
-                                    alignItems: "center",
-                                    gap: "8px",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    marginBottom: "12px",
                                 }}
                             >
-                                <FaExclamationTriangle style={{ color: "#92400e", fontSize: "14px" }} />
+                                <div>
+                                    <h4
+                                        style={{
+                                            margin: "0 0 4px 0",
+                                            fontSize: "18px",
+                                            fontWeight: "600",
+                                            color: colors.gray800,
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        {displayName}
+                                    </h4>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px",
+                                            fontSize: "14px",
+                                            color: colors.gray600,
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        <span>{objectTypeName}</span>
+                                        <span>•</span>
+                                        <span
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "4px",
+                                            }}
+                                        >
+                                            <FaBuilding size={12} />
+                                            {object.organization}
+                                        </span>
+                                        <span>•</span>
+                                        <span>
+                                            {formatCurrency(object.waarde)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Action buttons */}
                                 <div
                                     style={{
-                                        fontSize: "13px",
-                                        color: "#92400e",
-                                        fontFamily: ENHANCED_FONT_STACK,
+                                        display: "flex",
+                                        gap: "8px",
+                                        alignItems: "center",
                                     }}
                                 >
-                                    <strong>Let op:</strong> Premie promillage en eigen risico moeten beide ingevuld zijn voordat het object goedgekeurd kan worden.
+                                    <button
+                                        onClick={() => onViewDetails(object)}
+                                        disabled={isLoading || isProcessing}
+                                        style={{
+                                            ...styles.iconButton,
+                                            backgroundColor: colors.gray100,
+                                            color: colors.gray600,
+                                            padding: "8px",
+                                            borderRadius: "6px",
+                                            opacity:
+                                                isLoading || isProcessing
+                                                    ? 0.6
+                                                    : 1,
+                                            cursor:
+                                                isLoading || isProcessing
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                        }}
+                                        title="Bekijk details"
+                                        onMouseOver={(e) => {
+                                            if (!isLoading && !isProcessing) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    colors.gray200
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!isLoading && !isProcessing) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    colors.gray100
+                                            }
+                                        }}
+                                    >
+                                        <FaEye size={14} />
+                                    </button>
+
+                                    <button
+                                        onClick={handleApprove}
+                                        disabled={
+                                            isLoading ||
+                                            isProcessing
+                                        }
+                                        style={{
+                                            backgroundColor: hasEditedValues
+                                                ? "#f59e0b"
+                                                : "#10b981",
+                                            color: colors.white,
+                                            border: "none",
+                                            borderRadius: "6px",
+                                            padding: "8px 12px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            cursor:
+                                                isLoading ||
+                                                isProcessing
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                            transition: "all 0.2s",
+                                            opacity:
+                                                isLoading ||
+                                                isProcessing
+                                                    ? 0.6
+                                                    : 1,
+                                        }}
+                                        title={
+                                            hasEditedValues
+                                                ? "Goedkeuren met aangepaste waarden"
+                                                : "Goedkeuren met standaard waarden"
+                                        }
+                                        onMouseOver={(e) => {
+                                            if (
+                                                !isLoading &&
+                                                !isProcessing
+                                            ) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    hasEditedValues
+                                                        ? "#d97706"
+                                                        : "#059669"
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (
+                                                !isLoading &&
+                                                !isProcessing
+                                            ) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    hasEditedValues
+                                                        ? "#f59e0b"
+                                                        : "#10b981"
+                                            }
+                                        }}
+                                    >
+                                        <FaCheck size={12} />
+                                        {isProcessing
+                                            ? "..."
+                                            : hasEditedValues
+                                              ? "Goedkeuren*"
+                                              : "Goedkeuren"}
+                                    </button>
+
+                                    <button
+                                        onClick={() =>
+                                            setShowDeclineModal(true)
+                                        }
+                                        disabled={isLoading || isProcessing}
+                                        style={{
+                                            backgroundColor: "#dc2626",
+                                            color: colors.white,
+                                            border: "none",
+                                            borderRadius: "6px",
+                                            padding: "8px 12px",
+                                            fontSize: "14px",
+                                            fontWeight: "500",
+                                            cursor:
+                                                isLoading || isProcessing
+                                                    ? "not-allowed"
+                                                    : "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                            transition: "all 0.2s",
+                                            opacity:
+                                                isLoading || isProcessing
+                                                    ? 0.6
+                                                    : 1,
+                                        }}
+                                        onMouseOver={(e) => {
+                                            if (!isLoading && !isProcessing) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    "#b91c1c"
+                                            }
+                                        }}
+                                        onMouseOut={(e) => {
+                                            if (!isLoading && !isProcessing) {
+                                                ;(
+                                                    e.target as HTMLElement
+                                                ).style.backgroundColor =
+                                                    "#dc2626"
+                                            }
+                                        }}
+                                    >
+                                        <FaTimes size={12} />
+                                        Afwijzen
+                                    </button>
                                 </div>
                             </div>
-                        )}
 
-                        {/* Rejection Reasons */}
-                        {object.rejectionReasons && (
+                            {/* Additional details */}
                             <div
                                 style={{
-                                    marginTop: "12px",
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                        "repeat(auto-fit, minmax(200px, 1fr))",
+                                    gap: "16px",
                                     padding: "16px",
-                                    backgroundColor: "#fef2f2",
+                                    backgroundColor: colors.gray50,
                                     borderRadius: "8px",
-                                    border: "1px solid #fecaca",
+                                    fontSize: "14px",
+                                    fontFamily: ENHANCED_FONT_STACK,
                                 }}
                             >
+                                <div>
+                                    <div
+                                        style={{
+                                            color: colors.gray600,
+                                            marginBottom: "4px",
+                                        }}
+                                    >
+                                        Ingangsdatum
+                                    </div>
+                                    <div
+                                        style={{
+                                            color: colors.gray800,
+                                            fontWeight: "500",
+                                        }}
+                                    >
+                                        {formatDate(object.ingangsdatum)}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div
+                                        style={{
+                                            color: colors.gray600,
+                                            marginBottom: "4px",
+                                        }}
+                                    >
+                                        Aangemaakt
+                                    </div>
+                                    <div
+                                        style={{
+                                            color: colors.gray800,
+                                            fontWeight: "500",
+                                        }}
+                                    >
+                                        {formatDateTime(object.createdAt)}
+                                        <span
+                                            style={{
+                                                color: colors.gray500,
+                                                marginLeft: "8px",
+                                            }}
+                                        >
+                                            ({daysAgo} dag
+                                            {daysAgo !== 1 ? "en" : ""} geleden)
+                                        </span>
+                                    </div>
+                                </div>
+                                <EnhancedPremiumInput
+                                    config={premiumConfig}
+                                    onChange={setPremiumConfig}
+                                    boatValue={object.waarde}
+                                />
+                                <EnhancedOwnRiskInput
+                                    config={ownRiskConfig}
+                                    onChange={setOwnRiskConfig}
+                                    boatValue={object.waarde}
+                                />
+                            </div>
+
+                            {/* Validation warning */}
+                            {(finalPremiumValue === 0 ||
+                                finalOwnRiskValue === 0) && (
                                 <div
                                     style={{
+                                        marginTop: "12px",
+                                        padding: "12px",
+                                        backgroundColor: "#fef3c7",
+                                        borderRadius: "8px",
+                                        border: "1px solid #fde68a",
                                         display: "flex",
                                         alignItems: "center",
                                         gap: "8px",
-                                        marginBottom: "12px",
                                     }}
                                 >
-                                    <FaExclamationTriangle style={{ color: "#dc2626", fontSize: "16px" }} />
+                                    <FaExclamationTriangle
+                                        style={{
+                                            color: "#92400e",
+                                            fontSize: "14px",
+                                        }}
+                                    />
+                                    <div
+                                        style={{
+                                            fontSize: "13px",
+                                            color: "#92400e",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        <strong>Let op:</strong> Premie
+                                        promillage en eigen risico moeten beide
+                                        ingevuld zijn voordat het object
+                                        goedgekeurd kan worden.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Rejection Reasons */}
+                            {object.rejectionReasons && (
+                                <div
+                                    style={{
+                                        marginTop: "12px",
+                                        padding: "16px",
+                                        backgroundColor: "#fef2f2",
+                                        borderRadius: "8px",
+                                        border: "1px solid #fecaca",
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            marginBottom: "12px",
+                                        }}
+                                    >
+                                        <FaExclamationTriangle
+                                            style={{
+                                                color: "#dc2626",
+                                                fontSize: "16px",
+                                            }}
+                                        />
+                                        <div
+                                            style={{
+                                                fontSize: "14px",
+                                                fontWeight: "600",
+                                                color: "#991b1b",
+                                                fontFamily: ENHANCED_FONT_STACK,
+                                            }}
+                                        >
+                                            Waarom dit object niet automatisch
+                                            is goedgekeurd
+                                        </div>
+                                    </div>
+
+                                    {object.rejectionReasons
+                                        .ingangsdatum_override && (
+                                        <div
+                                            style={{
+                                                padding: "8px 12px",
+                                                backgroundColor: "#ffffff",
+                                                borderRadius: "6px",
+                                                marginBottom: "8px",
+                                                border: "1px solid #fca5a5",
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    fontSize: "13px",
+                                                    color: "#7f1d1d",
+                                                    fontFamily:
+                                                        ENHANCED_FONT_STACK,
+                                                }}
+                                            >
+                                                <strong>
+                                                    Ingangsdatum te ver in het
+                                                    verleden:
+                                                </strong>{" "}
+                                                De ingangsdatum ligt meer dan
+                                                één week in het verleden.
+                                                Objecten met een ingangsdatum
+                                                ouder dan 7 dagen vereisen
+                                                altijd handmatige goedkeuring.
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {object.rejectionReasons.rules_evaluated &&
+                                        object.rejectionReasons.rules_evaluated
+                                            .length > 0 && (
+                                            <div
+                                                style={{
+                                                    fontSize: "13px",
+                                                    color: "#7f1d1d",
+                                                    fontFamily:
+                                                        ENHANCED_FONT_STACK,
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        marginBottom: "8px",
+                                                        fontWeight: "500",
+                                                    }}
+                                                >
+                                                    Auto-goedkeuringsregels
+                                                    gecontroleerd:{" "}
+                                                    {
+                                                        object.rejectionReasons
+                                                            .rules_evaluated
+                                                            .length
+                                                    }
+                                                </div>
+                                                {object.rejectionReasons.rules_evaluated.map(
+                                                    (rule, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            style={{
+                                                                padding: "12px",
+                                                                backgroundColor:
+                                                                    "#ffffff",
+                                                                borderRadius:
+                                                                    "6px",
+                                                                marginBottom:
+                                                                    "8px",
+                                                                border: "1px solid #fca5a5",
+                                                            }}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    fontWeight:
+                                                                        "600",
+                                                                    marginBottom:
+                                                                        "8px",
+                                                                }}
+                                                            >
+                                                                Regel:{" "}
+                                                                {rule.rule_name}{" "}
+                                                                ({rule.logic})
+                                                            </div>
+                                                            <div
+                                                                style={{
+                                                                    marginBottom:
+                                                                        "4px",
+                                                                    color: "#991b1b",
+                                                                }}
+                                                            >
+                                                                Doorstaan:{" "}
+                                                                {
+                                                                    rule.passed_conditions
+                                                                }
+                                                                /
+                                                                {
+                                                                    rule.total_conditions
+                                                                }{" "}
+                                                                voorwaarden
+                                                            </div>
+                                                            {rule
+                                                                .failed_conditions
+                                                                .length > 0 && (
+                                                                <div
+                                                                    style={{
+                                                                        marginTop:
+                                                                            "8px",
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        style={{
+                                                                            fontWeight:
+                                                                                "500",
+                                                                            marginBottom:
+                                                                                "4px",
+                                                                        }}
+                                                                    >
+                                                                        Niet
+                                                                        voldaan
+                                                                        aan:
+                                                                    </div>
+                                                                    {rule.failed_conditions.map(
+                                                                        (
+                                                                            condition,
+                                                                            cidx
+                                                                        ) => (
+                                                                            <div
+                                                                                key={
+                                                                                    cidx
+                                                                                }
+                                                                                style={{
+                                                                                    padding:
+                                                                                        "6px 8px",
+                                                                                    backgroundColor:
+                                                                                        "#fef2f2",
+                                                                                    borderRadius:
+                                                                                        "4px",
+                                                                                    marginBottom:
+                                                                                        "4px",
+                                                                                    fontSize:
+                                                                                        "12px",
+                                                                                }}
+                                                                            >
+                                                                                <div>
+                                                                                    <strong>
+                                                                                        {
+                                                                                            condition.field
+                                                                                        }
+                                                                                        :
+                                                                                    </strong>{" "}
+                                                                                    Verwacht{" "}
+                                                                                    {condition.operator ===
+                                                                                    "between"
+                                                                                        ? "tussen"
+                                                                                        : condition.operator ===
+                                                                                            "in"
+                                                                                          ? "een van"
+                                                                                          : condition.operator}{" "}
+                                                                                    {JSON.stringify(
+                                                                                        condition.expected
+                                                                                    )}
+                                                                                </div>
+                                                                                <div
+                                                                                    style={{
+                                                                                        color: "#991b1b",
+                                                                                    }}
+                                                                                >
+                                                                                    Daadwerkelijk:{" "}
+                                                                                    {JSON.stringify(
+                                                                                        condition.actual
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                )}
+                                            </div>
+                                        )}
+
+                                    {!object.rejectionReasons
+                                        .ingangsdatum_override &&
+                                        (!object.rejectionReasons
+                                            .rules_evaluated ||
+                                            object.rejectionReasons
+                                                .rules_evaluated.length ===
+                                                0) && (
+                                            <div
+                                                style={{
+                                                    padding: "8px 12px",
+                                                    backgroundColor: "#ffffff",
+                                                    borderRadius: "6px",
+                                                    fontSize: "13px",
+                                                    color: "#7f1d1d",
+                                                    fontFamily:
+                                                        ENHANCED_FONT_STACK,
+                                                }}
+                                            >
+                                                {object.rejectionReasons
+                                                    .reason ||
+                                                    "Geen auto-goedkeuringsregels geconfigureerd voor deze organisatie."}
+                                            </div>
+                                        )}
+                                </div>
+                            )}
+
+                            {/* Notes if available */}
+                            {object.notitie && (
+                                <div
+                                    style={{
+                                        marginTop: "12px",
+                                        padding: "12px",
+                                        backgroundColor: "#fef3c7",
+                                        borderRadius: "8px",
+                                        border: "1px solid #fde68a",
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            fontSize: "12px",
+                                            color: "#92400e",
+                                            fontWeight: "600",
+                                            marginBottom: "4px",
+                                            textTransform: "uppercase",
+                                            fontFamily: ENHANCED_FONT_STACK,
+                                        }}
+                                    >
+                                        Notitie
+                                    </div>
                                     <div
                                         style={{
                                             fontSize: "14px",
-                                            fontWeight: "600",
-                                            color: "#991b1b",
+                                            color: "#92400e",
                                             fontFamily: ENHANCED_FONT_STACK,
                                         }}
                                     >
-                                        Waarom dit object niet automatisch is goedgekeurd
+                                        {object.notitie}
                                     </div>
                                 </div>
-
-                                {object.rejectionReasons.ingangsdatum_override && (
-                                    <div
-                                        style={{
-                                            padding: "8px 12px",
-                                            backgroundColor: "#ffffff",
-                                            borderRadius: "6px",
-                                            marginBottom: "8px",
-                                            border: "1px solid #fca5a5",
-                                        }}
-                                    >
-                                        <div style={{ fontSize: "13px", color: "#7f1d1d", fontFamily: ENHANCED_FONT_STACK }}>
-                                            <strong>Ingangsdatum te ver in het verleden:</strong> De ingangsdatum ligt meer dan één week in het verleden. Objecten met een ingangsdatum ouder dan 7 dagen vereisen altijd handmatige goedkeuring.
-                                        </div>
-                                    </div>
-                                )}
-
-                                {object.rejectionReasons.rules_evaluated && object.rejectionReasons.rules_evaluated.length > 0 && (
-                                    <div
-                                        style={{
-                                            fontSize: "13px",
-                                            color: "#7f1d1d",
-                                            fontFamily: ENHANCED_FONT_STACK,
-                                        }}
-                                    >
-                                        <div style={{ marginBottom: "8px", fontWeight: "500" }}>
-                                            Auto-goedkeuringsregels gecontroleerd: {object.rejectionReasons.rules_evaluated.length}
-                                        </div>
-                                        {object.rejectionReasons.rules_evaluated.map((rule, idx) => (
-                                            <div
-                                                key={idx}
-                                                style={{
-                                                    padding: "12px",
-                                                    backgroundColor: "#ffffff",
-                                                    borderRadius: "6px",
-                                                    marginBottom: "8px",
-                                                    border: "1px solid #fca5a5",
-                                                }}
-                                            >
-                                                <div style={{ fontWeight: "600", marginBottom: "8px" }}>
-                                                    Regel: {rule.rule_name} ({rule.logic})
-                                                </div>
-                                                <div style={{ marginBottom: "4px", color: "#991b1b" }}>
-                                                    Doorstaan: {rule.passed_conditions}/{rule.total_conditions} voorwaarden
-                                                </div>
-                                                {rule.failed_conditions.length > 0 && (
-                                                    <div style={{ marginTop: "8px" }}>
-                                                        <div style={{ fontWeight: "500", marginBottom: "4px" }}>
-                                                            Niet voldaan aan:
-                                                        </div>
-                                                        {rule.failed_conditions.map((condition, cidx) => (
-                                                            <div
-                                                                key={cidx}
-                                                                style={{
-                                                                    padding: "6px 8px",
-                                                                    backgroundColor: "#fef2f2",
-                                                                    borderRadius: "4px",
-                                                                    marginBottom: "4px",
-                                                                    fontSize: "12px",
-                                                                }}
-                                                            >
-                                                                <div>
-                                                                    <strong>{condition.field}:</strong> Verwacht {condition.operator === 'between' ? 'tussen' : condition.operator === 'in' ? 'een van' : condition.operator} {JSON.stringify(condition.expected)}
-                                                                </div>
-                                                                <div style={{ color: "#991b1b" }}>
-                                                                    Daadwerkelijk: {JSON.stringify(condition.actual)}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {!object.rejectionReasons.ingangsdatum_override && (!object.rejectionReasons.rules_evaluated || object.rejectionReasons.rules_evaluated.length === 0) && (
-                                    <div
-                                        style={{
-                                            padding: "8px 12px",
-                                            backgroundColor: "#ffffff",
-                                            borderRadius: "6px",
-                                            fontSize: "13px",
-                                            color: "#7f1d1d",
-                                            fontFamily: ENHANCED_FONT_STACK,
-                                        }}
-                                    >
-                                        {object.rejectionReasons.reason || 'Geen auto-goedkeuringsregels geconfigureerd voor deze organisatie.'}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Notes if available */}
-                        {object.notitie && (
-                            <div
-                                style={{
-                                    marginTop: "12px",
-                                    padding: "12px",
-                                    backgroundColor: "#fef3c7",
-                                    borderRadius: "8px",
-                                    border: "1px solid #fde68a",
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        fontSize: "12px",
-                                        color: "#92400e",
-                                        fontWeight: "600",
-                                        marginBottom: "4px",
-                                        textTransform: "uppercase",
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                    }}
-                                >
-                                    Notitie
-                                </div>
-                                <div
-                                    style={{
-                                        fontSize: "14px",
-                                        color: "#92400e",
-                                        fontFamily: ENHANCED_FONT_STACK,
-                                    }}
-                                >
-                                    {object.notitie}
-                                </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Decline modal */}
-            {showDeclineModal &&
-                ReactDOM.createPortal(
-                    <div style={styles.modalOverlay}>
-                        <div
-                            style={{
-                                ...styles.modal,
-                                width: "min(90vw, 500px)",
-                                padding: "32px",
-                            }}
-                        >
-                            <div style={styles.header}>
-                                <h2 style={styles.title}>Object Afwijzen</h2>
-                                <button
-                                    onClick={() => {
-                                        setShowDeclineModal(false)
-                                        setDeclineReason("")
-                                    }}
-                                    style={styles.iconButton}
-                                    onMouseOver={(e) => hover.iconButton(e.target as HTMLElement)}
-                                    onMouseOut={(e) => hover.resetIconButton(e.target as HTMLElement)}
-                                >
-                                    <FaTimes />
-                                </button>
-                            </div>
-
-                            <div style={styles.description}>
-                                Waarom wordt dit object afgewezen? Geef een duidelijke reden op.
-                            </div>
-
-                            <form onSubmit={(e) => { e.preventDefault(); handleDeclineSubmit(); }}>
-                                <div style={{ marginBottom: "24px" }}>
-                                    <label style={styles.label}>Reden voor afwijzing *</label>
-                                    <textarea
-                                        value={declineReason}
-                                        onChange={(e) => setDeclineReason(e.target.value)}
-                                        placeholder="Geef een duidelijke reden voor de afwijzing..."
-                                        required
-                                        rows={4}
-                                        style={{
-                                            ...styles.input,
-                                            minHeight: "100px",
-                                            resize: "vertical",
-                                        }}
-                                        onFocus={(e) => hover.input(e.target as HTMLElement)}
-                                        onBlur={(e) => hover.resetInput(e.target as HTMLElement)}
-                                    />
-                                </div>
-
-                                <div style={styles.buttonGroup}>
+                {/* Decline modal */}
+                {showDeclineModal &&
+                    ReactDOM.createPortal(
+                        <div style={styles.modalOverlay}>
+                            <div
+                                style={{
+                                    ...styles.modal,
+                                    width: "min(90vw, 500px)",
+                                    padding: "32px",
+                                }}
+                            >
+                                <div style={styles.header}>
+                                    <h2 style={styles.title}>
+                                        Object Afwijzen
+                                    </h2>
                                     <button
-                                        type="button"
                                         onClick={() => {
                                             setShowDeclineModal(false)
                                             setDeclineReason("")
                                         }}
-                                        style={styles.secondaryButton}
-                                        disabled={isProcessing}
-                                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
-                                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
+                                        style={styles.iconButton}
+                                        onMouseOver={(e) =>
+                                            hover.iconButton(
+                                                e.target as HTMLElement
+                                            )
+                                        }
+                                        onMouseOut={(e) =>
+                                            hover.resetIconButton(
+                                                e.target as HTMLElement
+                                            )
+                                        }
                                     >
-                                        Annuleren
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={!declineReason.trim() || isProcessing}
-                                        style={{
-                                            ...styles.primaryButton,
-                                            backgroundColor: colors.error,
-                                            opacity: (!declineReason.trim() || isProcessing) ? 0.6 : 1,
-                                            cursor: (!declineReason.trim() || isProcessing) ? "not-allowed" : "pointer",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            if (declineReason.trim() && !isProcessing) {
-                                                (e.target as HTMLElement).style.backgroundColor = "#b91c1c"
-                                            }
-                                        }}
-                                        onMouseOut={(e) => {
-                                            if (declineReason.trim() && !isProcessing) {
-                                                (e.target as HTMLElement).style.backgroundColor = colors.error
-                                            }
-                                        }}
-                                    >
-                                        {isProcessing ? "Bezig..." : "Object Afwijzen"}
+                                        <FaTimes />
                                     </button>
                                 </div>
-                            </form>
-                        </div>
-                    </div>,
-                    document.body
-                )}
+
+                                <div style={styles.description}>
+                                    Waarom wordt dit object afgewezen? Geef een
+                                    duidelijke reden op.
+                                </div>
+
+                                <form
+                                    onSubmit={(e) => {
+                                        e.preventDefault()
+                                        handleDeclineSubmit()
+                                    }}
+                                >
+                                    <div style={{ marginBottom: "24px" }}>
+                                        <label style={styles.label}>
+                                            Reden voor afwijzing *
+                                        </label>
+                                        <textarea
+                                            value={declineReason}
+                                            onChange={(e) =>
+                                                setDeclineReason(e.target.value)
+                                            }
+                                            placeholder="Geef een duidelijke reden voor de afwijzing..."
+                                            required
+                                            rows={4}
+                                            style={{
+                                                ...styles.input,
+                                                minHeight: "100px",
+                                                resize: "vertical",
+                                            }}
+                                            onFocus={(e) =>
+                                                hover.input(
+                                                    e.target as HTMLElement
+                                                )
+                                            }
+                                            onBlur={(e) =>
+                                                hover.resetInput(
+                                                    e.target as HTMLElement
+                                                )
+                                            }
+                                        />
+                                    </div>
+
+                                    <div style={styles.buttonGroup}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDeclineModal(false)
+                                                setDeclineReason("")
+                                            }}
+                                            style={styles.secondaryButton}
+                                            disabled={isProcessing}
+                                            onMouseOver={(e) =>
+                                                hover.secondaryButton(
+                                                    e.target as HTMLElement
+                                                )
+                                            }
+                                            onMouseOut={(e) =>
+                                                hover.resetSecondaryButton(
+                                                    e.target as HTMLElement
+                                                )
+                                            }
+                                        >
+                                            Annuleren
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={
+                                                !declineReason.trim() ||
+                                                isProcessing
+                                            }
+                                            style={{
+                                                ...styles.primaryButton,
+                                                backgroundColor: colors.error,
+                                                opacity:
+                                                    !declineReason.trim() ||
+                                                    isProcessing
+                                                        ? 0.6
+                                                        : 1,
+                                                cursor:
+                                                    !declineReason.trim() ||
+                                                    isProcessing
+                                                        ? "not-allowed"
+                                                        : "pointer",
+                                            }}
+                                            onMouseOver={(e) => {
+                                                if (
+                                                    declineReason.trim() &&
+                                                    !isProcessing
+                                                ) {
+                                                    ;(
+                                                        e.target as HTMLElement
+                                                    ).style.backgroundColor =
+                                                        "#b91c1c"
+                                                }
+                                            }}
+                                            onMouseOut={(e) => {
+                                                if (
+                                                    declineReason.trim() &&
+                                                    !isProcessing
+                                                ) {
+                                                    ;(
+                                                        e.target as HTMLElement
+                                                    ).style.backgroundColor =
+                                                        colors.error
+                                                }
+                                            }}
+                                        >
+                                            {isProcessing
+                                                ? "Bezig..."
+                                                : "Object Afwijzen"}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>,
+                        document.body
+                    )}
             </>
         )
     } catch (error) {
-        console.error("Error rendering PendingObjectRow:", error, "for object:", object)
+        console.error(
+            "Error rendering PendingObjectRow:",
+            error,
+            "for object:",
+            object
+        )
         // Fallback minimal render in case of errors
         return (
             <div
@@ -2298,11 +2876,18 @@ function PendingObjectRow({
             >
                 <FaBox style={{ color: "#6b7280" }} />
                 <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "16px", fontWeight: "600", color: colors.gray800 }}>
-                        Object {object.id?.slice(-8) || 'Unknown'}
+                    <div
+                        style={{
+                            fontSize: "16px",
+                            fontWeight: "600",
+                            color: colors.gray800,
+                        }}
+                    >
+                        Object {object.id?.slice(-8) || "Unknown"}
                     </div>
                     <div style={{ fontSize: "14px", color: colors.gray600 }}>
-                        {object.organization} • {formatCurrency(object.waarde || 0)}
+                        {object.organization} •{" "}
+                        {formatCurrency(object.waarde || 0)}
                     </div>
                 </div>
                 <div style={{ color: "#dc2626", fontSize: "12px" }}>
@@ -2314,8 +2899,8 @@ function PendingObjectRow({
 }
 
 // Filters and Search Component
-function PendingFilters({ 
-    searchTerm, 
+function PendingFilters({
+    searchTerm,
     onSearchChange,
     selectedObjectType,
     onObjectTypeChange,
@@ -2325,7 +2910,7 @@ function PendingFilters({
     onSortChange,
     sortDirection,
     onSortDirectionChange,
-    availableOrganizations
+    availableOrganizations,
 }: {
     searchTerm: string
     onSearchChange: (term: string) => void
@@ -2390,7 +2975,11 @@ function PendingFilters({
                     <label style={styles.label}>Type</label>
                     <select
                         value={selectedObjectType}
-                        onChange={(e) => onObjectTypeChange(e.target.value as ObjectType | "all")}
+                        onChange={(e) =>
+                            onObjectTypeChange(
+                                e.target.value as ObjectType | "all"
+                            )
+                        }
                         style={styles.input}
                     >
                         <option value="all">Alle types</option>
@@ -2436,7 +3025,11 @@ function PendingFilters({
                 <div>
                     <label style={styles.label}>Volgorde</label>
                     <button
-                        onClick={() => onSortDirectionChange(sortDirection === "asc" ? "desc" : "asc")}
+                        onClick={() =>
+                            onSortDirectionChange(
+                                sortDirection === "asc" ? "desc" : "asc"
+                            )
+                        }
                         style={{
                             ...styles.secondaryButton,
                             width: "100%",
@@ -2445,8 +3038,12 @@ function PendingFilters({
                             justifyContent: "center",
                             gap: "8px",
                         }}
-                        onMouseOver={(e) => hover.secondaryButton(e.target as HTMLElement)}
-                        onMouseOut={(e) => hover.resetSecondaryButton(e.target as HTMLElement)}
+                        onMouseOver={(e) =>
+                            hover.secondaryButton(e.target as HTMLElement)
+                        }
+                        onMouseOut={(e) =>
+                            hover.resetSecondaryButton(e.target as HTMLElement)
+                        }
                     >
                         {sortDirection === "asc" ? (
                             <>
@@ -2470,39 +3067,63 @@ function PendingFilters({
 export const PendingBoatsOverview: Override = () => {
     // State management
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
-    const [pendingObjects, setPendingObjects] = useState<PendingInsuredObject[]>([])
-    const [filteredObjects, setFilteredObjects] = useState<PendingInsuredObject[]>([])
+    const [pendingObjects, setPendingObjects] = useState<
+        PendingInsuredObject[]
+    >([])
+    const [filteredObjects, setFilteredObjects] = useState<
+        PendingInsuredObject[]
+    >([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
-    
+
     // Selection state
-    const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(new Set())
+    const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(
+        new Set()
+    )
     const [selectAll, setSelectAll] = useState(false)
-    
+
     // Filter state
     const [searchTerm, setSearchTerm] = useState("")
-    const [selectedObjectType, setSelectedObjectType] = useState<ObjectType | "all">("all")
+    const [selectedObjectType, setSelectedObjectType] = useState<
+        ObjectType | "all"
+    >("all")
     const [selectedOrganization, setSelectedOrganization] = useState("")
     const [sortBy, setSortBy] = useState("createdAt")
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
-    
+
     // Action states
     const [isProcessing, setIsProcessing] = useState(false)
-    
+
     // Content state for the override
     const [content, setContent] = useState<React.ReactNode>(null)
 
     // Debug: Monitor pendingObjects state changes
     useEffect(() => {
-        console.log("pendingObjects state changed:", pendingObjects, "length:", Array.isArray(pendingObjects) ? pendingObjects.length : "not array")
+        console.log(
+            "pendingObjects state changed:",
+            pendingObjects,
+            "length:",
+            Array.isArray(pendingObjects) ? pendingObjects.length : "not array"
+        )
     }, [pendingObjects])
 
     // Calculate statistics
-    console.log("About to calculate stats - pendingObjects:", pendingObjects, "length:", Array.isArray(pendingObjects) ? pendingObjects.length : "not array")
+    console.log(
+        "About to calculate stats - pendingObjects:",
+        pendingObjects,
+        "length:",
+        Array.isArray(pendingObjects) ? pendingObjects.length : "not array"
+    )
     const stats = calculatePendingStats(pendingObjects)
     console.log("Calculated stats:", stats)
-    const availableOrganizations = [...new Set((Array.isArray(pendingObjects) ? pendingObjects : []).map(obj => obj.organization))].sort()
+    const availableOrganizations = [
+        ...new Set(
+            (Array.isArray(pendingObjects) ? pendingObjects : []).map(
+                (obj) => obj.organization
+            )
+        ),
+    ].sort()
     console.log("Available organizations:", availableOrganizations)
 
     // Initialize user info and fetch data
@@ -2520,7 +3141,9 @@ export const PendingBoatsOverview: Override = () => {
                 }
 
                 // Fetch detailed user info
-                const detailedUserInfo = await fetchUserInfo(currentUserInfo.sub)
+                const detailedUserInfo = await fetchUserInfo(
+                    currentUserInfo.sub
+                )
                 if (!detailedUserInfo) {
                     setError("Kan gebruikersinformatie niet ophalen.")
                     return
@@ -2530,16 +3153,20 @@ export const PendingBoatsOverview: Override = () => {
 
                 // Check if user is admin
                 if (!isAdmin(detailedUserInfo)) {
-                    setError("Toegang geweigerd. Deze pagina is alleen toegankelijk voor beheerders.")
+                    setError(
+                        "Toegang geweigerd. Deze pagina is alleen toegankelijk voor beheerders."
+                    )
                     return
                 }
 
                 // Fetch all pending objects
                 await fetchPendingData()
-
             } catch (err: any) {
                 console.error("Error initializing data:", err)
-                setError(err.message || "Er is een fout opgetreden bij het laden van de gegevens.")
+                setError(
+                    err.message ||
+                        "Er is een fout opgetreden bij het laden van de gegevens."
+                )
             } finally {
                 setLoading(false)
             }
@@ -2553,43 +3180,69 @@ export const PendingBoatsOverview: Override = () => {
         try {
             console.log("fetchPendingData called - starting fetch")
             const objects = await fetchAllPendingObjects()
-            console.log("Raw objects from API:", objects, "type:", typeof objects, "isArray:", Array.isArray(objects))
-            
+            console.log(
+                "Raw objects from API:",
+                objects,
+                "type:",
+                typeof objects,
+                "isArray:",
+                Array.isArray(objects)
+            )
+
             if (!Array.isArray(objects)) {
                 console.error("API returned non-array data:", objects)
                 setPendingObjects([])
                 return
             }
-            
+
             // Process and validate the objects to ensure they have required fields
             const processedObjects = objects.map((obj, index) => {
                 console.log(`Processing object ${index}:`, obj)
-                
+
                 return {
                     ...obj,
                     // Ensure required fields exist with fallbacks
                     id: obj.id || `temp-id-${index}`,
-                    organization: obj.organization || 'Unknown Organization',
-                    createdAt: obj.createdAt || obj.created_at || new Date().toISOString(),
-                    updatedAt: obj.updatedAt || obj.updated_at || new Date().toISOString(),
-                    objectType: obj.objectType || (obj.objectType === undefined && obj.motorMerk ? 'motor' : 'boat'),
+                    organization: obj.organization || "Unknown Organization",
+                    createdAt:
+                        obj.createdAt ||
+                        obj.created_at ||
+                        new Date().toISOString(),
+                    updatedAt:
+                        obj.updatedAt ||
+                        obj.updated_at ||
+                        new Date().toISOString(),
+                    objectType:
+                        obj.objectType ||
+                        (obj.objectType === undefined && obj.motorMerk
+                            ? "motor"
+                            : "boat"),
                     waarde: obj.waarde || 0,
                     premiepercentage: obj.premiepercentage || 0,
                     eigenRisico: obj.eigenRisico || 0,
-                    ingangsdatum: obj.ingangsdatum || obj.startDate || new Date().toISOString(),
-                    status: 'Pending' as const // Ensure status is set
+                    ingangsdatum:
+                        obj.ingangsdatum ||
+                        obj.startDate ||
+                        new Date().toISOString(),
+                    status: "Pending" as const, // Ensure status is set
                 }
             })
-            
-            console.log("Processed objects before setting state:", processedObjects, "length:", processedObjects.length)
-            
+
+            console.log(
+                "Processed objects before setting state:",
+                processedObjects,
+                "length:",
+                processedObjects.length
+            )
+
             // Use setTimeout to ensure state update is async and check if it worked
             setPendingObjects(processedObjects)
-            
+
             setTimeout(() => {
-                console.log("State update should be complete - checking current state")
+                console.log(
+                    "State update should be complete - checking current state"
+                )
             }, 100)
-            
         } catch (err: any) {
             console.error("Error fetching pending objects:", err)
             setError(err.message || "Kan pending objecten niet ophalen.")
@@ -2598,36 +3251,58 @@ export const PendingBoatsOverview: Override = () => {
 
     // Filter and sort objects
     useEffect(() => {
-        console.log("Filter useEffect triggered - pendingObjects:", pendingObjects, "type:", typeof pendingObjects, "isArray:", Array.isArray(pendingObjects))
+        console.log(
+            "Filter useEffect triggered - pendingObjects:",
+            pendingObjects,
+            "type:",
+            typeof pendingObjects,
+            "isArray:",
+            Array.isArray(pendingObjects)
+        )
         // Safety check to ensure pendingObjects is an array
-        const safePendingObjects = Array.isArray(pendingObjects) ? pendingObjects : []
-        console.log("Filtering objects - input:", safePendingObjects, "length:", safePendingObjects.length)
+        const safePendingObjects = Array.isArray(pendingObjects)
+            ? pendingObjects
+            : []
+        console.log(
+            "Filtering objects - input:",
+            safePendingObjects,
+            "length:",
+            safePendingObjects.length
+        )
         let filtered = [...safePendingObjects]
 
         // Apply search filter
         if (searchTerm.trim()) {
             const searchLower = searchTerm.toLowerCase()
-            filtered = filtered.filter(obj => {
+            filtered = filtered.filter((obj) => {
                 const displayName = getObjectDisplayName(obj).toLowerCase()
                 const organization = obj.organization.toLowerCase()
                 const notes = (obj.notitie || "").toLowerCase()
-                const objectType = getObjectTypeName(obj.objectType).toLowerCase()
-                
-                return displayName.includes(searchLower) ||
-                       organization.includes(searchLower) ||
-                       notes.includes(searchLower) ||
-                       objectType.includes(searchLower)
+                const objectType = getObjectTypeName(
+                    obj.objectType
+                ).toLowerCase()
+
+                return (
+                    displayName.includes(searchLower) ||
+                    organization.includes(searchLower) ||
+                    notes.includes(searchLower) ||
+                    objectType.includes(searchLower)
+                )
             })
         }
 
         // Apply object type filter
         if (selectedObjectType !== "all") {
-            filtered = filtered.filter(obj => obj.objectType === selectedObjectType)
+            filtered = filtered.filter(
+                (obj) => obj.objectType === selectedObjectType
+            )
         }
 
         // Apply organization filter
         if (selectedOrganization) {
-            filtered = filtered.filter(obj => obj.organization === selectedOrganization)
+            filtered = filtered.filter(
+                (obj) => obj.organization === selectedOrganization
+            )
         }
 
         // Apply sorting
@@ -2664,11 +3339,18 @@ export const PendingBoatsOverview: Override = () => {
 
         console.log("Filtering complete - filtered objects:", filtered)
         setFilteredObjects(filtered)
-    }, [pendingObjects, searchTerm, selectedObjectType, selectedOrganization, sortBy, sortDirection])
+    }, [
+        pendingObjects,
+        searchTerm,
+        selectedObjectType,
+        selectedOrganization,
+        sortBy,
+        sortDirection,
+    ])
 
     // Handle selection
     const handleToggleSelect = useCallback((objectId: string) => {
-        setSelectedObjectIds(prev => {
+        setSelectedObjectIds((prev) => {
             const newSet = new Set(prev)
             if (newSet.has(objectId)) {
                 newSet.delete(objectId)
@@ -2684,7 +3366,7 @@ export const PendingBoatsOverview: Override = () => {
             setSelectedObjectIds(new Set())
             setSelectAll(false)
         } else {
-            setSelectedObjectIds(new Set(filteredObjects.map(obj => obj.id)))
+            setSelectedObjectIds(new Set(filteredObjects.map((obj) => obj.id)))
             setSelectAll(true)
         }
     }, [selectAll, filteredObjects])
@@ -2695,88 +3377,88 @@ export const PendingBoatsOverview: Override = () => {
     }, [])
 
     // Handle individual actions
-    const handleApprove = useCallback(async (
-        object: PendingInsuredObject,
-        customValues?: { premiumConfig: PremiumConfig, ownRiskConfig: OwnRiskConfig }
-    ) => {
-        try {
-            setIsProcessing(true)
-
-            // If custom values are provided, validate them
-            if (customValues) {
-                const finalPremium = calculatePremium(customValues.premiumConfig, object.waarde)
-                const finalOwnRisk = calculateOwnRisk(customValues.ownRiskConfig, object.waarde)
-
-                if (finalPremium === 0 || finalOwnRisk === 0) {
-                    setError("Premiepromillage en eigen risico moeten beide ingevuld zijn voordat u kunt goedkeuren.")
-                    setTimeout(() => setError(null), 5000)
-                    setIsProcessing(false)
-                    return
-                }
-
-                await approveObjectWithCustomValues(object.id, customValues.premiumConfig, customValues.ownRiskConfig)
-                setSuccess(`${getObjectDisplayName(object)} is goedgekeurd met aangepaste waarden.`)
-            } else {
-                // Validate default values
-                if (object.premiepercentage === 0 || object.eigenRisico === 0) {
-                    setError("Premiepromillage en eigen risico moeten beide ingevuld zijn voordat u kunt goedkeuren.")
-                    setTimeout(() => setError(null), 5000)
-                    setIsProcessing(false)
-                    return
-                }
-
-                await approveObject(object.id)
-                setSuccess(`${getObjectDisplayName(object)} is goedgekeurd.`)
+    const handleApprove = useCallback(
+        async (
+            object: PendingInsuredObject,
+            customValues?: {
+                premiumConfig: PremiumConfig
+                ownRiskConfig: OwnRiskConfig
             }
-            
-            setTimeout(() => setSuccess(null), 5000)
-            
-            // Refresh data
-            await fetchPendingData()
-            
-            // Remove from selection if it was selected
-            setSelectedObjectIds(prev => {
-                const newSet = new Set(prev)
-                newSet.delete(object.id)
-                return newSet
-            })
-        } catch (err: any) {
-            setError(`Fout bij goedkeuring: ${err.message}`)
-            setTimeout(() => setError(null), 5000)
-        } finally {
-            setIsProcessing(false)
-        }
-    }, [fetchPendingData])
+        ) => {
+            try {
+                setIsProcessing(true)
 
-    const handleDecline = useCallback(async (object: PendingInsuredObject, reason: string = "") => {
-        try {
-            setIsProcessing(true)
-            await declineObject(object.id, reason)
-            
-            setSuccess(`${getObjectDisplayName(object)} is afgewezen.`)
-            setTimeout(() => setSuccess(null), 5000)
-            
-            // Refresh data
-            await fetchPendingData()
-            
-            // Remove from selection if it was selected
-            setSelectedObjectIds(prev => {
-                const newSet = new Set(prev)
-                newSet.delete(object.id)
-                return newSet
-            })
-        } catch (err: any) {
-            setError(`Fout bij afwijzing: ${err.message}`)
-            setTimeout(() => setError(null), 5000)
-        } finally {
-            setIsProcessing(false)
-        }
-    }, [fetchPendingData])
+                // If custom values are provided, use them
+                if (customValues) {
+                    await approveObjectWithCustomValues(
+                        object.id,
+                        customValues.premiumConfig,
+                        customValues.ownRiskConfig
+                    )
+                    setSuccess(
+                        `${getObjectDisplayName(object)} is goedgekeurd met aangepaste waarden.`
+                    )
+                } else {
+                    // Use default values
+                    await approveObject(object.id)
+                    setSuccess(
+                        `${getObjectDisplayName(object)} is goedgekeurd.`
+                    )
+                }
+
+                setTimeout(() => setSuccess(null), 5000)
+
+                // Refresh data
+                await fetchPendingData()
+
+                // Remove from selection if it was selected
+                setSelectedObjectIds((prev) => {
+                    const newSet = new Set(prev)
+                    newSet.delete(object.id)
+                    return newSet
+                })
+            } catch (err: any) {
+                setError(`Fout bij goedkeuring: ${err.message}`)
+                setTimeout(() => setError(null), 5000)
+            } finally {
+                setIsProcessing(false)
+            }
+        },
+        [fetchPendingData]
+    )
+
+    const handleDecline = useCallback(
+        async (object: PendingInsuredObject, reason: string = "") => {
+            try {
+                setIsProcessing(true)
+                await declineObject(object.id, reason)
+
+                setSuccess(`${getObjectDisplayName(object)} is afgewezen.`)
+                setTimeout(() => setSuccess(null), 5000)
+
+                // Refresh data
+                await fetchPendingData()
+
+                // Remove from selection if it was selected
+                setSelectedObjectIds((prev) => {
+                    const newSet = new Set(prev)
+                    newSet.delete(object.id)
+                    return newSet
+                })
+            } catch (err: any) {
+                setError(`Fout bij afwijzing: ${err.message}`)
+                setTimeout(() => setError(null), 5000)
+            } finally {
+                setIsProcessing(false)
+            }
+        },
+        [fetchPendingData]
+    )
 
     const handleViewDetails = useCallback((object: PendingInsuredObject) => {
         // Navigate to organization's insured objects page
         const orgParam = encodeURIComponent(object.organization)
-        window.open(`/insuredobjects?org=${orgParam}`, '_blank')
+        window.open(`/insuredobjects?org=${orgParam}`, "_blank")
     }, [])
 
     // Handle bulk actions
@@ -2787,10 +3469,12 @@ export const PendingBoatsOverview: Override = () => {
             setIsProcessing(true)
             const objectIds = Array.from(selectedObjectIds)
             await bulkApproveObjects(objectIds)
-            
-            setSuccess(`${objectIds.length} object${objectIds.length > 1 ? "en" : ""} goedgekeurd.`)
+
+            setSuccess(
+                `${objectIds.length} object${objectIds.length > 1 ? "en" : ""} goedgekeurd.`
+            )
             setTimeout(() => setSuccess(null), 5000)
-            
+
             // Refresh data and clear selection
             await fetchPendingData()
             handleClearSelection()
@@ -2804,7 +3488,9 @@ export const PendingBoatsOverview: Override = () => {
 
     const handleBulkDecline = useCallback(() => {
         // For now, we'll show a message that bulk decline needs individual reasons
-        setError("Bulk afwijzing is nog niet beschikbaar. Wijs objecten individueel af met specifieke redenen.")
+        setError(
+            "Bulk afwijzing is nog niet beschikbaar. Wijs objecten individueel af met specifieke redenen."
+        )
         setTimeout(() => setError(null), 5000)
     }, [])
 
@@ -2874,7 +3560,11 @@ export const PendingBoatsOverview: Override = () => {
         }
 
         // Error state - not authorized or other errors
-        if (error && (error.includes("Toegang geweigerd") || error.includes("Niet ingelogd"))) {
+        if (
+            error &&
+            (error.includes("Toegang geweigerd") ||
+                error.includes("Niet ingelogd"))
+        ) {
             return (
                 <div
                     style={{
@@ -2927,14 +3617,22 @@ export const PendingBoatsOverview: Override = () => {
                                 {error}
                             </p>
                             <button
-                                onClick={() => (window.location.href = "/organizations")}
+                                onClick={() =>
+                                    (window.location.href = "/organizations")
+                                }
                                 style={{
                                     ...styles.primaryButton,
                                     padding: "12px 24px",
                                     fontSize: "16px",
                                 }}
-                                onMouseOver={(e) => hover.primaryButton(e.target as HTMLElement)}
-                                onMouseOut={(e) => hover.resetPrimaryButton(e.target as HTMLElement)}
+                                onMouseOver={(e) =>
+                                    hover.primaryButton(e.target as HTMLElement)
+                                }
+                                onMouseOut={(e) =>
+                                    hover.resetPrimaryButton(
+                                        e.target as HTMLElement
+                                    )
+                                }
                             >
                                 <FaArrowLeft />
                                 Terug naar Dashboard
@@ -2999,95 +3697,159 @@ export const PendingBoatsOverview: Override = () => {
                         >
                             {(() => {
                                 const tabs = [
-                                    { key: "organizations", label: "Organisaties", icon: FaBuilding, href: "/organizations" },
-                                    { key: "pending", label: "Pending Items", icon: FaClock, href: "/pending-overview" },
-                                    { key: "users", label: "Gebruikers", icon: FaUsers, href: "/users" },
-                                    { key: "changelog", label: "Wijzigingslogboek", icon: FaClipboardList, href: "/changelog" }
-                                ];
-                                
-                                return tabs.filter((tab) => {
-                                    // Hide users, pending, and changelog tabs for regular users
-                                    if (userInfo?.role === "user" && (tab.key === "users" || tab.key === "pending" || tab.key === "changelog")) {
-                                        return false
-                                    }
-                                    return true
-                                }).map((tab) => {
-                                const isActive = tab.key === "pending"
-                                const Icon = tab.icon
-                                
-                                return (
-                                    <button
-                                        key={tab.key}
-                                        onClick={() => {
-                                            if (!isActive) {
-                                                window.location.href = tab.href
-                                            }
-                                        }}
-                                        style={{
-                                            padding: "16px 24px",
-                                            backgroundColor: isActive ? colors.navigationActive : colors.navigationInactive,
-                                            color: isActive ? "white" : colors.gray500,
-                                            border: isActive ? "none" : `2px solid ${colors.navigationInactiveBorder}`,
-                                            borderRadius: "12px",
-                                            fontSize: "15px",
-                                            fontWeight: "600",
-                                            cursor: isActive ? "default" : "pointer",
-                                            fontFamily: ENHANCED_FONT_STACK,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "8px",
-                                            transition: "all 0.2s",
-                                            minHeight: "48px",
-                                            boxShadow: isActive 
-                                                ? "0 2px 8px rgba(59, 130, 246, 0.15)" 
-                                                : "0 2px 4px rgba(0,0,0,0.05)",
-                                            transform: isActive ? "translateY(-1px)" : "none",
-                                            position: "relative",
-                                        }}
-                                        onMouseOver={(e) => {
-                                            if (!isActive) {
-                                                const target = e.target as HTMLElement
-                                                target.style.backgroundColor = colors.navigationInactiveHover
-                                                target.style.borderColor = colors.navigationActive
-                                                target.style.color = colors.navigationActive
-                                                target.style.transform = "translateY(-1px)"
-                                                target.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.15)"
-                                            }
-                                        }}
-                                        onMouseOut={(e) => {
-                                            if (!isActive) {
-                                                const target = e.target as HTMLElement
-                                                target.style.backgroundColor = colors.navigationInactive
-                                                target.style.borderColor = colors.navigationInactiveBorder
-                                                target.style.color = colors.gray500
-                                                target.style.transform = "none"
-                                                target.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)"
-                                            }
-                                        }}
-                                    >
-                                        <Icon size={14} />
-                                        {tab.label}
-                                        {/* Pending count badge */}
-                                        {tab.key === "pending" && stats.total > 0 && (
-                                            <span
+                                    {
+                                        key: "organizations",
+                                        label: "Organisaties",
+                                        icon: FaBuilding,
+                                        href: "/organizations",
+                                    },
+                                    {
+                                        key: "pending",
+                                        label: "Pending Items",
+                                        icon: FaClock,
+                                        href: "/pending-overview",
+                                    },
+                                    {
+                                        key: "users",
+                                        label: "Gebruikers",
+                                        icon: FaUsers,
+                                        href: "/users",
+                                    },
+                                    {
+                                        key: "changelog",
+                                        label: "Wijzigingslogboek",
+                                        icon: FaClipboardList,
+                                        href: "/changelog",
+                                    },
+                                ]
+
+                                return tabs
+                                    .filter((tab) => {
+                                        // Hide users, pending, and changelog tabs for regular users
+                                        if (
+                                            userInfo?.role === "user" &&
+                                            (tab.key === "users" ||
+                                                tab.key === "pending" ||
+                                                tab.key === "changelog")
+                                        ) {
+                                            return false
+                                        }
+                                        return true
+                                    })
+                                    .map((tab) => {
+                                        const isActive = tab.key === "pending"
+                                        const Icon = tab.icon
+
+                                        return (
+                                            <button
+                                                key={tab.key}
+                                                onClick={() => {
+                                                    if (!isActive) {
+                                                        window.location.href =
+                                                            tab.href
+                                                    }
+                                                }}
                                                 style={{
-                                                    backgroundColor: isActive ? "rgba(255,255,255,0.3)" : "#dc2626",
-                                                    color: isActive ? "white" : "white",
-                                                    borderRadius: "10px",
-                                                    padding: "2px 6px",
-                                                    fontSize: "12px",
-                                                    fontWeight: "700",
-                                                    minWidth: "18px",
-                                                    textAlign: "center",
-                                                    marginLeft: "4px",
+                                                    padding: "16px 24px",
+                                                    backgroundColor: isActive
+                                                        ? colors.navigationActive
+                                                        : colors.navigationInactive,
+                                                    color: isActive
+                                                        ? "white"
+                                                        : colors.gray500,
+                                                    border: isActive
+                                                        ? "none"
+                                                        : `2px solid ${colors.navigationInactiveBorder}`,
+                                                    borderRadius: "12px",
+                                                    fontSize: "15px",
+                                                    fontWeight: "600",
+                                                    cursor: isActive
+                                                        ? "default"
+                                                        : "pointer",
+                                                    fontFamily:
+                                                        ENHANCED_FONT_STACK,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                    transition: "all 0.2s",
+                                                    minHeight: "48px",
+                                                    boxShadow: isActive
+                                                        ? "0 2px 8px rgba(59, 130, 246, 0.15)"
+                                                        : "0 2px 4px rgba(0,0,0,0.05)",
+                                                    transform: isActive
+                                                        ? "translateY(-1px)"
+                                                        : "none",
+                                                    position: "relative",
+                                                }}
+                                                onMouseOver={(e) => {
+                                                    if (!isActive) {
+                                                        const target =
+                                                            e.target as HTMLElement
+                                                        target.style.backgroundColor =
+                                                            colors.navigationInactiveHover
+                                                        target.style.borderColor =
+                                                            colors.navigationActive
+                                                        target.style.color =
+                                                            colors.navigationActive
+                                                        target.style.transform =
+                                                            "translateY(-1px)"
+                                                        target.style.boxShadow =
+                                                            "0 4px 12px rgba(59, 130, 246, 0.15)"
+                                                    }
+                                                }}
+                                                onMouseOut={(e) => {
+                                                    if (!isActive) {
+                                                        const target =
+                                                            e.target as HTMLElement
+                                                        target.style.backgroundColor =
+                                                            colors.navigationInactive
+                                                        target.style.borderColor =
+                                                            colors.navigationInactiveBorder
+                                                        target.style.color =
+                                                            colors.gray500
+                                                        target.style.transform =
+                                                            "none"
+                                                        target.style.boxShadow =
+                                                            "0 2px 4px rgba(0,0,0,0.05)"
+                                                    }
                                                 }}
                                             >
-                                                {stats.total}
-                                            </span>
-                                        )}
-                                    </button>
-                                )
-                            });
+                                                <Icon size={14} />
+                                                {tab.label}
+                                                {/* Pending count badge */}
+                                                {tab.key === "pending" &&
+                                                    stats.total > 0 && (
+                                                        <span
+                                                            style={{
+                                                                backgroundColor:
+                                                                    isActive
+                                                                        ? "rgba(255,255,255,0.3)"
+                                                                        : "#dc2626",
+                                                                color: isActive
+                                                                    ? "white"
+                                                                    : "white",
+                                                                borderRadius:
+                                                                    "10px",
+                                                                padding:
+                                                                    "2px 6px",
+                                                                fontSize:
+                                                                    "12px",
+                                                                fontWeight:
+                                                                    "700",
+                                                                minWidth:
+                                                                    "18px",
+                                                                textAlign:
+                                                                    "center",
+                                                                marginLeft:
+                                                                    "4px",
+                                                            }}
+                                                        >
+                                                            {stats.total}
+                                                        </span>
+                                                    )}
+                                            </button>
+                                        )
+                                    })
                             })()}
                         </div>
 
@@ -3123,26 +3885,33 @@ export const PendingBoatsOverview: Override = () => {
                                                 fontFamily: ENHANCED_FONT_STACK,
                                             }}
                                         >
-                                            Beheer alle wachtende verzekeringsobjecten vanuit één centrale locatie
+                                            Beheer alle wachtende
+                                            verzekeringsobjecten vanuit één
+                                            centrale locatie
                                         </p>
                                     </div>
-                                    
                                 </div>
 
                                 {/* Success/Error Messages */}
                                 {success && (
                                     <div style={styles.successAlert}>
-                                        <FaCheck style={{ marginRight: "8px" }} />
+                                        <FaCheck
+                                            style={{ marginRight: "8px" }}
+                                        />
                                         {success}
                                     </div>
                                 )}
-                                
-                                {error && !error.includes("Toegang geweigerd") && !error.includes("Niet ingelogd") && (
-                                    <div style={styles.errorAlert}>
-                                        <FaExclamationTriangle style={{ marginRight: "8px" }} />
-                                        {error}
-                                    </div>
-                                )}
+
+                                {error &&
+                                    !error.includes("Toegang geweigerd") &&
+                                    !error.includes("Niet ingelogd") && (
+                                        <div style={styles.errorAlert}>
+                                            <FaExclamationTriangle
+                                                style={{ marginRight: "8px" }}
+                                            />
+                                            {error}
+                                        </div>
+                                    )}
                             </div>
 
                             {/* Statistics Cards */}
@@ -3194,7 +3963,8 @@ export const PendingBoatsOverview: Override = () => {
                                                         fontWeight: "600",
                                                         color: colors.gray700,
                                                         marginBottom: "8px",
-                                                        fontFamily: ENHANCED_FONT_STACK,
+                                                        fontFamily:
+                                                            ENHANCED_FONT_STACK,
                                                     }}
                                                 >
                                                     Geen Pending Items
@@ -3203,10 +3973,12 @@ export const PendingBoatsOverview: Override = () => {
                                                     style={{
                                                         fontSize: "16px",
                                                         color: colors.gray500,
-                                                        fontFamily: ENHANCED_FONT_STACK,
+                                                        fontFamily:
+                                                            ENHANCED_FONT_STACK,
                                                     }}
                                                 >
-                                                    Alle verzekeringsobjecten zijn verwerkt. Goed werk!
+                                                    Alle verzekeringsobjecten
+                                                    zijn verwerkt. Goed werk!
                                                 </p>
                                             </>
                                         ) : (
@@ -3224,7 +3996,8 @@ export const PendingBoatsOverview: Override = () => {
                                                         fontWeight: "600",
                                                         color: colors.gray700,
                                                         marginBottom: "8px",
-                                                        fontFamily: ENHANCED_FONT_STACK,
+                                                        fontFamily:
+                                                            ENHANCED_FONT_STACK,
                                                     }}
                                                 >
                                                     Geen Resultaten
@@ -3233,12 +4006,15 @@ export const PendingBoatsOverview: Override = () => {
                                                     style={{
                                                         fontSize: "16px",
                                                         color: colors.gray500,
-                                                        fontFamily: ENHANCED_FONT_STACK,
+                                                        fontFamily:
+                                                            ENHANCED_FONT_STACK,
                                                     }}
                                                 >
-                                                    Geen pending items gevonden met de huidige filters.
+                                                    Geen pending items gevonden
+                                                    met de huidige filters.
                                                     <br />
-                                                    Probeer je zoekcriteria aan te passen.
+                                                    Probeer je zoekcriteria aan
+                                                    te passen.
                                                 </p>
                                             </>
                                         )}
@@ -3254,62 +4030,78 @@ export const PendingBoatsOverview: Override = () => {
                                                 fontFamily: ENHANCED_FONT_STACK,
                                             }}
                                         >
-                                            {filteredObjects.length} van {pendingObjects.length} pending item{filteredObjects.length !== 1 ? "s" : ""}
-                                       </div>
+                                            {filteredObjects.length} van{" "}
+                                            {pendingObjects.length} pending item
+                                            {filteredObjects.length !== 1
+                                                ? "s"
+                                                : ""}
+                                        </div>
 
-                                       {/* Objects list */}
-                                       {filteredObjects.map((object, index) => {
-                                           return (
-                                               <PendingObjectRow
-                                                   key={object.id}
-                                                   object={object}
-                                                   isSelected={selectedObjectIds.has(object.id)}
-                                                   onToggleSelect={handleToggleSelect}
-                                                   onApprove={handleApprove}
-                                                   onDecline={handleDecline}
-                                                   onViewDetails={handleViewDetails}
-                                                   isLoading={isProcessing}
-                                               />
-                                           )
-                                       })}
-                                   </div>
-                               )}
-                           </div>
-                       </div>
-                   </div>
-               </div>
-           </div>
-       )
-   }, [
-       loading,
-       error,
-       userInfo?.role,
-       stats.total,
-       searchTerm,
-       selectedObjectType,
-       selectedOrganization,
-       sortBy,
-       sortDirection,
-       selectedObjectIds.size,
-       selectAll,
-       isProcessing,
-       success,
-       filteredObjects.length,
-       pendingObjects.length
-   ])
+                                        {/* Objects list */}
+                                        {filteredObjects.map(
+                                            (object, index) => {
+                                                return (
+                                                    <PendingObjectRow
+                                                        key={object.id}
+                                                        object={object}
+                                                        isSelected={selectedObjectIds.has(
+                                                            object.id
+                                                        )}
+                                                        onToggleSelect={
+                                                            handleToggleSelect
+                                                        }
+                                                        onApprove={
+                                                            handleApprove
+                                                        }
+                                                        onDecline={
+                                                            handleDecline
+                                                        }
+                                                        onViewDetails={
+                                                            handleViewDetails
+                                                        }
+                                                        isLoading={isProcessing}
+                                                    />
+                                                )
+                                            }
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }, [
+        loading,
+        error,
+        userInfo?.role,
+        stats.total,
+        searchTerm,
+        selectedObjectType,
+        selectedOrganization,
+        sortBy,
+        sortDirection,
+        selectedObjectIds.size,
+        selectAll,
+        isProcessing,
+        success,
+        filteredObjects.length,
+        pendingObjects.length,
+    ])
 
-   // Update content when it changes
-   useEffect(() => {
-       setContent(currentContent)
-   }, [currentContent])
+    // Update content when it changes
+    useEffect(() => {
+        setContent(currentContent)
+    }, [currentContent])
 
-   // Return props for the Framer element
-   return {
-       children: content,
-       style: {
-           width: "100%",
-           height: "100%",
-           overflow: "auto"
-       }
-   }
+    // Return props for the Framer element
+    return {
+        children: content,
+        style: {
+            width: "100%",
+            height: "100%",
+            overflow: "auto",
+        },
+    }
 }

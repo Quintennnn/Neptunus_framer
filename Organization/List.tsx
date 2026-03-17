@@ -3019,6 +3019,9 @@ function EditOrgForm({
         org.type_organisatie || ""
     )
     const [polisnummer, setPolisnummer] = useState(org.polisnummer || "")
+    const [minimumPremium, setMinimumPremium] = useState<string>(
+        org.minimum_premium != null ? String(org.minimum_premium) : ""
+    )
     const [street, setStreet] = useState(org.street || "")
     const [huisnummer, setHuisnummer] = useState(org.huisnummer || "")
     const [city, setCity] = useState(org.city || "")
@@ -3202,7 +3205,7 @@ function EditOrgForm({
                 })),
             }
 
-            const payload = {
+            const payload: Record<string, any> = {
                 name,
                 type_organisatie: typeOrganisatie,
                 polisnummer: polisnummer || undefined,
@@ -3214,6 +3217,10 @@ function EditOrgForm({
                 extra_info: extraInfo || undefined,
                 insured_object_fields_config: updatedInsuredObjectFieldsConfig,
                 auto_approval_config: sanitizedAutoApprovalConfig,
+                minimum_premium:
+                    minimumPremium !== ""
+                        ? parseFloat(minimumPremium)
+                        : null,
             }
 
             // Debug logging for auto approval config
@@ -3427,6 +3434,48 @@ function EditOrgForm({
                                 fontFamily: FONT_STACK,
                             }}
                         />
+
+                        <label
+                            style={{
+                                display: "block",
+                                marginBottom: 8,
+                                fontWeight: 500,
+                            }}
+                        >
+                            Minimumpremie (€)
+                        </label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={minimumPremium}
+                            onChange={(e) =>
+                                setMinimumPremium(e.target.value)
+                            }
+                            placeholder="Geen minimumpremie ingesteld"
+                            style={{
+                                width: "100%",
+                                padding: 12,
+                                fontSize: 14,
+                                border: "1px solid #d1d5db",
+                                borderRadius: 8,
+                                marginBottom: 4,
+                                fontFamily: FONT_STACK,
+                            }}
+                        />
+                        <p
+                            style={{
+                                fontSize: 12,
+                                color: "#6b7280",
+                                marginBottom: 16,
+                                marginTop: 0,
+                            }}
+                        >
+                            Als de berekende premie lager is dan dit
+                            bedrag, wordt de minimumpremie
+                            gehanteerd. Laat leeg om geen minimum toe
+                            te passen.
+                        </p>
 
                         {/* Address Section */}
                         <div style={{ marginTop: 24 }}>

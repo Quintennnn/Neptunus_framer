@@ -18,6 +18,9 @@ export interface InsuredObject {
     uitgangsdatum?: string
     objectType: string
     organization: string
+    // Minimum premium from auto-approval rule
+    minimumPremium?: number
+    minimumPremiumApplied?: boolean
     // Calculated fields
     totalePremieOverHetJaar?: number
     totalePremieOverDeVerzekerdePeriode?: number
@@ -176,9 +179,20 @@ export function calculateObjectPremiums(object: InsuredObject): PremiumCalculati
         yearlyPremium = waarde * percentage / 100
     }
 
+    // Apply minimum premium to yearly premium if applicable
+    const minimumPremium = Number(object.minimumPremium) || 0
+    if (minimumPremium > 0 && yearlyPremium < minimumPremium) {
+        yearlyPremium = minimumPremium
+    }
+
     // Calculate actual period premium based on days (always 365 days per year)
     const periodDays = calculateInsurancePeriod(object)
-    const periodPremium = yearlyPremium * (periodDays / 365)
+    let periodPremium = yearlyPremium * (periodDays / 365)
+
+    // Apply minimum premium to period premium: total over insured period may never be lower than minimum
+    if (minimumPremium > 0 && periodPremium < minimumPremium) {
+        periodPremium = minimumPremium
+    }
 
     return {
         yearlyPremium,
@@ -246,9 +260,18 @@ export function calculateEnhancedTotals(objects: InsuredObject[]): TotalsCalcula
 
 /**
  * Update object with calculated premium values
+ * Respects backend minimum premium: if minimumPremiumApplied is true,
+ * the backend's totalePremieOverDeVerzekerdePeriode is preserved.
  */
 export function updateObjectWithCalculatedPremiums(object: InsuredObject): InsuredObject {
     const { yearlyPremium, periodPremium, periodDays } = calculateObjectPremiums(object)
+
+    console.log('[PREMIUM CALC] updateObjectWithCalculatedPremiums', {
+        id: object.id,
+        minimumPremium: object.minimumPremium,
+        backendPeriodPremium: object.totalePremieOverDeVerzekerdePeriode,
+        calculatedPeriodPremium: periodPremium,
+    })
 
     return {
         ...object,

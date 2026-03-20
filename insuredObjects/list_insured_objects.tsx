@@ -958,6 +958,11 @@ function renderObjectCellValue(
             case "totalePremieOverDeVerzekerdePeriode": // period premium
             case "totalePremieOverHetJaar": // yearly premium
                 return formatCurrency(Number(value), "EUR", 2)
+            case "premiumFixedAmount": // fixed premium amount
+                return `€${Number(value).toLocaleString("nl-NL", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                })}`
             case "premiepercentage": // premium percentage
                 // Handle backward compatibility with premiepromillage
                 let percentageValue = Number(value)
@@ -3555,6 +3560,24 @@ function AutoAcceptRulesDisplay({
             return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         }
 
+        // Handle 'between' with range object (min/max)
+        if (
+            condition.operator === "between" &&
+            condition.range &&
+            condition.range.min !== undefined &&
+            condition.range.max !== undefined
+        ) {
+            const val1 =
+                fieldKey === "waarde"
+                    ? formatNumber(condition.range.min)
+                    : condition.range.min
+            const val2 =
+                fieldKey === "waarde"
+                    ? formatNumber(condition.range.max)
+                    : condition.range.max
+            return `${val1} en ${val2}`
+        }
+
         // Handle multi-value conditions (e.g., 'in', 'between')
         if (Array.isArray(condition.values) && condition.values.length > 0) {
             if (
@@ -4772,6 +4795,14 @@ function InsuredObjectList() {
                                 field.key ===
                                     "totalePremieOverDeVerzekerdePeriode"
                             ) {
+                                const numValue = Number(value) || 0
+                                value = numValue.toLocaleString("nl-NL", {
+                                    style: "currency",
+                                    currency: "EUR",
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                })
+                            } else if (field.key === "premiumFixedAmount") {
                                 const numValue = Number(value) || 0
                                 value = numValue.toLocaleString("nl-NL", {
                                     style: "currency",

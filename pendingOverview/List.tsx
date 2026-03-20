@@ -279,7 +279,8 @@ async function approveObject(objectId: string): Promise<void> {
 async function approveObjectWithCustomValues(
     objectId: string,
     premiumConfig: PremiumConfig,
-    ownRiskConfig: OwnRiskConfig
+    ownRiskConfig: OwnRiskConfig,
+    minimumPremium?: number
 ): Promise<void> {
     try {
         const token = getIdTokenFromStorage()
@@ -301,6 +302,11 @@ async function approveObjectWithCustomValues(
                         ? parseFloat(String(ownRiskConfig.fixedAmount || 0))
                         : parseFloat(String(ownRiskConfig.percentage || 0)),
             },
+        }
+
+        // Include minimum premium if set
+        if (minimumPremium != null && minimumPremium > 0) {
+            payload.minimumPremium = minimumPremium
         }
 
         console.log("Sending approval with custom values:", payload)
@@ -1501,6 +1507,97 @@ function EnhancedOwnRiskInput({
     )
 }
 
+// Minimum Premium Input Component - allows admins to set a minimum premium (always fixed amount)
+// The minimum premium ensures the total period premium never drops below this value
+function MinimumPremiumInput({
+    value,
+    onChange,
+}: {
+    value: number
+    onChange: (value: number) => void
+}) {
+    const handleChange = (inputValue: string) => {
+        if (inputValue === "") {
+            onChange(0)
+            return
+        }
+        const numValue = parseFloat(inputValue)
+        if (!isNaN(numValue)) {
+            onChange(numValue)
+        }
+    }
+
+    const handleBlur = (inputValue: string) => {
+        if (inputValue === "" || inputValue === ".") {
+            onChange(0)
+            return
+        }
+        const numValue = parseFloat(inputValue)
+        if (!isNaN(numValue)) {
+            onChange(Math.round(numValue * 100) / 100)
+        }
+    }
+
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div
+                style={{
+                    color: colors.gray600,
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                    fontFamily: ENHANCED_FONT_STACK,
+                }}
+            >
+                Minimumpremie (optioneel)
+            </div>
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                }}
+            >
+                <input
+                    type="number"
+                    step="0.01"
+                    value={value || ""}
+                    onChange={(e) => handleChange(e.target.value)}
+                    onBlur={(e) => handleBlur(e.target.value)}
+                    placeholder="0.00"
+                    style={{
+                        width: "120px",
+                        padding: "6px 8px",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 4,
+                        fontSize: 12,
+                        fontFamily: ENHANCED_FONT_STACK,
+                    }}
+                />
+                <span
+                    style={{
+                        fontSize: 12,
+                        color: "#6b7280",
+                        marginLeft: "4px",
+                    }}
+                >
+                    €
+                </span>
+            </div>
+            <span
+                style={{
+                    fontSize: 10,
+                    color: "#9ca3af",
+                    marginTop: "2px",
+                    display: "block",
+                }}
+            >
+                Vast bedrag — premie na afvoering wordt nooit lager dan dit
+                bedrag
+            </span>
+        </div>
+    )
+}
+
 // Statistics Cards Component
 function PendingStatisticsCards({ stats }: { stats: PendingStats }) {
     const cards = [
@@ -1867,6 +1964,7 @@ function PendingObjectRow({
         customValues?: {
             premiumConfig: PremiumConfig
             ownRiskConfig: OwnRiskConfig
+            minimumPremium?: number
         }
     ) => void
     onDecline: (object: PendingInsuredObject, reason: string) => void
@@ -1916,6 +2014,9 @@ function PendingObjectRow({
         }
     })
 
+    // Minimum premium state (always a fixed amount)
+    const [minimumPremium, setMinimumPremium] = useState<number>(0)
+
     // Calculate final values based on method
     const finalPremiumValue = calculatePremium(premiumConfig, object.waarde)
     const finalOwnRiskValue = calculateOwnRisk(ownRiskConfig, object.waarde)
@@ -1923,7 +2024,8 @@ function PendingObjectRow({
     // Track if values have been edited
     const hasEditedValues =
         finalPremiumValue !== object.premiepercentage ||
-        finalOwnRiskValue !== object.eigenRisico
+        finalOwnRiskValue !== object.eigenRisico ||
+        minimumPremium > 0
 
     // Add error handling for utility function calls
     let daysAgo = 0
@@ -1991,6 +2093,7 @@ function PendingObjectRow({
                 await onApprove(object, {
                     premiumConfig: premiumConfig,
                     ownRiskConfig: ownRiskConfig,
+                    minimumPremium: minimumPremium > 0 ? minimumPremium : undefined,
                 })
             } else {
                 await onApprove(object)
@@ -2374,6 +2477,10 @@ function PendingObjectRow({
                                     config={ownRiskConfig}
                                     onChange={setOwnRiskConfig}
                                     boatValue={object.waarde}
+                                />
+                                <MinimumPremiumInput
+                                    value={minimumPremium}
+                                    onChange={setMinimumPremium}
                                 />
                             </div>
 
@@ -3383,6 +3490,7 @@ export const PendingBoatsOverview: Override = () => {
             customValues?: {
                 premiumConfig: PremiumConfig
                 ownRiskConfig: OwnRiskConfig
+                minimumPremium?: number
             }
         ) => {
             try {
@@ -3393,7 +3501,8 @@ export const PendingBoatsOverview: Override = () => {
                     await approveObjectWithCustomValues(
                         object.id,
                         customValues.premiumConfig,
-                        customValues.ownRiskConfig
+                        customValues.ownRiskConfig,
+                        customValues.minimumPremium
                     )
                     setSuccess(
                         `${getObjectDisplayName(object)} is goedgekeurd met aangepaste waarden.`

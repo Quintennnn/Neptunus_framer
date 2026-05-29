@@ -203,10 +203,9 @@ async function fetchAllPendingObjects(): Promise<PendingInsuredObject[]> {
         }
         if (token) headers.Authorization = `Bearer ${token}`
 
-        // Fetch both Pending and Rejected items for review
-        // Rejected items are kept visible as rejection history for potential reconsideration
+        // Fetch only Pending items — Rejected items are excluded from the pending overview
         const res = await fetch(
-            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending,Rejected`,
+            `${API_BASE_URL}${API_PATHS.INSURED_OBJECT}?status=Pending`,
             {
                 method: "GET",
                 headers,

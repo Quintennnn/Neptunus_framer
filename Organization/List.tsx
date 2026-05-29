@@ -3079,10 +3079,12 @@ function EditOrgForm({
     org,
     onClose,
     refresh,
+    userInfo,
 }: {
     org: any
     onClose: () => void
     refresh: () => void
+    userInfo: UserInfo | null
 }) {
     const [name, setName] = useState(org.name || "")
     const [typeOrganisatie, setTypeOrganisatie] = useState(
@@ -3114,11 +3116,16 @@ function EditOrgForm({
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<
-        "basic" | "fields" | "approval" | "logo"
+        "basic" | "fields" | "approval" | "logo" | "notifications"
     >("basic")
     const [autoApprovalConfig, setAutoApprovalConfig] = useState(
         org.auto_approval_config || { enabled: false, rules: [] }
     )
+    const [notificationExcludedUsers, setNotificationExcludedUsers] = useState<string[]>(
+        org.notification_excluded_users || []
+    )
+    const [connectedUsers, setConnectedUsers] = useState<any[]>([])
+    const [loadingUsers, setLoadingUsers] = useState(false)
 
     // Auto-clear success message after 2 seconds
     useEffect(() => {
@@ -3130,8 +3137,34 @@ function EditOrgForm({
         }
     }, [success])
 
-    // Get current user info for role-based access control
-    const currentUser = getCurrentUserInfo()
+    // Fetch connected users when notifications tab is activated
+    useEffect(() => {
+        if (activeTab !== "notifications") return
+        setLoadingUsers(true)
+        const token = getIdToken()
+        fetch(`${API_BASE_URL}${API_PATHS.USER}`, {
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                const users = (data.users || data || []).filter((u: any) => {
+                    if (!u.organizations) return false
+                    const orgs = typeof u.organizations === "string"
+                        ? u.organizations.split(",")
+                        : u.organizations
+                    return orgs.includes(org.name) && ["user", "editor"].includes((u.role || "").toLowerCase())
+                })
+                setConnectedUsers(users)
+            })
+            .catch((err) => console.error("Failed to fetch users:", err))
+            .finally(() => setLoadingUsers(false))
+    }, [activeTab, org.name])
+
+    // Use the userInfo prop (with actual role from backend) instead of getCurrentUserInfo()
+    const currentUser = userInfo
 
     // Use dynamic schema for field configuration
     const { schema: dynamicSchema, loading: schemaLoading } = useDynamicSchema(
@@ -3290,6 +3323,7 @@ function EditOrgForm({
                 extra_info: extraInfo || undefined,
                 insured_object_fields_config: updatedInsuredObjectFieldsConfig,
                 auto_approval_config: sanitizedAutoApprovalConfig,
+                notification_excluded_users: notificationExcludedUsers,
             }
 
             // Debug logging for auto approval config
@@ -3416,6 +3450,24 @@ function EditOrgForm({
                 >
                     Logo Beheer
                 </button>
+                {isAdmin(currentUser) && (
+                    <button
+                        onClick={() => setActiveTab("notifications")}
+                        style={{
+                            padding: "12px 20px",
+                            border: "none",
+                            background: "none",
+                            borderBottom:
+                                activeTab === "notifications" ? "2px solid #3b82f6" : "none",
+                            color: activeTab === "notifications" ? "#3b82f6" : "#6b7280",
+                            fontWeight: activeTab === "notifications" ? 600 : 400,
+                            cursor: "pointer",
+                            fontFamily: FONT_STACK,
+                        }}
+                    >
+                        Notificaties
+                    </button>
+                )}
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -4000,6 +4052,102 @@ function EditOrgForm({
                                 )
                             }}
                         />
+                    </div>
+                )}
+
+                {activeTab === "notifications" && (
+                    <div style={{ padding: "20px 0" }}>
+                        <h3 style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 600, fontFamily: FONT_STACK }}>
+                            Notificatie-instellingen
+                        </h3>
+                        <p style={{ margin: "0 0 20px 0", fontSize: 13, color: "#6b7280", fontFamily: FONT_STACK }}>
+                            Stel in welke verbonden gebruikers een bevestigings- of afwijzingsmail ontvangen
+                            wanneer een verzekerd object wordt goedgekeurd of afgewezen.
+                        </p>
+
+                        {loadingUsers ? (
+                            <p style={{ color: "#6b7280", fontFamily: FONT_STACK }}>Gebruikers laden...</p>
+                        ) : connectedUsers.length === 0 ? (
+                            <p style={{ color: "#6b7280", fontFamily: FONT_STACK }}>
+                                Geen gebruikers (user/editor) verbonden aan deze organisatie.
+                            </p>
+                        ) : (
+                            <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+                                <div style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr auto auto",
+                                    padding: "10px 16px",
+                                    backgroundColor: "#7CC2FE",
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    fontFamily: FONT_STACK,
+                                    color: "#1e3a5f",
+                                }}>
+                                    <span>E-mail</span>
+                                    <span style={{ textAlign: "center", minWidth: 80 }}>Rol</span>
+                                    <span style={{ textAlign: "center", minWidth: 100 }}>Ontvangt mail</span>
+                                </div>
+                                {connectedUsers.map((user: any) => {
+                                    const isExcluded = notificationExcludedUsers.includes(user.email)
+                                    return (
+                                        <div
+                                            key={user.email}
+                                            style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr auto auto",
+                                                padding: "12px 16px",
+                                                borderTop: "1px solid #e5e7eb",
+                                                alignItems: "center",
+                                                fontSize: 13,
+                                                fontFamily: FONT_STACK,
+                                            }}
+                                        >
+                                            <span style={{ color: "#374151" }}>
+                                                {user.lastName || user.initials ? `${user.initials || ""} ${user.lastName || ""}`.trim() + " — " : ""}
+                                                {user.email}
+                                            </span>
+                                            <span style={{
+                                                textAlign: "center",
+                                                minWidth: 80,
+                                                padding: "2px 8px",
+                                                borderRadius: 4,
+                                                fontSize: 11,
+                                                fontWeight: 600,
+                                                backgroundColor: user.role === "editor" ? "#e0f2fe" : "#ecfdf5",
+                                                color: user.role === "editor" ? "#0369a1" : "#059669",
+                                            }}>
+                                                {user.role === "editor" ? "Editor" : "User"}
+                                            </span>
+                                            <div style={{ textAlign: "center", minWidth: 100 }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isExcluded) {
+                                                            setNotificationExcludedUsers((prev) =>
+                                                                prev.filter((e) => e !== user.email)
+                                                            )
+                                                        } else {
+                                                            setNotificationExcludedUsers((prev) => [...prev, user.email])
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        border: "none",
+                                                        background: "none",
+                                                        cursor: "pointer",
+                                                        fontSize: 22,
+                                                        color: isExcluded ? "#d1d5db" : "#10b981",
+                                                        padding: "4px 8px",
+                                                    }}
+                                                    title={isExcluded ? "Klik om notificaties in te schakelen" : "Klik om notificaties uit te schakelen"}
+                                                >
+                                                    {isExcluded ? <FaToggleOff /> : <FaToggleOn />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -5386,6 +5534,7 @@ export function OrganizationPageOverride(): Override {
                                     setEditingOrgName(null)
                                 }}
                                 refresh={refresh}
+                                userInfo={userInfo}
                             />
                         </div>,
                         document.body
